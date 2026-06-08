@@ -62,6 +62,10 @@ providers:
     use_gpu: false
     playback: false
     auto_speak: false
+    # 0.0.8 spoken response pipeline. When voice is on, Jarvis streams text
+    # normally while sentence chunks are sent to TTS on a background queue.
+    auto_speak_chunk_chars: 320
+    queue_max_size: 12
     # XTTS remains an experimental, personal/non-commercial provider only. It is
     # not in the default chain. Prefer Kokoro locally and a licensed provider
     # such as ElevenLabs later if SaaS quality/voice cloning is needed.

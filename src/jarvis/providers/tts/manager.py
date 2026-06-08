@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import wave
 from datetime import datetime, timezone
 from pathlib import Path
@@ -139,6 +140,7 @@ class TTSManager:
         selected_speaker = self.speaker_wav_for_voice(selected_voice)
         should_play = bool(self.playback if play_audio is None else play_audio)
         selected_chain = self.provider_chain(provider_override=provider_override, allow_fallback=allow_fallback)
+        request_started = time.perf_counter()
         self.events.emit(
             "voice.tts_requested",
             source="tts.manager",
@@ -191,6 +193,7 @@ class TTSManager:
             )
             attempts.append(attempt)
             if result.success:
+                result.data.setdefault("tts_elapsed_ms", (time.perf_counter() - request_started) * 1000.0)
                 played = False
                 if should_play and result.output_path and result.output_path.suffix.lower() == ".wav":
                     played = self._play_wav(result.output_path)
@@ -210,7 +213,7 @@ class TTSManager:
             errors.append(f"{provider_name}: {result.error or result.message}")
 
         message = "No TTS provider could generate speech. " + " | ".join(errors)
-        failed = TTSResult.fail(message, provider="tts_manager", data={"errors": errors, "attempts": attempts, "voice_name": selected_voice, "provider_chain": selected_chain})
+        failed = TTSResult.fail(message, provider="tts_manager", data={"errors": errors, "attempts": attempts, "voice_name": selected_voice, "provider_chain": selected_chain, "tts_elapsed_ms": (time.perf_counter() - request_started) * 1000.0})
         self.last_result = failed
         self.last_attempts = attempts
         self.events.emit("voice.tts_failed", source="tts.manager", message=message, data={"errors": errors, "attempts": attempts})
@@ -237,6 +240,26 @@ class TTSManager:
             result.success = False
             result.error = "Playback failed or is not supported in this environment."
         return result
+
+    def stop_playback(self) -> bool:
+        """Best-effort stop for active audio playback.
+
+        This is intentionally conservative. It can stop Windows winsound playback
+        and clears any provider-owned playback if future providers expose one.
+        It cannot interrupt every possible TTS generation call yet.
+        """
+        stopped = False
+        try:
+            if sys.platform.startswith("win"):
+                import winsound
+
+                winsound.PlaySound(None, winsound.SND_PURGE)
+                stopped = True
+        except Exception as exc:
+            self.events.emit("voice.playback_stop_failed", source="tts.manager", message=str(exc), data={"exception_type": type(exc).__name__})
+        if stopped:
+            self.events.emit("voice.playback_stopped", source="tts.manager", message="Audio playback stopped.")
+        return stopped
 
     def provider_chain(self, *, provider_override: str | None = None, allow_fallback: bool = True) -> list[str]:
         primary = normalize_provider_name(provider_override or self.provider_name)

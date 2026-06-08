@@ -11,7 +11,10 @@ PROMPT_DIAGNOSTIC_COMMANDS = {"prompt stats", "prompt diagnostics", "llm prompt"
 MEMORY_STATUS_COMMANDS = {"memory status", "short memory status", "short-term memory status", "stm status"}
 MEMORY_LAST_COMMANDS = {"memory last", "memory recent", "short memory last", "short-term memory last", "stm last"}
 MEMORY_CLEAR_COMMANDS = {"memory clear", "clear memory", "short memory clear", "short-term memory clear", "stm clear"}
-TTS_STATUS_COMMANDS = {"tts status", "voice status", "speech status"}
+TTS_STATUS_COMMANDS = {"tts status", "speech status"}
+VOICE_STATUS_COMMANDS = {"voice status", "spoken status", "auto voice status"}
+TTS_QUEUE_STATUS_COMMANDS = {"tts queue", "tts queue status", "voice queue", "voice queue status"}
+TTS_STOP_COMMANDS = {"tts stop", "voice stop", "stop voice", "stop speaking", "silence"}
 TTS_PROVIDERS_COMMANDS = {"tts providers", "voice providers", "tts provider"}
 TTS_TEST_COMMANDS = {"tts test", "voice test", "test voice", "test tts"}
 TTS_TEST_PLAY_COMMANDS = {"tts test play", "voice test play", "test voice play", "test tts play"}
@@ -44,18 +47,20 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, tts status, tts test, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
         try:
             command = input("You: ").strip()
         except (KeyboardInterrupt, EOFError):
+            runtime.spoken_pipeline.shutdown()
             print("\nJarvis: Shutting down.")
             break
 
         normalized = command.lower()
         if normalized in EXIT_COMMANDS:
+            runtime.spoken_pipeline.shutdown()
             print("Jarvis: Shutting down.")
             break
 
@@ -78,6 +83,18 @@ def main() -> None:
 
         if normalized in MEMORY_CLEAR_COMMANDS:
             print(f"Jarvis: {runtime.memory_clear()}")
+            continue
+
+        if normalized in VOICE_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.voice_status()}")
+            continue
+
+        if normalized in TTS_QUEUE_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.tts_queue_status()}")
+            continue
+
+        if normalized in TTS_STOP_COMMANDS:
+            print(f"Jarvis: {runtime.tts_stop()}")
             continue
 
         if normalized in TTS_STATUS_COMMANDS:
@@ -189,16 +206,18 @@ def main() -> None:
                 state["started"] = True
             print(chunk, end="", flush=True)
 
-        result = runtime.handle_command(command, stream_callback=print_stream_chunk)
+        spoken_stream = runtime.create_spoken_stream(print_stream_chunk) if runtime.tts_manager.auto_speak else None
+        callback = spoken_stream if spoken_stream is not None else print_stream_chunk
+        result = runtime.handle_command(command, stream_callback=callback)
+        if spoken_stream is not None:
+            speak_remaining = bool(result.success and result.action == "llm_chat")
+            spoken_stream.finish(speak_remaining=speak_remaining)
         if state["started"]:
             print()
             if not result.success:
                 print(f"Jarvis: {result.message}")
         else:
             print(f"Jarvis: {result.message}")
-
-        if runtime.tts_manager.auto_speak and result.success and result.message:
-            print(f"Jarvis voice: {runtime.tts_say(result.message, play_audio=True)}")
 
 
 

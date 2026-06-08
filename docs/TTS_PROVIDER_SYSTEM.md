@@ -113,3 +113,51 @@ tts debug last
 Use XTTS only for personal/local experiments with voices you own or have clear
 permission to use. Do not build the SaaS/commercial Jarvis path on XTTS unless a
 commercial license is obtained.
+
+## 0.0.8 spoken response pipeline
+
+0.0.8 adds the first normal-chat voice pipeline:
+
+```text
+LLM streams text to the CLI
+→ Jarvis detects sentence/soft chunk boundaries
+→ chunks are queued for TTS
+→ a background TTS worker generates/plays audio
+→ the CLI stays usable
+```
+
+This is intentionally still local-first and provider-swappable. The TTS manager
+still owns provider selection, while the spoken response pipeline only manages
+chunking, queueing, and background speech. That keeps the Jarvis Brain from
+being tied to Kokoro, ElevenLabs, XTTS, or any future provider.
+
+New commands:
+
+```text
+voice on
+voice off
+voice status
+tts queue
+tts queue status
+tts stop
+voice stop
+stop speaking
+```
+
+`voice on` enables auto-speak and playback for the current runtime session.
+When normal LLM chat streams, Jarvis will send completed sentence chunks to the
+background TTS queue. `voice off` disables auto-speak/playback and clears any
+pending speech chunks. `tts stop` is a best-effort stop for the current and
+pending spoken output.
+
+Configuration:
+
+```env
+JARVIS_TTS_AUTO_SPEAK=false
+JARVIS_TTS_PLAYBACK=false
+JARVIS_TTS_AUTO_SPEAK_CHUNK_CHARS=320
+JARVIS_TTS_QUEUE_MAX_SIZE=12
+```
+
+For an always-running Jarvis, keep the queue bounded. If speech falls behind,
+Jarvis drops old pending speech chunks instead of growing memory forever.

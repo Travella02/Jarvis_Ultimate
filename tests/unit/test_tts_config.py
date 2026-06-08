@@ -42,6 +42,8 @@ class TestTTSConfig(unittest.TestCase):
             "JARVIS_TTS_FALLBACK_PROVIDERS=mock\n"
             "JARVIS_TTS_USE_GPU=false\n"
             "JARVIS_TTS_AUTO_SPEAK=true\n"
+            "JARVIS_TTS_AUTO_SPEAK_CHUNK_CHARS=180\n"
+            "JARVIS_TTS_QUEUE_MAX_SIZE=5\n"
             "JARVIS_TTS_XTTS_SPEAKER_WAV=assets/voices/custom.wav\n"
         )
         with patch.dict(os.environ, {}, clear=True):
@@ -51,6 +53,8 @@ class TestTTSConfig(unittest.TestCase):
         self.assertEqual(config.tts_fallback_providers, "mock")
         self.assertFalse(config.tts_use_gpu)
         self.assertTrue(config.tts_auto_speak)
+        self.assertEqual(config.tts_auto_speak_chunk_chars, 180)
+        self.assertEqual(config.tts_queue_max_size, 5)
         self.assertEqual(config.tts_xtts_speaker_wav, "assets/voices/custom.wav")
 
 

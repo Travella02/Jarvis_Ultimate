@@ -17,6 +17,7 @@ from jarvis.memory.short_term import ShortTermMemory
 from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 from jarvis.providers.tts.manager import TTSManager, format_tts_result
+from jarvis.providers.tts.pipeline import SpokenResponsePipeline
 
 
 class JarvisRuntime:
@@ -29,6 +30,13 @@ class JarvisRuntime:
         self.registry = AgentRegistry()
         self.llm_provider = llm_provider or create_llm_provider(self.config)
         self.tts_manager = tts_manager or TTSManager(self.config, events=self.events)
+        self.spoken_pipeline = SpokenResponsePipeline(
+            self.tts_manager,
+            events=self.events,
+            chunk_max_chars=getattr(self.config, "tts_auto_speak_chunk_chars", 320),
+            queue_max_size=getattr(self.config, "tts_queue_max_size", 12),
+            play_audio=True,
+        )
         self.router: JarvisRouter | None = None
         self.short_term_memory = ShortTermMemory(
             enabled=getattr(self.config, "memory_short_term_enabled", True),
@@ -69,6 +77,10 @@ class JarvisRuntime:
                     "enabled": self.tts_manager.enabled,
                     "provider": self.tts_manager.provider_name,
                     "auto_speak": self.tts_manager.auto_speak,
+                    "spoken_pipeline": {
+                        "queue_max_size": self.spoken_pipeline.queue_max_size,
+                        "chunk_max_chars": self.spoken_pipeline.chunk_max_chars,
+                    },
                 },
             },
         )
@@ -175,6 +187,15 @@ class JarvisRuntime:
         """Return detailed provider-attempt diagnostics for the last TTS request."""
         return self.tts_manager.format_debug_last()
 
+    def tts_queue_status(self) -> str:
+        """Return spoken response queue diagnostics."""
+        return self.spoken_pipeline.status()
+
+    def tts_stop(self) -> str:
+        """Stop current/pending spoken response output as much as possible."""
+        removed = self.spoken_pipeline.stop(clear_pending=True)
+        return f"Stopped spoken response output. Cleared {removed} pending chunk(s)."
+
     def tts_xtts_test(self, *, play_audio: bool | None = None) -> str:
         """Test experimental XTTS directly without falling back, so failures are visible."""
         phrase = "Hello sir. This is a direct experimental XTTS voice test."
@@ -238,17 +259,31 @@ class JarvisRuntime:
         result = self.tts_manager.say(text, play_audio=play_audio, voice_name=voice_name, provider_override=provider, allow_fallback=False)
         return format_tts_result(result)
 
+    def create_spoken_stream(self, display_callback=None):
+        """Create a stream callback adapter for live spoken responses."""
+        enabled = bool(self.tts_manager.enabled and self.tts_manager.auto_speak)
+        return self.spoken_pipeline.create_stream_adapter(display_callback, enabled=enabled)
+
+    def voice_status(self) -> str:
+        """Return combined TTS and spoken pipeline status."""
+        return self.tts_manager.status() + "\n\n" + self.spoken_pipeline.status()
+
     def voice_on(self) -> str:
         """Enable automatic voice output and playback for successful CLI chat responses."""
         self.tts_manager.set_auto_speak(True)
         self.tts_manager.set_playback(True)
-        return "Voice auto-speak and playback are on for this runtime session. Use 'voice off' to disable them."
+        return (
+            "Voice auto-speak and playback are on for this runtime session. "
+            "Normal chat responses will be sent to the spoken response queue while text streams. "
+            "Use 'voice off' or 'tts stop' to disable/stop it."
+        )
 
     def voice_off(self) -> str:
         """Disable automatic voice output for CLI chat responses."""
         self.tts_manager.set_auto_speak(False)
         self.tts_manager.set_playback(False)
-        return "Voice auto-speak and playback are off for this runtime session."
+        removed = self.spoken_pipeline.stop(clear_pending=True)
+        return f"Voice auto-speak and playback are off for this runtime session. Cleared {removed} pending speech chunk(s)."
 
     def _record_short_term_turn(self, command: str, result: JarvisResult, *, timing: TurnTimer | None = None) -> None:
         """Record normal LLM chat turns after the assistant response is ready."""

@@ -53,6 +53,8 @@ _ENV_ALIASES = {
     "tts_xtts_speaker_wav": ("JARVIS_TTS_XTTS_SPEAKER_WAV", "JARVIS_XTTS_SPEAKER_WAV"),
     "tts_kokoro_voice": ("JARVIS_TTS_KOKORO_VOICE",),
     "tts_kokoro_lang_code": ("JARVIS_TTS_KOKORO_LANG_CODE",),
+    "tts_auto_speak_chunk_chars": ("JARVIS_TTS_AUTO_SPEAK_CHUNK_CHARS", "JARVIS_VOICE_CHUNK_CHARS"),
+    "tts_queue_max_size": ("JARVIS_TTS_QUEUE_MAX_SIZE", "JARVIS_VOICE_QUEUE_MAX_SIZE"),
 }
 
 
@@ -240,6 +242,8 @@ class JarvisConfig:
     tts_xtts_speaker_wav: str = "assets/voices/jarvis_reference.wav"
     tts_kokoro_voice: str = "af_heart"
     tts_kokoro_lang_code: str = "a"
+    tts_auto_speak_chunk_chars: int = 320
+    tts_queue_max_size: int = 12
 
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
@@ -332,4 +336,6 @@ class JarvisConfig:
             tts_xtts_speaker_wav=str(_setting(_ENV_ALIASES["tts_xtts_speaker_wav"], env_file, tts_config.get("xtts_speaker_wav", "assets/voices/jarvis_reference.wav"))),
             tts_kokoro_voice=str(_setting(_ENV_ALIASES["tts_kokoro_voice"], env_file, tts_config.get("kokoro_voice", "af_heart"))),
             tts_kokoro_lang_code=str(_setting(_ENV_ALIASES["tts_kokoro_lang_code"], env_file, tts_config.get("kokoro_lang_code", "a"))),
+            tts_auto_speak_chunk_chars=int(_setting(_ENV_ALIASES["tts_auto_speak_chunk_chars"], env_file, tts_config.get("auto_speak_chunk_chars", "320"))),
+            tts_queue_max_size=int(_setting(_ENV_ALIASES["tts_queue_max_size"], env_file, tts_config.get("queue_max_size", "12"))),
         )
