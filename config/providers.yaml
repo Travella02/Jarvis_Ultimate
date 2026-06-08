@@ -1,12 +1,23 @@
 providers:
   llm:
-    default: mock
-    model: mock
+    # Jarvis 0.0.3 uses LM Studio through its OpenAI-compatible local API.
+    default: lm_studio
+    base_url: http://localhost:1234/v1
+    # Use auto to let Jarvis pick the first model reported by LM Studio /v1/models.
+    # You can replace this with the exact model id shown in LM Studio later.
+    model: auto
+    timeout_seconds: 90
+    temperature: 0.7
+    max_tokens: 512
+
   ocr:
     default: mock
+
   tts:
     default: mock
+
   stt:
     default: mock
+
   avatar:
     default: mock_avatar

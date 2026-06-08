@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from jarvis.brain.intent_classifier import IntentClassifier, IntentResult
+from jarvis.brain.intent_classifier import IntentClassifier
 from jarvis.core.events import EventBus
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
@@ -29,10 +29,18 @@ INTENT_AGENT_MAP = {
 class JarvisRouter:
     """Routes user commands to normal conversation or a specialized agent."""
 
-    def __init__(self, *, registry: AgentRegistry, events: EventBus | None = None, classifier: IntentClassifier | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        registry: AgentRegistry,
+        events: EventBus | None = None,
+        classifier: IntentClassifier | None = None,
+        llm_provider: Any | None = None,
+    ) -> None:
         self.registry = registry
         self.events = events or EventBus()
         self.classifier = classifier or IntentClassifier()
+        self.llm_provider = llm_provider
 
     def handle(self, command: str) -> JarvisResult:
         self.events.emit("user.command.received", source="brain.router", message=command)
@@ -62,6 +70,7 @@ class JarvisRouter:
             "intent": intent,
             "registry": self.registry,
             "events": self.events,
+            "llm_provider": self.llm_provider,
         }
 
         try:

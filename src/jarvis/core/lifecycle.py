@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from jarvis.brain.router import JarvisRouter
 from jarvis.core.config import JarvisConfig
@@ -10,16 +11,18 @@ from jarvis.core.events import EventBus
 from jarvis.core.logging import JarvisLogger
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
+from jarvis.providers.llm.factory import create_llm_provider
 
 
 class JarvisRuntime:
     """Boots the core Jarvis systems and handles user commands."""
 
-    def __init__(self, *, project_root: str | Path | None = None) -> None:
+    def __init__(self, *, project_root: str | Path | None = None, llm_provider: Any | None = None) -> None:
         self.config = JarvisConfig.from_project_root(project_root)
         self.events = EventBus()
         self.logger = JarvisLogger(self.config.logs_dir)
         self.registry = AgentRegistry()
+        self.llm_provider = llm_provider or create_llm_provider(self.config)
         self.router: JarvisRouter | None = None
         self.started = False
 
@@ -28,14 +31,18 @@ class JarvisRuntime:
     def boot(self) -> JarvisResult:
         self.events.emit("jarvis.boot_started", source="lifecycle", message="Jarvis boot started.")
         self.registry.load_builtin_agents()
-        self.router = JarvisRouter(registry=self.registry, events=self.events)
+        self.router = JarvisRouter(registry=self.registry, events=self.events, llm_provider=self.llm_provider)
         self.started = True
         agent_names = self.registry.names(enabled_only=True)
         result = JarvisResult.ok(
             f"Jarvis 3 is online. Registered {len(agent_names)} agents.",
             agent_name="lifecycle",
             action="boot",
-            data={"agents": agent_names},
+            data={
+                "agents": agent_names,
+                "llm_provider": getattr(self.llm_provider, "provider_name", "unknown"),
+                "llm_model": getattr(self.llm_provider, "model", "unknown"),
+            },
         )
         self.logger.log_result(result)
         self.events.emit("jarvis.boot_finished", source="lifecycle", message="Jarvis boot finished.", data=result.data)

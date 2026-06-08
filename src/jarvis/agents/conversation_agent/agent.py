@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from jarvis.agents.conversation_agent.prompts import SYSTEM_PROMPT
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
 
@@ -23,18 +24,21 @@ class Agent:
 
         if intent_name == "empty":
             return JarvisResult.ok(
-                "I did not catch a command. Type something like 'status' or 'list agents'.",
+                "I did not catch a command. Type something like 'status', 'list agents', or just talk to me normally.",
                 agent_name=self.name,
                 action="empty_input",
             )
 
         if intent_name == "status":
             agent_count = len(registry.enabled_records()) if registry else 0
+            llm_provider = context.get("llm_provider")
+            provider_name = getattr(llm_provider, "provider_name", "unknown") if llm_provider else "none"
+            provider_model = getattr(llm_provider, "model", "unknown") if llm_provider else "none"
             return JarvisResult.ok(
-                f"Jarvis 3 core is online. Agent registry is active with {agent_count} enabled agents.",
+                f"Jarvis 3 core is online. Agent registry is active with {agent_count} enabled agents. LLM provider: {provider_name} ({provider_model}).",
                 agent_name=self.name,
                 action="status",
-                data={"enabled_agent_count": agent_count},
+                data={"enabled_agent_count": agent_count, "llm_provider": provider_name, "llm_model": provider_model},
             )
 
         if intent_name == "list_agents":
@@ -49,15 +53,44 @@ class Agent:
                 data={"agents": [record.name for record in agents]},
             )
 
-        text = command.strip()
-        if text.lower() in {"hello", "hi", "hey", "hey jarvis", "hello jarvis"}:
-            message = "Hey Tanner. Jarvis 3 is online. The new core, registry, and routing foundation are active."
-        else:
-            message = "I can respond through the new Jarvis 3 routing system now. The real local LLM provider comes next."
+        return self._handle_general_chat(command, context=context)
 
-        return JarvisResult.ok(
-            message,
+    def _handle_general_chat(self, command: str, *, context: dict[str, Any]) -> JarvisResult:
+        llm_provider = context.get("llm_provider")
+        if llm_provider is None:
+            return JarvisResult.ok(
+                "I can route conversation now, but no LLM provider is attached yet.",
+                agent_name=self.name,
+                action="general_chat",
+                data={"llm_enabled": False},
+            )
+
+        messages = [{"role": "user", "content": command.strip()}]
+        response = llm_provider.chat(messages, system_prompt=SYSTEM_PROMPT)
+
+        provider_name = getattr(llm_provider, "provider_name", response.provider)
+        if response.success:
+            return JarvisResult.ok(
+                response.content,
+                agent_name=self.name,
+                action="llm_chat",
+                data={
+                    "llm_enabled": True,
+                    "llm_provider": provider_name,
+                    "llm_model": response.model,
+                },
+            )
+
+        return JarvisResult.fail(
+            "I tried to talk through LM Studio, but the local model provider is not responding yet. "
+            "Open LM Studio, load your model, start the Local Server, then try again. "
+            f"Details: {response.error}",
             agent_name=self.name,
-            action="general_chat",
-            data={"llm_enabled": False, "note": "Mock/general conversation only in 0.0.2."},
+            action="llm_chat",
+            errors=[response.error or "Unknown LLM provider error."],
+            data={
+                "llm_enabled": False,
+                "llm_provider": provider_name,
+                "llm_model": response.model,
+            },
         )
