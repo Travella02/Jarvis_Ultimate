@@ -129,21 +129,126 @@ class JarvisRuntime:
         result = self.tts_manager.say(text, play_audio=play_audio)
         return format_tts_result(result)
 
-    def tts_test(self) -> str:
+    def tts_test(self, *, play_audio: bool | None = None) -> str:
         """Generate a short test phrase through the TTS provider chain."""
-        phrase = "Hello Tanner. Jarvis voice output is connected."
-        result = self.tts_manager.say(phrase, play_audio=getattr(self.config, "tts_playback", False))
+        phrase = "Hello sir. Jarvis voice output is connected."
+        result = self.tts_manager.say(phrase, play_audio=play_audio if play_audio is not None else getattr(self.config, "tts_playback", False))
+        return format_tts_result(result)
+
+    def tts_play_last(self) -> str:
+        """Play the most recently generated TTS output, if available."""
+        return format_tts_result(self.tts_manager.play_last())
+
+    def tts_playback_on(self) -> str:
+        """Enable audio playback for this runtime session."""
+        self.tts_manager.set_playback(True)
+        return "TTS playback is on for this runtime session. Generated WAV files will be played when possible."
+
+    def tts_playback_off(self) -> str:
+        """Disable audio playback for this runtime session."""
+        self.tts_manager.set_playback(False)
+        return "TTS playback is off for this runtime session. Jarvis will keep generating WAV files without playing them."
+
+    def tts_reference_status(self) -> str:
+        """Return legacy XTTS speaker reference setup status."""
+        status = self.tts_manager.speaker_reference_status()
+        lines = [
+            "XTTS speaker reference status:",
+            "- default Jarvis provider is now Kokoro; XTTS is experimental/personal-only and disabled unless explicitly selected.",
+            f"- ready: {status['ready']}",
+            f"- path: {status['path'] or '(not configured)'}",
+            f"- message: {status['message']}",
+            "- default import target: " + str(self.tts_manager.default_reference_path()),
+        ]
+        return "\n".join(lines)
+
+    def tts_reference_set(self, path: str, *, import_to_default: bool = False) -> str:
+        """Set or import the XTTS speaker reference WAV for this runtime session."""
+        result = self.tts_manager.set_speaker_wav(path, copy_to_default=import_to_default)
+        lines = [format_tts_result(result)]
+        if result.success:
+            status = self.tts_manager.speaker_reference_status()
+            lines.append(f"Reference ready: {status['ready']} ({status['message']})")
+        return "\n".join(lines)
+
+    def tts_debug_last(self) -> str:
+        """Return detailed provider-attempt diagnostics for the last TTS request."""
+        return self.tts_manager.format_debug_last()
+
+    def tts_xtts_test(self, *, play_audio: bool | None = None) -> str:
+        """Test experimental XTTS directly without falling back, so failures are visible."""
+        phrase = "Hello sir. This is a direct experimental XTTS voice test."
+        result = self.tts_manager.say(
+            phrase,
+            play_audio=play_audio if play_audio is not None else getattr(self.config, "tts_playback", False),
+            provider_override="xtts",
+            allow_fallback=False,
+        )
+        return format_tts_result(result)
+
+    def tts_voice_list(self) -> str:
+        """List known voices for the active TTS provider."""
+        if self.tts_manager.provider_name == "kokoro":
+            return self.tts_manager.format_kokoro_voices()
+        return self.tts_manager.format_voice_profiles()
+
+    def tts_voice_current(self) -> str:
+        """Show the active voice for the active TTS provider."""
+        if self.tts_manager.provider_name == "kokoro":
+            return self.tts_manager.format_kokoro_current_voice()
+        return self.tts_manager.format_current_voice()
+
+    def tts_voice_import(self, voice_name: str, path: str, *, activate: bool = True) -> str:
+        """Import a named experimental XTTS voice profile."""
+        result = self.tts_manager.import_voice_profile(voice_name, path, activate=activate)
+        return format_tts_result(result)
+
+    def tts_voice_use(self, voice_name: str) -> str:
+        """Switch the active voice for the active TTS provider."""
+        if self.tts_manager.provider_name == "kokoro":
+            result = self.tts_manager.set_kokoro_voice(voice_name)
+        else:
+            result = self.tts_manager.use_voice_profile(voice_name)
+        return format_tts_result(result)
+
+    def tts_voice_delete(self, voice_name: str) -> str:
+        """Delete a named experimental XTTS voice profile, or explain Kokoro voices are built-in."""
+        if self.tts_manager.provider_name == "kokoro":
+            return "Kokoro voices are built into the provider and cannot be deleted from Jarvis. Use 'tts voice use <voice_id>' to switch voices."
+        result = self.tts_manager.delete_voice_profile(voice_name)
+        return format_tts_result(result)
+
+    def tts_voice_test(self, voice_name: str | None = None, *, play_audio: bool | None = None) -> str:
+        """Test a specific voice on the active TTS provider with no fallback."""
+        selected_voice = voice_name or (self.tts_manager.kokoro_voice if self.tts_manager.provider_name == "kokoro" else self.tts_manager.voice_name)
+        phrase = f"Hello sir. This is the {selected_voice} voice."
+        provider = "kokoro" if self.tts_manager.provider_name == "kokoro" else "xtts"
+        result = self.tts_manager.say(
+            phrase,
+            play_audio=play_audio if play_audio is not None else getattr(self.config, "tts_playback", False),
+            voice_name=selected_voice,
+            provider_override=provider,
+            allow_fallback=False,
+        )
+        return format_tts_result(result)
+
+    def tts_say_as(self, voice_name: str, text: str, *, play_audio: bool | None = None) -> str:
+        """Generate speech using a specific voice on the active provider without changing the active voice."""
+        provider = "kokoro" if self.tts_manager.provider_name == "kokoro" else "xtts"
+        result = self.tts_manager.say(text, play_audio=play_audio, voice_name=voice_name, provider_override=provider, allow_fallback=False)
         return format_tts_result(result)
 
     def voice_on(self) -> str:
-        """Enable automatic voice output for successful CLI chat responses."""
+        """Enable automatic voice output and playback for successful CLI chat responses."""
         self.tts_manager.set_auto_speak(True)
-        return "Voice auto-speak is on for this runtime session. Use 'voice off' to disable it."
+        self.tts_manager.set_playback(True)
+        return "Voice auto-speak and playback are on for this runtime session. Use 'voice off' to disable them."
 
     def voice_off(self) -> str:
         """Disable automatic voice output for CLI chat responses."""
         self.tts_manager.set_auto_speak(False)
-        return "Voice auto-speak is off for this runtime session."
+        self.tts_manager.set_playback(False)
+        return "Voice auto-speak and playback are off for this runtime session."
 
     def _record_short_term_turn(self, command: str, result: JarvisResult, *, timing: TurnTimer | None = None) -> None:
         """Record normal LLM chat turns after the assistant response is ready."""

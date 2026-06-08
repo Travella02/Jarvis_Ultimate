@@ -1,0 +1,14 @@
+# Jarvis Ultimate 0.0.7c default TTS dependencies.
+# Kokoro is now the default local TTS provider.
+# Install from the Jarvis root with the venv active:
+#   python -m pip install -r requirements-tts.txt
+
+# Keep NumPy below 2.0 for better compatibility with the local audio/TTS stack.
+numpy>=1.26,<2.0
+soundfile>=0.12
+kokoro
+
+# Kokoro's English pipeline may need spaCy's small English model. Installing it
+# here avoids Jarvis trying to download it during the first TTS command on a new PC.
+spacy>=3.8,<3.9
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

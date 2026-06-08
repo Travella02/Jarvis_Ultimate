@@ -7,6 +7,7 @@ non-commercial, so SaaS/commercial builds should swap this provider out.
 
 from __future__ import annotations
 
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,8 @@ class XTTSTTSProvider:
             "speaker_wav": str(self.speaker_wav) if self.speaker_wav else "",
             "license_note": "XTTS v2 public model license is non-commercial; swap for SaaS/commercial use.",
         }
+        if self._load_error:
+            details["last_load_error"] = self._load_error
         if not import_check[0]:
             return TTSProviderStatus(name=self.provider_name, available=False, ready=False, message=import_check[1], details=details)
         if not self._speaker_is_usable():
@@ -56,12 +59,12 @@ class XTTSTTSProvider:
     def synthesize(self, request: TTSRequest) -> TTSResult:
         import_ok, import_message = self._check_imports()
         if not import_ok:
-            return TTSResult.fail(import_message, provider=self.provider_name)
+            return TTSResult.fail(import_message, provider=self.provider_name, data={"exception_type": "ImportError"})
 
         speaker_wav = request.speaker_wav or self.speaker_wav
         if speaker_wav is None or not Path(speaker_wav).exists():
             return TTSResult.fail(
-                "XTTS needs a clean speaker reference WAV. Set JARVIS_TTS_XTTS_SPEAKER_WAV or place one at assets/voices/jarvis_reference.wav.",
+                "XTTS needs a clean speaker reference WAV. Set a voice profile or JARVIS_TTS_XTTS_SPEAKER_WAV.",
                 provider=self.provider_name,
                 data={"speaker_wav": str(speaker_wav) if speaker_wav else ""},
             )
@@ -79,20 +82,38 @@ class XTTSTTSProvider:
                 "XTTS generated speech audio.",
                 provider=self.provider_name,
                 output_path=request.output_path,
-                data={"model_name": self.model_name, "speaker_wav": str(speaker_wav), "language": request.language or "en"},
+                data={
+                    "model_name": self.model_name,
+                    "speaker_wav": str(speaker_wav),
+                    "language": request.language or "en",
+                    "voice_name": request.voice_name,
+                },
             )
         except Exception as exc:  # Keep Jarvis safe if the optional engine fails.
-            return TTSResult.fail("XTTS failed while generating speech.", provider=self.provider_name, error=str(exc))
+            tb = traceback.format_exc(limit=8)
+            return TTSResult.fail(
+                "XTTS failed while generating speech.",
+                provider=self.provider_name,
+                error=f"{type(exc).__name__}: {exc}",
+                data={
+                    "exception_type": type(exc).__name__,
+                    "traceback": tb,
+                    "model_name": self.model_name,
+                    "speaker_wav": str(speaker_wav),
+                    "language": request.language or "en",
+                    "voice_name": request.voice_name,
+                },
+            )
 
     def _check_imports(self) -> tuple[bool, str]:
         try:
             import TTS.api  # noqa: F401
         except Exception as exc:
-            return False, f"XTTS optional dependency is not installed or failed to import: {exc}"
+            return False, f"XTTS optional dependency is not installed or failed to import: {type(exc).__name__}: {exc}"
         return True, "XTTS optional dependency is installed."
 
     def _speaker_is_usable(self) -> bool:
-        return self.speaker_wav is not None and self.speaker_wav.exists()
+        return self.speaker_wav is not None and self.speaker_wav.exists() and self.speaker_wav.suffix.lower() == ".wav"
 
     def _load_engine(self) -> Any:
         if self._engine is not None:
@@ -107,4 +128,7 @@ class XTTSTTSProvider:
             self._engine = TTS(self.model_name)
             if self.use_gpu and hasattr(self._engine, "to"):
                 self._engine.to(self.device)
+        except Exception as exc:
+            self._load_error = f"{type(exc).__name__}: {exc}"
+            raise
         return self._engine

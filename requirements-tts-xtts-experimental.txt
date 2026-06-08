@@ -1,0 +1,10 @@
+# Experimental/personal-only XTTS dependencies.
+# Not required for normal Jarvis voice output after 0.0.7c.
+# XTTS v2 is not SaaS/commercial-safe under its public model license.
+# Use only if you intentionally revisit XTTS later.
+
+# These pins are based on the laptop debugging notes, but XTTS may still need
+# machine-specific PyTorch/TorchCodec/FFmpeg setup. Kokoro is the supported path.
+numpy==1.26.4
+transformers==4.56.2
+TTS

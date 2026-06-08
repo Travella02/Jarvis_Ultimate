@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -31,29 +32,37 @@ class TestTTSProviders(unittest.TestCase):
         self.assertEqual(normalize_provider_name("kokoro_tts"), "kokoro")
         self.assertEqual(parse_fallback_chain("kokoro,mock,kokoro"), ["kokoro", "mock"])
 
-    def test_manager_falls_back_to_mock_when_xtts_unavailable(self):
+    def test_manager_uses_mock_fallback_when_kokoro_unavailable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = SimpleNamespace(
                 project_root=Path(temp_dir),
                 tts_enabled=True,
                 tts_auto_speak=False,
-                tts_provider="xtts",
+                tts_provider="kokoro",
                 tts_fallback_providers="mock",
                 tts_output_dir="data/tts",
                 tts_voice_name="jarvis",
+                tts_voice_profiles_dir="data/tts/voices",
                 tts_language="en",
                 tts_playback=False,
+                tts_kokoro_voice="af_heart",
+                tts_kokoro_lang_code="a",
                 tts_xtts_speaker_wav="assets/voices/missing.wav",
                 tts_xtts_model_name="tts_models/multilingual/multi-dataset/xtts_v2",
-                tts_use_gpu=True,
-                tts_device="cuda",
+                tts_use_gpu=False,
+                tts_device="auto",
             )
             manager = TTSManager(config)
-            result = manager.say("hello from fallback")
+            with patch(
+                "jarvis.providers.tts.kokoro_provider.KokoroTTSProvider._check_imports",
+                return_value=(False, "Kokoro intentionally unavailable for fallback test."),
+            ):
+                result = manager.say("hello from fallback")
 
             self.assertTrue(result.success)
             self.assertEqual(result.provider, "mock")
-            self.assertIn("mock", manager.status().lower())
+            self.assertIn("preferred provider: kokoro", manager.status().lower())
+            self.assertIn("fallback providers: mock", manager.status().lower())
 
 
 if __name__ == "__main__":

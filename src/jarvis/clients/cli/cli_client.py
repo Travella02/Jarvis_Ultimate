@@ -14,6 +14,16 @@ MEMORY_CLEAR_COMMANDS = {"memory clear", "clear memory", "short memory clear", "
 TTS_STATUS_COMMANDS = {"tts status", "voice status", "speech status"}
 TTS_PROVIDERS_COMMANDS = {"tts providers", "voice providers", "tts provider"}
 TTS_TEST_COMMANDS = {"tts test", "voice test", "test voice", "test tts"}
+TTS_TEST_PLAY_COMMANDS = {"tts test play", "voice test play", "test voice play", "test tts play"}
+TTS_PLAY_LAST_COMMANDS = {"tts play last", "voice play last", "play last voice", "play last tts"}
+TTS_PLAYBACK_ON_COMMANDS = {"tts playback on", "playback on", "voice playback on", "tts sound on"}
+TTS_PLAYBACK_OFF_COMMANDS = {"tts playback off", "playback off", "voice playback off", "tts sound off"}
+TTS_REFERENCE_STATUS_COMMANDS = {"tts reference", "tts reference status", "xtts reference", "xtts reference status", "voice reference"}
+TTS_DEBUG_LAST_COMMANDS = {"tts debug last", "tts last error", "tts debug", "voice debug last"}
+TTS_XTTS_TEST_COMMANDS = {"tts xtts test", "xtts test", "test xtts"}  # experimental/personal-only
+TTS_XTTS_TEST_PLAY_COMMANDS = {"tts xtts test play", "xtts test play", "test xtts play"}
+TTS_VOICE_LIST_COMMANDS = {"tts voice list", "voice list", "tts voices", "kokoro voices", "tts kokoro voices", "xtts voice list"}
+TTS_VOICE_CURRENT_COMMANDS = {"tts voice current", "voice current", "current voice", "tts current voice", "xtts voice current"}
 VOICE_ON_COMMANDS = {"voice on", "tts on", "auto voice on", "auto speak on"}
 VOICE_OFF_COMMANDS = {"voice off", "tts off", "auto voice off", "auto speak off"}
 BENCHMARK_PREFIXES = {
@@ -34,7 +44,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, tts status, tts test, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, tts status, tts test, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
@@ -78,8 +88,78 @@ def main() -> None:
             print(f"Jarvis: {runtime.tts_providers()}")
             continue
 
+        if normalized in TTS_TEST_PLAY_COMMANDS:
+            print(f"Jarvis: {runtime.tts_test(play_audio=True)}")
+            continue
+
         if normalized in TTS_TEST_COMMANDS:
             print(f"Jarvis: {runtime.tts_test()}")
+            continue
+
+        if normalized in TTS_PLAY_LAST_COMMANDS:
+            print(f"Jarvis: {runtime.tts_play_last()}")
+            continue
+
+        if normalized in TTS_PLAYBACK_ON_COMMANDS:
+            print(f"Jarvis: {runtime.tts_playback_on()}")
+            continue
+
+        if normalized in TTS_PLAYBACK_OFF_COMMANDS:
+            print(f"Jarvis: {runtime.tts_playback_off()}")
+            continue
+
+        if normalized in TTS_REFERENCE_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.tts_reference_status()}")
+            continue
+
+        if normalized in TTS_DEBUG_LAST_COMMANDS:
+            print(f"Jarvis: {runtime.tts_debug_last()}")
+            continue
+
+        if normalized in TTS_XTTS_TEST_PLAY_COMMANDS:
+            print(f"Jarvis: {runtime.tts_xtts_test(play_audio=True)}")
+            continue
+
+        if normalized in TTS_XTTS_TEST_COMMANDS:
+            print(f"Jarvis: {runtime.tts_xtts_test()}")
+            continue
+
+        if normalized in TTS_VOICE_LIST_COMMANDS:
+            print(f"Jarvis: {runtime.tts_voice_list()}")
+            continue
+
+        if normalized in TTS_VOICE_CURRENT_COMMANDS:
+            print(f"Jarvis: {runtime.tts_voice_current()}")
+            continue
+
+        voice_import_options = _parse_tts_voice_import_command(command)
+        if voice_import_options is not None:
+            print(f"Jarvis: {runtime.tts_voice_import(voice_import_options['voice_name'], voice_import_options['path'], activate=voice_import_options['activate'])}")
+            continue
+
+        voice_use_name = _parse_tts_voice_use_command(command)
+        if voice_use_name is not None:
+            print(f"Jarvis: {runtime.tts_voice_use(voice_use_name)}")
+            continue
+
+        voice_delete_name = _parse_tts_voice_delete_command(command)
+        if voice_delete_name is not None:
+            print(f"Jarvis: {runtime.tts_voice_delete(voice_delete_name)}")
+            continue
+
+        voice_test_options = _parse_tts_voice_test_command(command)
+        if voice_test_options is not None:
+            print(f"Jarvis: {runtime.tts_voice_test(voice_test_options['voice_name'], play_audio=voice_test_options['play_audio'])}")
+            continue
+
+        say_as_options = _parse_tts_say_as_command(command)
+        if say_as_options is not None:
+            print(f"Jarvis: {runtime.tts_say_as(say_as_options['voice_name'], say_as_options['text'], play_audio=say_as_options['play_audio'])}")
+            continue
+
+        reference_options = _parse_tts_reference_command(command)
+        if reference_options is not None:
+            print(f"Jarvis: {runtime.tts_reference_set(reference_options['path'], import_to_default=reference_options['import_to_default'])}")
             continue
 
         tts_text = _parse_tts_say_command(command)
@@ -118,9 +198,84 @@ def main() -> None:
             print(f"Jarvis: {result.message}")
 
         if runtime.tts_manager.auto_speak and result.success and result.message:
-            print(f"Jarvis voice: {runtime.tts_say(result.message)}")
+            print(f"Jarvis voice: {runtime.tts_say(result.message, play_audio=True)}")
 
 
+
+
+def _strip_quotes(value: str) -> str:
+    return value.strip().strip('"').strip("'")
+
+
+def _parse_tts_voice_import_command(command: str) -> dict[str, object] | None:
+    """Parse commands like 'tts voice import jarvis C:\\voice.wav'."""
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = (
+        "tts voice import ",
+        "tts voice create ",
+        "xtts voice import ",
+        "xtts voice create ",
+        "voice import ",
+    )
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            rest = stripped[len(prefix):].strip()
+            parts = rest.split(maxsplit=1)
+            if len(parts) != 2:
+                return None
+            return {"voice_name": _strip_quotes(parts[0]), "path": _strip_quotes(parts[1]), "activate": True}
+    return None
+
+
+def _parse_tts_voice_use_command(command: str) -> str | None:
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("tts voice use ", "tts voice set ", "voice use ", "kokoro voice use ", "tts kokoro voice use ", "xtts voice use ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            return _strip_quotes(stripped[len(prefix):].strip()) or None
+    return None
+
+
+def _parse_tts_voice_delete_command(command: str) -> str | None:
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("tts voice delete ", "tts voice remove ", "voice delete ", "xtts voice delete ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            return _strip_quotes(stripped[len(prefix):].strip()) or None
+    return None
+
+
+def _parse_tts_voice_test_command(command: str) -> dict[str, object] | None:
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("tts voice test ", "voice test ", "kokoro voice test ", "tts kokoro voice test ", "xtts voice test ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            rest = stripped[len(prefix):].strip()
+            play_audio = False
+            if rest.lower().endswith(" play"):
+                play_audio = True
+                rest = rest[:-5].strip()
+            return {"voice_name": _strip_quotes(rest) or None, "play_audio": play_audio}
+    return None
+
+
+def _parse_tts_say_as_command(command: str) -> dict[str, object] | None:
+    """Parse commands like 'tts say as jarvis Hello sir'."""
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("tts say as ", "voice say as ", "speak as ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            rest = stripped[len(prefix):].strip()
+            parts = rest.split(maxsplit=1)
+            if len(parts) != 2:
+                return None
+            return {"voice_name": _strip_quotes(parts[0]), "text": parts[1].strip(), "play_audio": None}
+    return None
 
 def _parse_tts_say_command(command: str) -> str | None:
     """Parse commands like 'tts say hello' without lowercasing the text."""
@@ -130,6 +285,21 @@ def _parse_tts_say_command(command: str) -> str | None:
     for prefix in prefixes:
         if lowered.startswith(prefix):
             return stripped[len(prefix):].strip()
+    return None
+
+
+def _parse_tts_reference_command(command: str) -> dict[str, object] | None:
+    """Parse XTTS reference setup commands while preserving Windows paths."""
+    stripped = command.strip()
+    lowered = stripped.lower()
+    import_prefixes = ("tts reference import ", "xtts reference import ", "voice reference import ")
+    set_prefixes = ("tts reference set ", "xtts reference set ", "voice reference set ")
+    for prefix in import_prefixes:
+        if lowered.startswith(prefix):
+            return {"path": stripped[len(prefix):].strip().strip('"'), "import_to_default": True}
+    for prefix in set_prefixes:
+        if lowered.startswith(prefix):
+            return {"path": stripped[len(prefix):].strip().strip('"'), "import_to_default": False}
     return None
 
 
@@ -144,6 +314,7 @@ def _parse_memory_last_command(normalized_command: str) -> int | None:
         except ValueError:
             return 5
     return None
+
 
 def _parse_benchmark_command(normalized_command: str) -> dict[str, str | None] | None:
     """Parse direct benchmark commands.

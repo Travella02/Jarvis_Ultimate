@@ -8,18 +8,21 @@ from typing import Any
 from jarvis.providers.tts.base import TTSProvider
 from jarvis.providers.tts.kokoro_provider import KokoroTTSProvider
 from jarvis.providers.tts.mock_provider import MockTTSProvider
-from jarvis.providers.tts.xtts_provider import XTTSTTSProvider
 
 
 def create_tts_provider(name: str, config: Any) -> TTSProvider:
     """Create a TTS provider by name without loading heavy models yet."""
     provider = normalize_provider_name(name)
     if provider == "xtts":
+        # Keep XTTS import lazy so normal Kokoro installs do not import or require
+        # Coqui/TTS at boot. XTTS is experimental/personal-only after 0.0.7c.
+        from jarvis.providers.tts.xtts_provider import XTTSTTSProvider
+
         speaker_wav = getattr(config, "tts_xtts_speaker_wav", "")
         return XTTSTTSProvider(
             model_name=getattr(config, "tts_xtts_model_name", "tts_models/multilingual/multi-dataset/xtts_v2"),
-            use_gpu=bool(getattr(config, "tts_use_gpu", True)),
-            device=getattr(config, "tts_device", "cuda"),
+            use_gpu=bool(getattr(config, "tts_use_gpu", False)),
+            device=getattr(config, "tts_device", "auto"),
             speaker_wav=speaker_wav or None,
         )
     if provider == "kokoro":

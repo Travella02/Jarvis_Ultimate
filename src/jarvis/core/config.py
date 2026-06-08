@@ -43,6 +43,7 @@ _ENV_ALIASES = {
     "tts_fallback_providers": ("JARVIS_TTS_FALLBACK_PROVIDERS",),
     "tts_output_dir": ("JARVIS_TTS_OUTPUT_DIR",),
     "tts_voice_name": ("JARVIS_TTS_VOICE_NAME", "JARVIS_VOICE_NAME"),
+    "tts_voice_profiles_dir": ("JARVIS_TTS_VOICE_PROFILES_DIR",),
     "tts_language": ("JARVIS_TTS_LANGUAGE",),
     "tts_device": ("JARVIS_TTS_DEVICE",),
     "tts_use_gpu": ("JARVIS_TTS_USE_GPU",),
@@ -225,13 +226,14 @@ class JarvisConfig:
     memory_short_term_autosave: bool = False
 
     tts_enabled: bool = True
-    tts_provider: str = "xtts"
-    tts_fallback_providers: str = "kokoro,mock"
+    tts_provider: str = "kokoro"
+    tts_fallback_providers: str = "mock"
     tts_output_dir: str = "data/tts"
     tts_voice_name: str = "jarvis"
+    tts_voice_profiles_dir: str = "data/tts/voices"
     tts_language: str = "en"
-    tts_device: str = "cuda"
-    tts_use_gpu: bool = True
+    tts_device: str = "auto"
+    tts_use_gpu: bool = False
     tts_playback: bool = False
     tts_auto_speak: bool = False
     tts_xtts_model_name: str = "tts_models/multilingual/multi-dataset/xtts_v2"
@@ -310,13 +312,14 @@ class JarvisConfig:
                 default=False,
             ),
             tts_enabled=_as_bool(_setting(_ENV_ALIASES["tts_enabled"], env_file, tts_config.get("enabled", "true")), default=True),
-            tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "xtts"))).strip().lower(),
-            tts_fallback_providers=str(_setting(_ENV_ALIASES["tts_fallback_providers"], env_file, tts_config.get("fallback_providers", "kokoro,mock"))),
+            tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "kokoro"))).strip().lower(),
+            tts_fallback_providers=str(_setting(_ENV_ALIASES["tts_fallback_providers"], env_file, tts_config.get("fallback_providers", "mock"))),
             tts_output_dir=str(_setting(_ENV_ALIASES["tts_output_dir"], env_file, tts_config.get("output_dir", "data/tts"))),
             tts_voice_name=str(_setting(_ENV_ALIASES["tts_voice_name"], env_file, tts_config.get("voice_name", "jarvis"))),
             tts_language=str(_setting(_ENV_ALIASES["tts_language"], env_file, tts_config.get("language", "en"))),
-            tts_device=str(_setting(_ENV_ALIASES["tts_device"], env_file, tts_config.get("device", "cuda"))),
-            tts_use_gpu=_as_bool(_setting(_ENV_ALIASES["tts_use_gpu"], env_file, tts_config.get("use_gpu", "true")), default=True),
+            tts_voice_profiles_dir=str(_setting(_ENV_ALIASES["tts_voice_profiles_dir"], env_file, tts_config.get("voice_profiles_dir", "data/tts/voices"))),
+            tts_device=str(_setting(_ENV_ALIASES["tts_device"], env_file, tts_config.get("device", "auto"))),
+            tts_use_gpu=_as_bool(_setting(_ENV_ALIASES["tts_use_gpu"], env_file, tts_config.get("use_gpu", "false")), default=False),
             tts_playback=_as_bool(_setting(_ENV_ALIASES["tts_playback"], env_file, tts_config.get("playback", "false")), default=False),
             tts_auto_speak=_as_bool(_setting(_ENV_ALIASES["tts_auto_speak"], env_file, tts_config.get("auto_speak", "false")), default=False),
             tts_xtts_model_name=str(

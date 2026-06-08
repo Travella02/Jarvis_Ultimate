@@ -1,8 +1,7 @@
 """Optional Kokoro TTS provider.
 
-Kokoro is the preferred SaaS-safer local fallback path because the main Kokoro
-model/weights are Apache-licensed. This provider stays lazy so Jarvis can boot
-without Kokoro installed.
+Kokoro is Jarvis's default local TTS path as of 0.0.7c. It stays
+lazy so Jarvis can boot and run tests without Kokoro installed.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ class KokoroTTSProvider:
             available=ok,
             ready=ok,
             message=message,
-            details={"voice_name": self.voice_name, "lang_code": self.lang_code, "license_note": "Kokoro is the SaaS-safer local fallback path."},
+            details={"voice_name": self.voice_name, "lang_code": self.lang_code, "license_note": "Kokoro is Jarvis's default local TTS path for SaaS-ready development."},
         )
 
     def synthesize(self, request: TTSRequest) -> TTSResult:
@@ -40,7 +39,8 @@ class KokoroTTSProvider:
             import soundfile as sf
 
             pipeline = self._load_pipeline()
-            voice = request.voice_name if request.voice_name and request.voice_name != "jarvis" else self.voice_name
+            requested_voice = str(request.metadata.get("kokoro_voice") or request.voice_name or "").strip()
+            voice = requested_voice if requested_voice and requested_voice not in {"jarvis", "default"} else self.voice_name
             chunks = []
             for _graphemes, _phonemes, audio in pipeline(request.text, voice=voice):
                 chunks.append(audio)

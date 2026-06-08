@@ -20,7 +20,7 @@ class TestTTSConfig(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "providers.yaml").write_text(
             providers_text
-            or "providers:\n  llm:\n    default: mock\n  tts:\n    default: xtts\n    fallback_providers: kokoro,mock\n    output_dir: data/tts\n",
+            or "providers:\n  llm:\n    default: mock\n  tts:\n    default: kokoro\n    fallback_providers: mock\n    output_dir: data/tts\n",
             encoding="utf-8",
         )
         (root / ".env").write_text(env_text, encoding="utf-8")
@@ -31,8 +31,8 @@ class TestTTSConfig(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             config = JarvisConfig.from_project_root(root)
 
-        self.assertEqual(config.tts_provider, "xtts")
-        self.assertEqual(config.tts_fallback_providers, "kokoro,mock")
+        self.assertEqual(config.tts_provider, "kokoro")
+        self.assertEqual(config.tts_fallback_providers, "mock")
         self.assertEqual(config.tts_output_dir, "data/tts")
         self.assertTrue(config.tts_enabled)
 
