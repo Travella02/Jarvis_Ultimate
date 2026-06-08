@@ -22,6 +22,7 @@ def create_llm_provider(config: Any | None = None):
             timeout_seconds=float(getattr(config, "llm_timeout_seconds", 90.0)),
             temperature=float(getattr(config, "llm_temperature", 0.7)),
             max_tokens=int(getattr(config, "llm_max_tokens", 512)),
+            resolve_auto_model=bool(getattr(config, "llm_resolve_auto_model", False)),
         )
 
     # Safe fallback for unknown provider names.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jarvis.providers.llm.base import ChatMessage, LLMResponse
 
 
@@ -24,7 +26,10 @@ class MockLLMProvider:
         system_prompt: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        timing: Any | None = None,
     ) -> LLMResponse:
+        if timing is not None and hasattr(timing, "mark"):
+            timing.mark("mock_llm.request_start", model=self.model)
         if self.canned_response:
             content = self.canned_response
         else:
@@ -34,4 +39,6 @@ class MockLLMProvider:
                     user_message = message.get("content", "")
                     break
             content = f"Mock Jarvis response: {user_message}" if user_message else "Mock Jarvis response."
+        if timing is not None and hasattr(timing, "mark"):
+            timing.mark("mock_llm.request_finished", model=self.model)
         return LLMResponse.ok(content, provider=self.provider_name, model=self.model)

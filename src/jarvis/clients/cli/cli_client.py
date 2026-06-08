@@ -6,13 +6,14 @@ from jarvis.core.lifecycle import JarvisRuntime
 
 
 EXIT_COMMANDS = {"exit", "quit", "q", "bye"}
+TIMING_LAST_COMMANDS = {"timing last", "last timing", "show timing", "latency last"}
 
 
 def main() -> None:
     runtime = JarvisRuntime()
     boot_result = runtime.boot()
     print(boot_result.message)
-    print("Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check")
+    print("Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, timing last")
 
     while True:
         try:
@@ -21,9 +22,14 @@ def main() -> None:
             print("\nJarvis: Shutting down.")
             break
 
-        if command.lower() in EXIT_COMMANDS:
+        normalized = command.lower()
+        if normalized in EXIT_COMMANDS:
             print("Jarvis: Shutting down.")
             break
+
+        if normalized in TIMING_LAST_COMMANDS:
+            print(f"Jarvis: {runtime.timing_last()}")
+            continue
 
         result = runtime.handle_command(command)
         print(f"Jarvis: {result.message}")

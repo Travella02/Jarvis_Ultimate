@@ -26,6 +26,12 @@ src/jarvis/agents/avatar_agent/tools/animation_state.py
 src/jarvis/agents/avatar_agent/tools/avatar_controller.py
 src/jarvis/agents/avatar_agent/tools/emotion_mapper.py
 src/jarvis/agents/avatar_agent/tools/expression_controller.py
+src/jarvis/agents/conversation_agent/__init__.py
+src/jarvis/agents/conversation_agent/agent.py
+src/jarvis/agents/conversation_agent/manifest.py
+src/jarvis/agents/conversation_agent/models.py
+src/jarvis/agents/conversation_agent/prompts.py
+src/jarvis/agents/conversation_agent/tools/__init__.py
 src/jarvis/agents/file_agent/__init__.py
 src/jarvis/agents/file_agent/agent.py
 src/jarvis/agents/file_agent/manifest.py
@@ -131,6 +137,8 @@ src/jarvis/providers/avatar/mock_avatar_provider.py
 src/jarvis/providers/avatar/vrm_provider.py
 src/jarvis/providers/llm/__init__.py
 src/jarvis/providers/llm/base.py
+src/jarvis/providers/llm/factory.py
+src/jarvis/providers/llm/lm_studio_provider.py
 src/jarvis/providers/llm/mock_provider.py
 src/jarvis/providers/llm/ollama_provider.py
 src/jarvis/providers/llm/openai_provider.py

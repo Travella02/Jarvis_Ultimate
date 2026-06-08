@@ -61,7 +61,7 @@ class TestLLMProviders(unittest.TestCase):
         def fake_urlopen(request, timeout):
             return FakeHTTPResponse({"data": [{"id": "loaded-model"}]})
 
-        provider = LMStudioProvider(urlopen=fake_urlopen)
+        provider = LMStudioProvider(resolve_auto_model=True, urlopen=fake_urlopen)
         self.assertEqual(provider.list_models(), ["loaded-model"])
         self.assertEqual(provider.resolve_model(), "loaded-model")
 

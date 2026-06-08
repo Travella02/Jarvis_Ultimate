@@ -42,19 +42,24 @@ class JarvisRouter:
         self.classifier = classifier or IntentClassifier()
         self.llm_provider = llm_provider
 
-    def handle(self, command: str) -> JarvisResult:
+    def handle(self, command: str, *, timing: Any | None = None) -> JarvisResult:
+        self._mark(timing, "brain.router_received")
         self.events.emit("user.command.received", source="brain.router", message=command)
         self.events.emit("brain.routing_started", source="brain.router")
 
+        self._mark(timing, "brain.classify_start")
         intent = self.classifier.classify(command)
         agent_name = INTENT_AGENT_MAP.get(intent.intent, "conversation_agent")
+        self._mark(timing, "brain.classify_finished", intent=intent.intent, agent_name=agent_name)
         self.events.emit(
             "brain.intent_classified",
             source="brain.router",
             data={"intent": intent.intent, "confidence": intent.confidence, "reason": intent.reason, "agent_name": agent_name},
         )
 
+        self._mark(timing, "brain.agent_lookup_start", agent_name=agent_name)
         agent = self.registry.get_agent(agent_name)
+        self._mark(timing, "brain.agent_lookup_finished", found=agent is not None, agent_name=agent_name)
         if agent is None:
             result = JarvisResult.fail(
                 f"I understood the intent as '{intent.intent}', but the '{agent_name}' is not available yet.",
@@ -71,11 +76,15 @@ class JarvisRouter:
             "registry": self.registry,
             "events": self.events,
             "llm_provider": self.llm_provider,
+            "timing": timing,
         }
 
         try:
+            self._mark(timing, "agent.handle_start", agent_name=agent_name)
             result = agent.handle(command, context=context)
+            self._mark(timing, "agent.handle_finished", agent_name=agent_name, success=result.success)
         except Exception as exc:  # Keep runtime safe while agents are young.
+            self._mark(timing, "agent.handle_failed", agent_name=agent_name, error=str(exc))
             result = JarvisResult.fail(
                 f"{agent_name} failed while handling the command.",
                 agent_name=agent_name,
@@ -89,4 +98,9 @@ class JarvisRouter:
         result.data.setdefault("selected_agent", agent_name)
         self.events.emit("agent.finished", source=agent_name, message=result.message, data=result.data)
         self.events.emit("jarvis.response_ready", source="brain.router", message=result.message, data={"success": result.success})
+        self._mark(timing, "brain.response_ready", success=result.success)
         return result
+
+    def _mark(self, timing: Any | None, name: str, **data: Any) -> None:
+        if timing is not None and hasattr(timing, "mark"):
+            timing.mark(name, **data)

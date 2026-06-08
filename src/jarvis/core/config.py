@@ -46,6 +46,19 @@ def _read_simple_provider_config(path: Path) -> dict[str, Any]:
     return data
 
 
+def _as_bool(value: Any, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
 @dataclass(slots=True)
 class JarvisConfig:
     project_root: Path = field(default_factory=lambda: Path.cwd())
@@ -60,6 +73,7 @@ class JarvisConfig:
     llm_timeout_seconds: float = 90.0
     llm_temperature: float = 0.7
     llm_max_tokens: int = 512
+    llm_resolve_auto_model: bool = False
 
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
@@ -77,4 +91,8 @@ class JarvisConfig:
             llm_timeout_seconds=float(os.getenv("JARVIS_LLM_TIMEOUT_SECONDS", str(provider_config.get("timeout_seconds", "90")))),
             llm_temperature=float(os.getenv("JARVIS_LLM_TEMPERATURE", str(provider_config.get("temperature", "0.7")))),
             llm_max_tokens=int(os.getenv("JARVIS_LLM_MAX_TOKENS", str(provider_config.get("max_tokens", "512")))),
+            llm_resolve_auto_model=_as_bool(
+                os.getenv("JARVIS_LLM_RESOLVE_AUTO_MODEL", provider_config.get("resolve_auto_model", "false")),
+                default=False,
+            ),
         )

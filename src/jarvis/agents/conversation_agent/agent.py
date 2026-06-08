@@ -57,6 +57,7 @@ class Agent:
 
     def _handle_general_chat(self, command: str, *, context: dict[str, Any]) -> JarvisResult:
         llm_provider = context.get("llm_provider")
+        timing = context.get("timing")
         if llm_provider is None:
             return JarvisResult.ok(
                 "I can route conversation now, but no LLM provider is attached yet.",
@@ -66,7 +67,9 @@ class Agent:
             )
 
         messages = [{"role": "user", "content": command.strip()}]
-        response = llm_provider.chat(messages, system_prompt=SYSTEM_PROMPT)
+        self._mark(timing, "conversation.llm_chat_start")
+        response = llm_provider.chat(messages, system_prompt=SYSTEM_PROMPT, timing=timing)
+        self._mark(timing, "conversation.llm_chat_finished", success=response.success, provider=response.provider, model=response.model)
 
         provider_name = getattr(llm_provider, "provider_name", response.provider)
         if response.success:
@@ -94,3 +97,7 @@ class Agent:
                 "llm_model": response.model,
             },
         )
+
+    def _mark(self, timing: Any | None, name: str, **data: Any) -> None:
+        if timing is not None and hasattr(timing, "mark"):
+            timing.mark(name, **data)

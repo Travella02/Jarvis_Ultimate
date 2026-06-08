@@ -11,6 +11,7 @@ from jarvis.core.events import EventBus
 from jarvis.core.logging import JarvisLogger
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
+from jarvis.core.timing import TurnTimer, format_timing_summary
 from jarvis.providers.llm.factory import create_llm_provider
 
 
@@ -25,6 +26,7 @@ class JarvisRuntime:
         self.llm_provider = llm_provider or create_llm_provider(self.config)
         self.router: JarvisRouter | None = None
         self.started = False
+        self.last_timing: TurnTimer | None = None
 
         self.events.subscribe("*", lambda event: self.logger.log_event(event.event_type, source=event.source, message=event.message, data=event.data))
 
@@ -53,6 +55,16 @@ class JarvisRuntime:
             self.boot()
         if self.router is None:
             return JarvisResult.fail("Jarvis router failed to initialize.", agent_name="lifecycle", action="handle_command")
-        result = self.router.handle(command)
+
+        timing = TurnTimer(command=command)
+        timing.mark("runtime.handle_command_start")
+        result = self.router.handle(command, timing=timing)
+        timing.mark("runtime.handle_command_finished", success=result.success, action=result.action)
+        result.data["timing"] = timing.to_dict()
+        self.last_timing = timing
         self.logger.log_result(result)
         return result
+
+    def timing_last(self) -> str:
+        """Return a readable summary for the most recent command turn."""
+        return format_timing_summary(self.last_timing)

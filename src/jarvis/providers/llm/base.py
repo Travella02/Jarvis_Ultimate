@@ -42,5 +42,6 @@ class LLMProvider(Protocol):
         system_prompt: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        timing: Any | None = None,
     ) -> LLMResponse:
         ...
