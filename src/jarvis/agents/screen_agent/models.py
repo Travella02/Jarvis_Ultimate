@@ -1,1 +1,1 @@
-"""Placeholder for models."""
+"""Models placeholder for screen_agent."""

@@ -1,1 +1,1 @@
-"""Placeholder for ui_events."""
+"""UI event helpers placeholder."""

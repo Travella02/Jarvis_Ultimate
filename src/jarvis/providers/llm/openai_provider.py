@@ -1,1 +1,1 @@
-"""Placeholder for openai_provider."""
+"""OpenAI provider placeholder. Real implementation comes in a later milestone."""

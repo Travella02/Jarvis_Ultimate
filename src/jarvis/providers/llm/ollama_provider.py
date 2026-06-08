@@ -1,1 +1,1 @@
-"""Placeholder for ollama_provider."""
+"""Ollama provider placeholder. Real implementation comes in a later milestone."""

@@ -1,1 +1,1 @@
-"""Placeholder for prompts."""
+"""Prompts placeholder for voice_agent."""

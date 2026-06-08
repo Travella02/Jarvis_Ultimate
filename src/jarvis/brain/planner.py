@@ -1,1 +1,1 @@
-"""Placeholder for planner."""
+"""Planner placeholder for future multi-agent plans."""

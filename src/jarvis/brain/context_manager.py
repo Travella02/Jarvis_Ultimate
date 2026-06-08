@@ -1,1 +1,1 @@
-"""Placeholder for context_manager."""
+"""Context manager placeholder for short-term conversation context."""

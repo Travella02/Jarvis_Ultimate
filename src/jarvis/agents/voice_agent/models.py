@@ -1,1 +1,1 @@
-"""Placeholder for models."""
+"""Models placeholder for voice_agent."""

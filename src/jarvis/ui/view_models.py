@@ -1,1 +1,1 @@
-"""Placeholder for view_models."""
+"""View model placeholders for desktop UI."""

@@ -1,1 +1,1 @@
-"""Placeholder for themes."""
+"""Theme helpers placeholder."""

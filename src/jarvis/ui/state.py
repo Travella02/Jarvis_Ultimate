@@ -1,1 +1,1 @@
-"""Placeholder for state."""
+"""UI state placeholder."""

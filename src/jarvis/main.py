@@ -1,7 +1,15 @@
 """Jarvis 3 main entrypoint."""
 
+from __future__ import annotations
+
+from jarvis.core.lifecycle import JarvisRuntime
+
+
 def main() -> None:
-    print("Jarvis 3 skeleton loaded. Next milestone: Core Boot + Agent Registry + Event System.")
+    runtime = JarvisRuntime()
+    result = runtime.boot()
+    print(result.message)
+
 
 if __name__ == "__main__":
     main()
