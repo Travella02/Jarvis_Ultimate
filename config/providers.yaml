@@ -1,0 +1,12 @@
+providers:
+  llm:
+    default: mock
+    model: mock
+  ocr:
+    default: mock
+  tts:
+    default: mock
+  stt:
+    default: mock
+  avatar:
+    default: mock_avatar

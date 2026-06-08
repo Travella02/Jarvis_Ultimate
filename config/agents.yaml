@@ -1,0 +1,17 @@
+agents:
+  screen_agent:
+    enabled: true
+  app_agent:
+    enabled: true
+  voice_agent:
+    enabled: false
+  avatar_agent:
+    enabled: true
+  memory_agent:
+    enabled: true
+  file_agent:
+    enabled: true
+  recorder_agent:
+    enabled: false
+  weather_agent:
+    enabled: false

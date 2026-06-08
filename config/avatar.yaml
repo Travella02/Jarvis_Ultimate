@@ -1,0 +1,10 @@
+avatar:
+  enabled: true
+  default_avatar: orb
+  default_state: idle
+states:
+  idle: idle
+  listening: listening
+  thinking: thinking
+  speaking: speaking
+  error: error

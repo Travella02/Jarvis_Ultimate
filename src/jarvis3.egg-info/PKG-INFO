@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: jarvis3
+Version: 0.1.0
+Summary: Jarvis 3 modular AI assistant foundation
+Requires-Python: >=3.10

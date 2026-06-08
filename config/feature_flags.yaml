@@ -1,0 +1,10 @@
+feature_flags:
+  enable_cli: true
+  enable_desktop_ui: false
+  enable_avatar: true
+  enable_full_screen_ocr: false
+  enable_voice_input: false
+  enable_voice_output: false
+  enable_recording: false
+  enable_weather: false
+  enable_email: false

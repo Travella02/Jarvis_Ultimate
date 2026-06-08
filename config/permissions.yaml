@@ -1,0 +1,13 @@
+permissions:
+  screenshot:
+    default: allow
+  app_control:
+    default: ask
+  file_delete:
+    default: ask
+  email_send:
+    default: ask
+  recording:
+    default: ask
+  memory_write:
+    default: allow

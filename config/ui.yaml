@@ -1,0 +1,6 @@
+ui:
+  default_client: cli
+  desktop:
+    enabled: false
+    window_title: Jarvis 3
+    start_maximized: false

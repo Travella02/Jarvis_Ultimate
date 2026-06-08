@@ -1,0 +1,9 @@
+# Jarvis 3 starter requirements
+# Keep this minimal at first.
+# Suggested future packages:
+# PyYAML
+# pydantic
+# requests
+# pillow
+# mss
+# pytesseract

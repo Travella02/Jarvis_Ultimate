@@ -1,0 +1,7 @@
+app:
+  name: Jarvis 3
+  environment: development
+  debug: true
+runtime:
+  data_dir: data
+  logs_dir: logs
