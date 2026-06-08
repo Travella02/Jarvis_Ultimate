@@ -75,7 +75,22 @@ providers:
     kokoro_lang_code: a
 
   stt:
-    default: mock
+    # 0.0.9 speech-to-text input foundation. faster_whisper is the preferred
+    # local/offline STT path, with mock fallback so tests/fresh installs stay safe.
+    default: faster_whisper
+    enabled: true
+    fallback_providers: mock
+    model: base.en
+    device: cpu
+    compute_type: int8
+    language: en
+    output_dir: data/stt
+    record_seconds: 4.0
+    sample_rate: 16000
+    channels: 1
+    microphone_device:
+    vad_filter: true
+    mock_text: Hello sir, this is a mock transcription.
 
   avatar:
     default: mock_avatar

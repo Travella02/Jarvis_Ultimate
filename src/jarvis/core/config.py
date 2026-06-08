@@ -55,6 +55,20 @@ _ENV_ALIASES = {
     "tts_kokoro_lang_code": ("JARVIS_TTS_KOKORO_LANG_CODE",),
     "tts_auto_speak_chunk_chars": ("JARVIS_TTS_AUTO_SPEAK_CHUNK_CHARS", "JARVIS_VOICE_CHUNK_CHARS"),
     "tts_queue_max_size": ("JARVIS_TTS_QUEUE_MAX_SIZE", "JARVIS_VOICE_QUEUE_MAX_SIZE"),
+    "stt_enabled": ("JARVIS_STT_ENABLED",),
+    "stt_provider": ("JARVIS_STT_PROVIDER",),
+    "stt_fallback_providers": ("JARVIS_STT_FALLBACK_PROVIDERS",),
+    "stt_model": ("JARVIS_STT_MODEL", "JARVIS_WHISPER_MODEL"),
+    "stt_device": ("JARVIS_STT_DEVICE",),
+    "stt_compute_type": ("JARVIS_STT_COMPUTE_TYPE",),
+    "stt_language": ("JARVIS_STT_LANGUAGE",),
+    "stt_output_dir": ("JARVIS_STT_OUTPUT_DIR",),
+    "stt_record_seconds": ("JARVIS_STT_RECORD_SECONDS", "JARVIS_MIC_RECORD_SECONDS"),
+    "stt_sample_rate": ("JARVIS_STT_SAMPLE_RATE", "JARVIS_MIC_SAMPLE_RATE"),
+    "stt_channels": ("JARVIS_STT_CHANNELS", "JARVIS_MIC_CHANNELS"),
+    "stt_microphone_device": ("JARVIS_STT_MICROPHONE_DEVICE", "JARVIS_MIC_DEVICE"),
+    "stt_vad_filter": ("JARVIS_STT_VAD_FILTER",),
+    "stt_mock_text": ("JARVIS_STT_MOCK_TEXT",),
 }
 
 
@@ -245,11 +259,27 @@ class JarvisConfig:
     tts_auto_speak_chunk_chars: int = 320
     tts_queue_max_size: int = 12
 
+    stt_enabled: bool = True
+    stt_provider: str = "faster_whisper"
+    stt_fallback_providers: str = "mock"
+    stt_model: str = "base.en"
+    stt_device: str = "cpu"
+    stt_compute_type: str = "int8"
+    stt_language: str = "en"
+    stt_output_dir: str = "data/stt"
+    stt_record_seconds: float = 4.0
+    stt_sample_rate: int = 16000
+    stt_channels: int = 1
+    stt_microphone_device: str = ""
+    stt_vad_filter: bool = True
+    stt_mock_text: str = "Hello sir, this is a mock transcription."
+
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
         root = Path(project_root) if project_root else Path.cwd()
         provider_config = _read_simple_provider_config(root / "config" / "providers.yaml")
         tts_config = _read_simple_provider_section_config(root / "config" / "providers.yaml", "tts")
+        stt_config = _read_simple_provider_section_config(root / "config" / "providers.yaml", "stt")
         env_file = _read_simple_env_file(root / ".env")
 
         return cls(
@@ -338,4 +368,18 @@ class JarvisConfig:
             tts_kokoro_lang_code=str(_setting(_ENV_ALIASES["tts_kokoro_lang_code"], env_file, tts_config.get("kokoro_lang_code", "a"))),
             tts_auto_speak_chunk_chars=int(_setting(_ENV_ALIASES["tts_auto_speak_chunk_chars"], env_file, tts_config.get("auto_speak_chunk_chars", "320"))),
             tts_queue_max_size=int(_setting(_ENV_ALIASES["tts_queue_max_size"], env_file, tts_config.get("queue_max_size", "12"))),
+            stt_enabled=_as_bool(_setting(_ENV_ALIASES["stt_enabled"], env_file, stt_config.get("enabled", "true")), default=True),
+            stt_provider=str(_setting(_ENV_ALIASES["stt_provider"], env_file, stt_config.get("default", "faster_whisper"))).strip().lower(),
+            stt_fallback_providers=str(_setting(_ENV_ALIASES["stt_fallback_providers"], env_file, stt_config.get("fallback_providers", "mock"))),
+            stt_model=str(_setting(_ENV_ALIASES["stt_model"], env_file, stt_config.get("model", "base.en"))),
+            stt_device=str(_setting(_ENV_ALIASES["stt_device"], env_file, stt_config.get("device", "cpu"))).strip().lower(),
+            stt_compute_type=str(_setting(_ENV_ALIASES["stt_compute_type"], env_file, stt_config.get("compute_type", "int8"))).strip().lower(),
+            stt_language=str(_setting(_ENV_ALIASES["stt_language"], env_file, stt_config.get("language", "en"))),
+            stt_output_dir=str(_setting(_ENV_ALIASES["stt_output_dir"], env_file, stt_config.get("output_dir", "data/stt"))),
+            stt_record_seconds=float(_setting(_ENV_ALIASES["stt_record_seconds"], env_file, stt_config.get("record_seconds", "4.0"))),
+            stt_sample_rate=int(_setting(_ENV_ALIASES["stt_sample_rate"], env_file, stt_config.get("sample_rate", "16000"))),
+            stt_channels=int(_setting(_ENV_ALIASES["stt_channels"], env_file, stt_config.get("channels", "1"))),
+            stt_microphone_device=str(_setting(_ENV_ALIASES["stt_microphone_device"], env_file, stt_config.get("microphone_device", ""))),
+            stt_vad_filter=_as_bool(_setting(_ENV_ALIASES["stt_vad_filter"], env_file, stt_config.get("vad_filter", "true")), default=True),
+            stt_mock_text=str(_setting(_ENV_ALIASES["stt_mock_text"], env_file, stt_config.get("mock_text", "Hello sir, this is a mock transcription."))),
         )

@@ -18,18 +18,20 @@ from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 from jarvis.providers.tts.manager import TTSManager, format_tts_result
 from jarvis.providers.tts.pipeline import SpokenResponsePipeline
+from jarvis.providers.stt.manager import STTManager, format_stt_manager_result
 
 
 class JarvisRuntime:
     """Boots the core Jarvis systems and handles user commands."""
 
-    def __init__(self, *, project_root: str | Path | None = None, llm_provider: Any | None = None, tts_manager: TTSManager | None = None) -> None:
+    def __init__(self, *, project_root: str | Path | None = None, llm_provider: Any | None = None, tts_manager: TTSManager | None = None, stt_manager: STTManager | None = None) -> None:
         self.config = JarvisConfig.from_project_root(project_root)
         self.events = EventBus()
         self.logger = JarvisLogger(self.config.logs_dir)
         self.registry = AgentRegistry()
         self.llm_provider = llm_provider or create_llm_provider(self.config)
         self.tts_manager = tts_manager or TTSManager(self.config, events=self.events)
+        self.stt_manager = stt_manager or STTManager(self.config, events=self.events)
         self.spoken_pipeline = SpokenResponsePipeline(
             self.tts_manager,
             events=self.events,
@@ -82,6 +84,11 @@ class JarvisRuntime:
                         "chunk_max_chars": self.spoken_pipeline.chunk_max_chars,
                     },
                 },
+                "stt": {
+                    "enabled": self.stt_manager.enabled,
+                    "provider": self.stt_manager.provider_name,
+                    "record_seconds": self.stt_manager.record_seconds,
+                },
             },
         )
         self.logger.log_result(result)
@@ -127,6 +134,30 @@ class JarvisRuntime:
             data={"removed_turns": removed},
         )
         return f"Short-term memory cleared. Removed {removed} turn(s)."
+
+    def stt_status(self) -> str:
+        """Return user-facing STT and microphone status."""
+        return self.stt_manager.status()
+
+    def stt_providers(self) -> str:
+        """Return the configured STT provider chain."""
+        return self.stt_manager.providers_summary()
+
+    def stt_record(self) -> str:
+        """Record a short microphone WAV without transcription."""
+        return self.stt_manager.record_once()
+
+    def stt_listen_once(self) -> str:
+        """Record a short microphone clip and transcribe it."""
+        return format_stt_manager_result(self.stt_manager.listen_once())
+
+    def stt_transcribe_file(self, path: str) -> str:
+        """Transcribe an audio file through the STT provider chain."""
+        return format_stt_manager_result(self.stt_manager.transcribe_file(path))
+
+    def stt_debug_last(self) -> str:
+        """Return detailed provider-attempt diagnostics for the last STT request."""
+        return self.stt_manager.format_debug_last()
 
     def tts_status(self) -> str:
         """Return user-facing TTS status and provider diagnostics."""
@@ -265,8 +296,8 @@ class JarvisRuntime:
         return self.spoken_pipeline.create_stream_adapter(display_callback, enabled=enabled)
 
     def voice_status(self) -> str:
-        """Return combined TTS and spoken pipeline status."""
-        return self.tts_manager.status() + "\n\n" + self.spoken_pipeline.status()
+        """Return combined TTS, spoken output, and STT status."""
+        return self.tts_manager.status() + "\n\n" + self.spoken_pipeline.status() + "\n\n" + self.stt_manager.status()
 
     def voice_on(self) -> str:
         """Enable automatic voice output and playback for successful CLI chat responses."""

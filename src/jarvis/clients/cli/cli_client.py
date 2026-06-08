@@ -11,6 +11,11 @@ PROMPT_DIAGNOSTIC_COMMANDS = {"prompt stats", "prompt diagnostics", "llm prompt"
 MEMORY_STATUS_COMMANDS = {"memory status", "short memory status", "short-term memory status", "stm status"}
 MEMORY_LAST_COMMANDS = {"memory last", "memory recent", "short memory last", "short-term memory last", "stm last"}
 MEMORY_CLEAR_COMMANDS = {"memory clear", "clear memory", "short memory clear", "short-term memory clear", "stm clear"}
+STT_STATUS_COMMANDS = {"stt status", "mic status", "microphone status", "voice input status", "speech input status"}
+STT_PROVIDERS_COMMANDS = {"stt providers", "mic providers", "speech input providers"}
+STT_RECORD_COMMANDS = {"stt record", "mic record", "record mic", "record microphone"}
+STT_LISTEN_ONCE_COMMANDS = {"listen once", "stt listen", "mic listen", "microphone listen", "stt test mic", "test microphone"}
+STT_DEBUG_LAST_COMMANDS = {"stt debug last", "stt debug", "mic debug last", "speech input debug"}
 TTS_STATUS_COMMANDS = {"tts status", "speech status"}
 VOICE_STATUS_COMMANDS = {"voice status", "spoken status", "auto voice status"}
 TTS_QUEUE_STATUS_COMMANDS = {"tts queue", "tts queue status", "voice queue", "voice queue status"}
@@ -47,7 +52,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, stt status, listen once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
@@ -83,6 +88,33 @@ def main() -> None:
 
         if normalized in MEMORY_CLEAR_COMMANDS:
             print(f"Jarvis: {runtime.memory_clear()}")
+            continue
+
+        if normalized in STT_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.stt_status()}")
+            continue
+
+        if normalized in STT_PROVIDERS_COMMANDS:
+            print(f"Jarvis: {runtime.stt_providers()}")
+            continue
+
+        if normalized in STT_RECORD_COMMANDS:
+            print("Jarvis: Recording a short microphone clip...")
+            print(f"Jarvis: {runtime.stt_record()}")
+            continue
+
+        if normalized in STT_LISTEN_ONCE_COMMANDS:
+            print("Jarvis: Listening once...")
+            print(f"Jarvis: {runtime.stt_listen_once()}")
+            continue
+
+        if normalized in STT_DEBUG_LAST_COMMANDS:
+            print(f"Jarvis: {runtime.stt_debug_last()}")
+            continue
+
+        stt_file_path = _parse_stt_transcribe_command(command)
+        if stt_file_path is not None:
+            print(f"Jarvis: {runtime.stt_transcribe_file(stt_file_path)}")
             continue
 
         if normalized in VOICE_STATUS_COMMANDS:
@@ -319,6 +351,17 @@ def _parse_tts_reference_command(command: str) -> dict[str, object] | None:
     for prefix in set_prefixes:
         if lowered.startswith(prefix):
             return {"path": stripped[len(prefix):].strip().strip('"'), "import_to_default": False}
+    return None
+
+
+def _parse_stt_transcribe_command(command: str) -> str | None:
+    """Parse commands like 'stt transcribe C:\\path\\clip.wav'."""
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("stt transcribe file ", "stt transcribe ", "transcribe audio ", "transcribe file ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            return stripped[len(prefix):].strip().strip('"') or None
     return None
 
 

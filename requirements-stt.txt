@@ -1,0 +1,11 @@
+# Jarvis Ultimate 0.0.9 STT / microphone input dependencies
+# Install from the project root with:
+#   python -m pip install -r requirements-stt.txt
+
+# Microphone recording
+sounddevice>=0.5.0
+numpy>=1.26,<2.0
+
+# Local/offline speech recognition provider
+# Default config uses CPU/int8 for easier laptop/desktop setup. GPU can be tried later with JARVIS_STT_DEVICE=cuda.
+faster-whisper>=1.0.0
