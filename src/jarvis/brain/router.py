@@ -38,12 +38,14 @@ class JarvisRouter:
         classifier: IntentClassifier | None = None,
         llm_provider: Any | None = None,
         config: Any | None = None,
+        short_term_memory: Any | None = None,
     ) -> None:
         self.registry = registry
         self.events = events or EventBus()
         self.classifier = classifier or IntentClassifier()
         self.llm_provider = llm_provider
         self.config = config
+        self.short_term_memory = short_term_memory
 
     def handle(self, command: str, *, timing: Any | None = None, stream_callback: LLMStreamCallback | None = None) -> JarvisResult:
         self._mark(timing, "brain.router_received")
@@ -82,6 +84,7 @@ class JarvisRouter:
             "config": self.config,
             "timing": timing,
             "stream_callback": stream_callback,
+            "short_term_memory": self.short_term_memory,
         }
 
         try:

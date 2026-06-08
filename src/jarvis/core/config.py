@@ -33,7 +33,13 @@ _ENV_ALIASES = {
     "conversation_prompt_mode": ("JARVIS_CONVERSATION_PROMPT_MODE", "JARVIS_CHAT_SYSTEM_PROMPT_MODE", "JARVIS_LLM_PROMPT_MODE"),
     "llm_benchmark_max_tokens": ("JARVIS_LLM_BENCHMARK_MAX_TOKENS", "JARVIS_LM_BENCHMARK_MAX_TOKENS"),
     "llm_benchmark_prompt": ("JARVIS_LLM_BENCHMARK_PROMPT", "JARVIS_LM_BENCHMARK_PROMPT"),
+    "memory_short_term_enabled": ("JARVIS_MEMORY_SHORT_TERM_ENABLED", "JARVIS_STM_ENABLED"),
+    "memory_short_term_max_turns": ("JARVIS_MEMORY_SHORT_TERM_MAX_TURNS", "JARVIS_STM_MAX_TURNS"),
+    "memory_short_term_max_chars": ("JARVIS_MEMORY_SHORT_TERM_MAX_CHARS", "JARVIS_STM_MAX_CHARS"),
+    "memory_short_term_inject_last_turns": ("JARVIS_MEMORY_SHORT_TERM_INJECT_LAST_TURNS", "JARVIS_STM_INJECT_LAST_TURNS"),
+    "memory_short_term_autosave": ("JARVIS_MEMORY_SHORT_TERM_AUTOSAVE", "JARVIS_STM_AUTOSAVE"),
 }
+
 
 
 def _read_simple_provider_config(path: Path) -> dict[str, Any]:
@@ -168,6 +174,12 @@ class JarvisConfig:
     llm_benchmark_max_tokens: int = 64
     llm_benchmark_prompt: str = "Reply with exactly one short sentence saying you are ready."
 
+    memory_short_term_enabled: bool = True
+    memory_short_term_max_turns: int = 20
+    memory_short_term_max_chars: int = 12_000
+    memory_short_term_inject_last_turns: int = 8
+    memory_short_term_autosave: bool = False
+
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
         root = Path(project_root) if project_root else Path.cwd()
@@ -215,5 +227,26 @@ class JarvisConfig:
                     env_file,
                     provider_config.get("benchmark_prompt", "Reply with exactly one short sentence saying you are ready."),
                 )
+            ),
+            memory_short_term_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_short_term_enabled"], env_file, provider_config.get("memory_short_term_enabled", "true")),
+                default=True,
+            ),
+            memory_short_term_max_turns=int(
+                _setting(_ENV_ALIASES["memory_short_term_max_turns"], env_file, provider_config.get("memory_short_term_max_turns", "20"))
+            ),
+            memory_short_term_max_chars=int(
+                _setting(_ENV_ALIASES["memory_short_term_max_chars"], env_file, provider_config.get("memory_short_term_max_chars", "12000"))
+            ),
+            memory_short_term_inject_last_turns=int(
+                _setting(
+                    _ENV_ALIASES["memory_short_term_inject_last_turns"],
+                    env_file,
+                    provider_config.get("memory_short_term_inject_last_turns", "8"),
+                )
+            ),
+            memory_short_term_autosave=_as_bool(
+                _setting(_ENV_ALIASES["memory_short_term_autosave"], env_file, provider_config.get("memory_short_term_autosave", "false")),
+                default=False,
             ),
         )

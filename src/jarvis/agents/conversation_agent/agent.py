@@ -72,9 +72,15 @@ class Agent:
         prompt_mode = getattr(config, "conversation_prompt_mode", "normal") if config else "normal"
         system_prompt = get_system_prompt(prompt_mode)
         prompt_stats = get_prompt_stats(prompt_mode)
-        messages = [{"role": "user", "content": command.strip()}]
+        short_term_memory = context.get("short_term_memory")
+        memory_messages = []
+        if short_term_memory is not None and hasattr(short_term_memory, "to_llm_messages"):
+            memory_messages = short_term_memory.to_llm_messages()
+        messages = [*memory_messages, {"role": "user", "content": command.strip()}]
+        memory_turns = len(memory_messages) // 2
+        self._mark(timing, "conversation.memory_context_selected", turns=memory_turns, messages=len(memory_messages))
         self._mark(timing, "conversation.prompt_selected", **prompt_stats)
-        self._mark(timing, "conversation.llm_chat_start", stream_callback=stream_callback is not None)
+        self._mark(timing, "conversation.llm_chat_start", stream_callback=stream_callback is not None, message_count=len(messages))
         response = llm_provider.chat(messages, system_prompt=system_prompt, timing=timing, stream_callback=stream_callback)
         did_stream = bool(response.raw.get("streamed")) if isinstance(response.raw, dict) else False
         self._mark(
@@ -99,6 +105,7 @@ class Agent:
                     "streamed_output": did_stream,
                     "prompt_mode": prompt_stats["mode"],
                     "system_prompt_chars": prompt_stats["chars"],
+                    "short_term_memory_turns_used": memory_turns,
                 },
             )
 
@@ -116,6 +123,7 @@ class Agent:
                 "streamed_output": did_stream,
                 "prompt_mode": prompt_stats["mode"],
                 "system_prompt_chars": prompt_stats["chars"],
+                "short_term_memory_turns_used": memory_turns,
             },
         )
 

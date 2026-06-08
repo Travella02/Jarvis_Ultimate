@@ -33,6 +33,15 @@ providers:
     benchmark_max_tokens: 64
     benchmark_prompt: Reply with exactly one short sentence saying you are ready.
 
+    # 0.0.6 short-term conversation memory. This is a bounded rolling
+    # session window, not permanent long-term memory. Keep it bounded because
+    # Jarvis is intended to eventually run for long periods.
+    memory_short_term_enabled: true
+    memory_short_term_max_turns: 20
+    memory_short_term_max_chars: 12000
+    memory_short_term_inject_last_turns: 8
+    memory_short_term_autosave: false
+
   ocr:
     default: mock
 

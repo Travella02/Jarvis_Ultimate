@@ -8,6 +8,9 @@ from jarvis.core.lifecycle import JarvisRuntime
 EXIT_COMMANDS = {"exit", "quit", "q", "bye"}
 TIMING_LAST_COMMANDS = {"timing last", "last timing", "show timing", "latency last"}
 PROMPT_DIAGNOSTIC_COMMANDS = {"prompt stats", "prompt diagnostics", "llm prompt", "llm diagnostics"}
+MEMORY_STATUS_COMMANDS = {"memory status", "short memory status", "short-term memory status", "stm status"}
+MEMORY_LAST_COMMANDS = {"memory last", "memory recent", "short memory last", "short-term memory last", "stm last"}
+MEMORY_CLEAR_COMMANDS = {"memory clear", "clear memory", "short memory clear", "short-term memory clear", "stm clear"}
 BENCHMARK_PREFIXES = {
     ("benchmark", "llm"),
     ("benchmark", "lm"),
@@ -26,7 +29,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, benchmark llm, benchmark lm native off"
+        "timing last, prompt stats, memory status, memory last, benchmark llm"
     )
 
     while True:
@@ -47,6 +50,19 @@ def main() -> None:
 
         if normalized in PROMPT_DIAGNOSTIC_COMMANDS:
             print(f"Jarvis: {runtime.prompt_diagnostics()}")
+            continue
+
+        if normalized in MEMORY_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.memory_status()}")
+            continue
+
+        memory_last_limit = _parse_memory_last_command(normalized)
+        if memory_last_limit is not None:
+            print(f"Jarvis: {runtime.memory_last(limit=memory_last_limit)}")
+            continue
+
+        if normalized in MEMORY_CLEAR_COMMANDS:
+            print(f"Jarvis: {runtime.memory_clear()}")
             continue
 
         benchmark_options = _parse_benchmark_command(normalized)
@@ -71,6 +87,19 @@ def main() -> None:
         else:
             print(f"Jarvis: {result.message}")
 
+
+
+def _parse_memory_last_command(normalized_command: str) -> int | None:
+    """Parse memory-last commands with optional numeric limits."""
+    if normalized_command in MEMORY_LAST_COMMANDS:
+        return 5
+    words = normalized_command.split()
+    if len(words) == 3 and words[0] == "memory" and words[1] == "last":
+        try:
+            return max(1, min(20, int(words[2])))
+        except ValueError:
+            return 5
+    return None
 
 def _parse_benchmark_command(normalized_command: str) -> dict[str, str | None] | None:
     """Parse direct benchmark commands.

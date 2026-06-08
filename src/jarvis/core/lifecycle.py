@@ -13,6 +13,7 @@ from jarvis.core.logging import JarvisLogger
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
 from jarvis.core.timing import TurnTimer, format_timing_summary
+from jarvis.memory.short_term import ShortTermMemory
 from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 
@@ -27,6 +28,14 @@ class JarvisRuntime:
         self.registry = AgentRegistry()
         self.llm_provider = llm_provider or create_llm_provider(self.config)
         self.router: JarvisRouter | None = None
+        self.short_term_memory = ShortTermMemory(
+            enabled=getattr(self.config, "memory_short_term_enabled", True),
+            max_turns=getattr(self.config, "memory_short_term_max_turns", 20),
+            max_chars=getattr(self.config, "memory_short_term_max_chars", 12000),
+            inject_last_turns=getattr(self.config, "memory_short_term_inject_last_turns", 8),
+            persist_path=self.config.data_dir / "conversations" / "short_term_session.json",
+            autosave=getattr(self.config, "memory_short_term_autosave", False),
+        )
         self.started = False
         self.last_timing: TurnTimer | None = None
 
@@ -35,7 +44,13 @@ class JarvisRuntime:
     def boot(self) -> JarvisResult:
         self.events.emit("jarvis.boot_started", source="lifecycle", message="Jarvis boot started.")
         self.registry.load_builtin_agents()
-        self.router = JarvisRouter(registry=self.registry, events=self.events, llm_provider=self.llm_provider, config=self.config)
+        self.router = JarvisRouter(
+            registry=self.registry,
+            events=self.events,
+            llm_provider=self.llm_provider,
+            config=self.config,
+            short_term_memory=self.short_term_memory,
+        )
         self.started = True
         agent_names = self.registry.names(enabled_only=True)
         result = JarvisResult.ok(
@@ -47,6 +62,7 @@ class JarvisRuntime:
                 "llm_provider": getattr(self.llm_provider, "provider_name", "unknown"),
                 "llm_model": getattr(self.llm_provider, "model", "unknown"),
                 "llm_streaming": getattr(self.llm_provider, "streaming_enabled", False),
+                "short_term_memory": self.short_term_memory.status(),
             },
         )
         self.logger.log_result(result)
@@ -63,6 +79,7 @@ class JarvisRuntime:
         timing.mark("runtime.handle_command_start", stream_callback=stream_callback is not None)
         result = self.router.handle(command, timing=timing, stream_callback=stream_callback)
         timing.mark("runtime.handle_command_finished", success=result.success, action=result.action, streamed=result.data.get("streamed_output"))
+        self._record_short_term_turn(command, result, timing=timing)
         result.data["timing"] = timing.to_dict()
         self.last_timing = timing
         self.logger.log_result(result)
@@ -71,6 +88,55 @@ class JarvisRuntime:
     def timing_last(self) -> str:
         """Return a readable summary for the most recent command turn."""
         return format_timing_summary(self.last_timing)
+
+
+    def memory_status(self) -> str:
+        """Return user-facing short-term memory status."""
+        return self.short_term_memory.format_status()
+
+    def memory_last(self, limit: int = 5) -> str:
+        """Return recent short-term memory turns."""
+        return self.short_term_memory.format_last(limit=limit)
+
+    def memory_clear(self) -> str:
+        """Clear short-term memory and return a short confirmation."""
+        removed = self.short_term_memory.clear()
+        self.events.emit(
+            "memory.short_term_cleared",
+            source="lifecycle",
+            message="Short-term memory cleared.",
+            data={"removed_turns": removed},
+        )
+        return f"Short-term memory cleared. Removed {removed} turn(s)."
+
+    def _record_short_term_turn(self, command: str, result: JarvisResult, *, timing: TurnTimer | None = None) -> None:
+        """Record normal LLM chat turns after the assistant response is ready."""
+        if not result.success or result.action != "llm_chat":
+            return
+        if not getattr(self.config, "memory_short_term_enabled", True):
+            return
+        stored = self.short_term_memory.add_turn(
+            user=command,
+            assistant=result.message,
+            agent_name=result.agent_name,
+            action=result.action,
+            success=result.success,
+            metadata={
+                "intent": result.data.get("intent"),
+                "llm_model": result.data.get("llm_model"),
+                "prompt_mode": result.data.get("prompt_mode"),
+            },
+        )
+        if stored is None:
+            return
+        if timing is not None:
+            timing.mark("memory.short_term_turn_saved", turns=len(self.short_term_memory.turns))
+        self.events.emit(
+            "memory.short_term_saved",
+            source="lifecycle",
+            message="Short-term conversation turn saved.",
+            data={"turns": len(self.short_term_memory.turns), "session_id": self.short_term_memory.session_id},
+        )
 
     def prompt_diagnostics(self) -> str:
         """Return current LLM prompt/config diagnostics for the CLI."""
@@ -96,6 +162,9 @@ class JarvisRuntime:
             f"- system prompt enabled: {stats['enabled']}",
             f"- system prompt size: {stats['chars']} chars, {stats['words']} words, {stats['lines']} lines",
             f"- benchmark max tokens: {getattr(self.config, 'llm_benchmark_max_tokens', 'unknown')}",
+            f"- short-term memory: {'enabled' if getattr(self.config, 'memory_short_term_enabled', True) else 'disabled'}",
+            f"- short-term memory turns: {len(self.short_term_memory.turns)} / {self.short_term_memory.max_turns}",
+            f"- short-term injected turns: {self.short_term_memory.inject_last_turns}",
         ]
         lines.extend(self._loopback_warnings(base_url=base_url, native_base_url=native_base_url))
         return "\n".join(lines)
