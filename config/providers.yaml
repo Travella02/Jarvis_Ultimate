@@ -3,10 +3,10 @@ providers:
     # Jarvis uses LM Studio through its OpenAI-compatible local API.
     default: lm_studio
     base_url: http://localhost:1234/v1
-    # Keep this as auto for LM Studio's local server. Jarvis 0.0.4 uses a fast
-    # path and sends "local-model" without calling /v1/models before chat.
-    # If your LM Studio setup requires an exact id, replace auto with the model
-    # id shown in LM Studio.
+    # Keep this as auto for LM Studio's local server fast path, or replace it
+    # with the exact model id shown in LM Studio. Jarvis 0.0.5a also reads the
+    # project-root .env file, so you can set JARVIS_LLM_MODEL or JARVIS_LM_MODEL
+    # there without editing committed config.
     model: auto
     # False avoids the pre-chat /v1/models lookup. Set true only when you want
     # Jarvis to ask LM Studio which model is loaded before the first chat.
