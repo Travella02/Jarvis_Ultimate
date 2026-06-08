@@ -46,7 +46,23 @@ providers:
     default: mock
 
   tts:
-    default: mock
+    # 0.0.7 voice output foundation. XTTS is the preferred personal/local
+    # provider for Tanner's current Jarvis voice experiments. Kokoro is the
+    # SaaS-safer local fallback path. Mock keeps tests and fresh installs safe.
+    default: xtts
+    enabled: true
+    fallback_providers: kokoro,mock
+    output_dir: data/tts
+    voice_name: jarvis
+    language: en
+    device: cuda
+    use_gpu: true
+    playback: false
+    auto_speak: false
+    xtts_model_name: tts_models/multilingual/multi-dataset/xtts_v2
+    xtts_speaker_wav: assets/voices/jarvis_reference.wav
+    kokoro_voice: af_heart
+    kokoro_lang_code: a
 
   stt:
     default: mock

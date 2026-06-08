@@ -11,6 +11,11 @@ PROMPT_DIAGNOSTIC_COMMANDS = {"prompt stats", "prompt diagnostics", "llm prompt"
 MEMORY_STATUS_COMMANDS = {"memory status", "short memory status", "short-term memory status", "stm status"}
 MEMORY_LAST_COMMANDS = {"memory last", "memory recent", "short memory last", "short-term memory last", "stm last"}
 MEMORY_CLEAR_COMMANDS = {"memory clear", "clear memory", "short memory clear", "short-term memory clear", "stm clear"}
+TTS_STATUS_COMMANDS = {"tts status", "voice status", "speech status"}
+TTS_PROVIDERS_COMMANDS = {"tts providers", "voice providers", "tts provider"}
+TTS_TEST_COMMANDS = {"tts test", "voice test", "test voice", "test tts"}
+VOICE_ON_COMMANDS = {"voice on", "tts on", "auto voice on", "auto speak on"}
+VOICE_OFF_COMMANDS = {"voice off", "tts off", "auto voice off", "auto speak off"}
 BENCHMARK_PREFIXES = {
     ("benchmark", "llm"),
     ("benchmark", "lm"),
@@ -29,7 +34,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, tts status, tts test, benchmark llm"
     )
 
     while True:
@@ -65,6 +70,31 @@ def main() -> None:
             print(f"Jarvis: {runtime.memory_clear()}")
             continue
 
+        if normalized in TTS_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.tts_status()}")
+            continue
+
+        if normalized in TTS_PROVIDERS_COMMANDS:
+            print(f"Jarvis: {runtime.tts_providers()}")
+            continue
+
+        if normalized in TTS_TEST_COMMANDS:
+            print(f"Jarvis: {runtime.tts_test()}")
+            continue
+
+        tts_text = _parse_tts_say_command(command)
+        if tts_text is not None:
+            print(f"Jarvis: {runtime.tts_say(tts_text)}")
+            continue
+
+        if normalized in VOICE_ON_COMMANDS:
+            print(f"Jarvis: {runtime.voice_on()}")
+            continue
+
+        if normalized in VOICE_OFF_COMMANDS:
+            print(f"Jarvis: {runtime.voice_off()}")
+            continue
+
         benchmark_options = _parse_benchmark_command(normalized)
         if benchmark_options is not None:
             print("Jarvis: Running direct LLM benchmark...")
@@ -87,6 +117,20 @@ def main() -> None:
         else:
             print(f"Jarvis: {result.message}")
 
+        if runtime.tts_manager.auto_speak and result.success and result.message:
+            print(f"Jarvis voice: {runtime.tts_say(result.message)}")
+
+
+
+def _parse_tts_say_command(command: str) -> str | None:
+    """Parse commands like 'tts say hello' without lowercasing the text."""
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("tts say ", "say aloud ", "voice say ", "speak ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            return stripped[len(prefix):].strip()
+    return None
 
 
 def _parse_memory_last_command(normalized_command: str) -> int | None:

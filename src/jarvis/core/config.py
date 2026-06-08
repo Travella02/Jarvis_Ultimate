@@ -38,6 +38,20 @@ _ENV_ALIASES = {
     "memory_short_term_max_chars": ("JARVIS_MEMORY_SHORT_TERM_MAX_CHARS", "JARVIS_STM_MAX_CHARS"),
     "memory_short_term_inject_last_turns": ("JARVIS_MEMORY_SHORT_TERM_INJECT_LAST_TURNS", "JARVIS_STM_INJECT_LAST_TURNS"),
     "memory_short_term_autosave": ("JARVIS_MEMORY_SHORT_TERM_AUTOSAVE", "JARVIS_STM_AUTOSAVE"),
+    "tts_enabled": ("JARVIS_TTS_ENABLED",),
+    "tts_provider": ("JARVIS_TTS_PROVIDER",),
+    "tts_fallback_providers": ("JARVIS_TTS_FALLBACK_PROVIDERS",),
+    "tts_output_dir": ("JARVIS_TTS_OUTPUT_DIR",),
+    "tts_voice_name": ("JARVIS_TTS_VOICE_NAME", "JARVIS_VOICE_NAME"),
+    "tts_language": ("JARVIS_TTS_LANGUAGE",),
+    "tts_device": ("JARVIS_TTS_DEVICE",),
+    "tts_use_gpu": ("JARVIS_TTS_USE_GPU",),
+    "tts_playback": ("JARVIS_TTS_PLAYBACK",),
+    "tts_auto_speak": ("JARVIS_TTS_AUTO_SPEAK", "JARVIS_VOICE_AUTO_SPEAK"),
+    "tts_xtts_model_name": ("JARVIS_TTS_XTTS_MODEL_NAME",),
+    "tts_xtts_speaker_wav": ("JARVIS_TTS_XTTS_SPEAKER_WAV", "JARVIS_XTTS_SPEAKER_WAV"),
+    "tts_kokoro_voice": ("JARVIS_TTS_KOKORO_VOICE",),
+    "tts_kokoro_lang_code": ("JARVIS_TTS_KOKORO_LANG_CODE",),
 }
 
 
@@ -75,6 +89,36 @@ def _read_simple_provider_config(path: Path) -> dict[str, Any]:
             data[key.strip()] = value.strip().strip('"').strip("'")
     return data
 
+
+
+
+def _read_simple_provider_section_config(path: Path, section_name: str) -> dict[str, Any]:
+    """Read a named provider section from the starter providers.yaml.
+
+    This deliberately supports only the simple Jarvis config shape and avoids a
+    YAML dependency during the early rebuild.
+    """
+    if not path.exists():
+        return {}
+
+    data: dict[str, Any] = {}
+    in_section = False
+    section_header = f"{section_name}:"
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 2 and stripped == section_header:
+            in_section = True
+            continue
+        if indent <= 2 and stripped.endswith(":") and stripped != section_header:
+            in_section = False
+        if in_section and indent >= 4 and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            data[key.strip()] = value.strip().strip('"').strip("'")
+    return data
 
 def _read_simple_env_file(path: Path) -> dict[str, str]:
     """Read a small KEY=value .env file without adding a dependency.
@@ -180,10 +224,26 @@ class JarvisConfig:
     memory_short_term_inject_last_turns: int = 8
     memory_short_term_autosave: bool = False
 
+    tts_enabled: bool = True
+    tts_provider: str = "xtts"
+    tts_fallback_providers: str = "kokoro,mock"
+    tts_output_dir: str = "data/tts"
+    tts_voice_name: str = "jarvis"
+    tts_language: str = "en"
+    tts_device: str = "cuda"
+    tts_use_gpu: bool = True
+    tts_playback: bool = False
+    tts_auto_speak: bool = False
+    tts_xtts_model_name: str = "tts_models/multilingual/multi-dataset/xtts_v2"
+    tts_xtts_speaker_wav: str = "assets/voices/jarvis_reference.wav"
+    tts_kokoro_voice: str = "af_heart"
+    tts_kokoro_lang_code: str = "a"
+
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
         root = Path(project_root) if project_root else Path.cwd()
         provider_config = _read_simple_provider_config(root / "config" / "providers.yaml")
+        tts_config = _read_simple_provider_section_config(root / "config" / "providers.yaml", "tts")
         env_file = _read_simple_env_file(root / ".env")
 
         return cls(
@@ -249,4 +309,24 @@ class JarvisConfig:
                 _setting(_ENV_ALIASES["memory_short_term_autosave"], env_file, provider_config.get("memory_short_term_autosave", "false")),
                 default=False,
             ),
+            tts_enabled=_as_bool(_setting(_ENV_ALIASES["tts_enabled"], env_file, tts_config.get("enabled", "true")), default=True),
+            tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "xtts"))).strip().lower(),
+            tts_fallback_providers=str(_setting(_ENV_ALIASES["tts_fallback_providers"], env_file, tts_config.get("fallback_providers", "kokoro,mock"))),
+            tts_output_dir=str(_setting(_ENV_ALIASES["tts_output_dir"], env_file, tts_config.get("output_dir", "data/tts"))),
+            tts_voice_name=str(_setting(_ENV_ALIASES["tts_voice_name"], env_file, tts_config.get("voice_name", "jarvis"))),
+            tts_language=str(_setting(_ENV_ALIASES["tts_language"], env_file, tts_config.get("language", "en"))),
+            tts_device=str(_setting(_ENV_ALIASES["tts_device"], env_file, tts_config.get("device", "cuda"))),
+            tts_use_gpu=_as_bool(_setting(_ENV_ALIASES["tts_use_gpu"], env_file, tts_config.get("use_gpu", "true")), default=True),
+            tts_playback=_as_bool(_setting(_ENV_ALIASES["tts_playback"], env_file, tts_config.get("playback", "false")), default=False),
+            tts_auto_speak=_as_bool(_setting(_ENV_ALIASES["tts_auto_speak"], env_file, tts_config.get("auto_speak", "false")), default=False),
+            tts_xtts_model_name=str(
+                _setting(
+                    _ENV_ALIASES["tts_xtts_model_name"],
+                    env_file,
+                    tts_config.get("xtts_model_name", "tts_models/multilingual/multi-dataset/xtts_v2"),
+                )
+            ),
+            tts_xtts_speaker_wav=str(_setting(_ENV_ALIASES["tts_xtts_speaker_wav"], env_file, tts_config.get("xtts_speaker_wav", "assets/voices/jarvis_reference.wav"))),
+            tts_kokoro_voice=str(_setting(_ENV_ALIASES["tts_kokoro_voice"], env_file, tts_config.get("kokoro_voice", "af_heart"))),
+            tts_kokoro_lang_code=str(_setting(_ENV_ALIASES["tts_kokoro_lang_code"], env_file, tts_config.get("kokoro_lang_code", "a"))),
         )

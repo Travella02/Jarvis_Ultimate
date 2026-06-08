@@ -16,17 +16,19 @@ from jarvis.core.timing import TurnTimer, format_timing_summary
 from jarvis.memory.short_term import ShortTermMemory
 from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
+from jarvis.providers.tts.manager import TTSManager, format_tts_result
 
 
 class JarvisRuntime:
     """Boots the core Jarvis systems and handles user commands."""
 
-    def __init__(self, *, project_root: str | Path | None = None, llm_provider: Any | None = None) -> None:
+    def __init__(self, *, project_root: str | Path | None = None, llm_provider: Any | None = None, tts_manager: TTSManager | None = None) -> None:
         self.config = JarvisConfig.from_project_root(project_root)
         self.events = EventBus()
         self.logger = JarvisLogger(self.config.logs_dir)
         self.registry = AgentRegistry()
         self.llm_provider = llm_provider or create_llm_provider(self.config)
+        self.tts_manager = tts_manager or TTSManager(self.config, events=self.events)
         self.router: JarvisRouter | None = None
         self.short_term_memory = ShortTermMemory(
             enabled=getattr(self.config, "memory_short_term_enabled", True),
@@ -63,6 +65,11 @@ class JarvisRuntime:
                 "llm_model": getattr(self.llm_provider, "model", "unknown"),
                 "llm_streaming": getattr(self.llm_provider, "streaming_enabled", False),
                 "short_term_memory": self.short_term_memory.status(),
+                "tts": {
+                    "enabled": self.tts_manager.enabled,
+                    "provider": self.tts_manager.provider_name,
+                    "auto_speak": self.tts_manager.auto_speak,
+                },
             },
         )
         self.logger.log_result(result)
@@ -108,6 +115,35 @@ class JarvisRuntime:
             data={"removed_turns": removed},
         )
         return f"Short-term memory cleared. Removed {removed} turn(s)."
+
+    def tts_status(self) -> str:
+        """Return user-facing TTS status and provider diagnostics."""
+        return self.tts_manager.status()
+
+    def tts_providers(self) -> str:
+        """Return the configured TTS provider chain."""
+        return self.tts_manager.providers_summary()
+
+    def tts_say(self, text: str, *, play_audio: bool | None = None) -> str:
+        """Generate speech for text with the configured TTS provider chain."""
+        result = self.tts_manager.say(text, play_audio=play_audio)
+        return format_tts_result(result)
+
+    def tts_test(self) -> str:
+        """Generate a short test phrase through the TTS provider chain."""
+        phrase = "Hello Tanner. Jarvis voice output is connected."
+        result = self.tts_manager.say(phrase, play_audio=getattr(self.config, "tts_playback", False))
+        return format_tts_result(result)
+
+    def voice_on(self) -> str:
+        """Enable automatic voice output for successful CLI chat responses."""
+        self.tts_manager.set_auto_speak(True)
+        return "Voice auto-speak is on for this runtime session. Use 'voice off' to disable it."
+
+    def voice_off(self) -> str:
+        """Disable automatic voice output for CLI chat responses."""
+        self.tts_manager.set_auto_speak(False)
+        return "Voice auto-speak is off for this runtime session."
 
     def _record_short_term_turn(self, command: str, result: JarvisResult, *, timing: TurnTimer | None = None) -> None:
         """Record normal LLM chat turns after the assistant response is ready."""

@@ -7,3 +7,16 @@
 # pillow
 # mss
 # pytesseract
+
+# Optional TTS dependencies for Jarvis 0.0.7.
+# Do not install these unless you are ready to test local voice output.
+# XTTS/Coqui can be heavy and may need a Python/CUDA/PyTorch setup that matches
+# your machine. Kokoro is kept as the SaaS-safer local fallback path.
+
+# XTTS v2 provider
+TTS
+
+# Kokoro provider
+kokoro
+soundfile
+numpy
