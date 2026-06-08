@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 
 ChatMessage = dict[str, str]
+LLMStreamCallback = Callable[[str], None]
 
 
 @dataclass(slots=True)
@@ -43,5 +44,7 @@ class LLMProvider(Protocol):
         temperature: float | None = None,
         max_tokens: int | None = None,
         timing: Any | None = None,
+        stream_callback: LLMStreamCallback | None = None,
+        stream: bool | None = None,
     ) -> LLMResponse:
         ...

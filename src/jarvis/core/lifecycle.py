@@ -12,6 +12,7 @@ from jarvis.core.logging import JarvisLogger
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
 from jarvis.core.timing import TurnTimer, format_timing_summary
+from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 
 
@@ -44,22 +45,23 @@ class JarvisRuntime:
                 "agents": agent_names,
                 "llm_provider": getattr(self.llm_provider, "provider_name", "unknown"),
                 "llm_model": getattr(self.llm_provider, "model", "unknown"),
+                "llm_streaming": getattr(self.llm_provider, "streaming_enabled", False),
             },
         )
         self.logger.log_result(result)
         self.events.emit("jarvis.boot_finished", source="lifecycle", message="Jarvis boot finished.", data=result.data)
         return result
 
-    def handle_command(self, command: str) -> JarvisResult:
+    def handle_command(self, command: str, *, stream_callback: LLMStreamCallback | None = None) -> JarvisResult:
         if not self.started:
             self.boot()
         if self.router is None:
             return JarvisResult.fail("Jarvis router failed to initialize.", agent_name="lifecycle", action="handle_command")
 
         timing = TurnTimer(command=command)
-        timing.mark("runtime.handle_command_start")
-        result = self.router.handle(command, timing=timing)
-        timing.mark("runtime.handle_command_finished", success=result.success, action=result.action)
+        timing.mark("runtime.handle_command_start", stream_callback=stream_callback is not None)
+        result = self.router.handle(command, timing=timing, stream_callback=stream_callback)
+        timing.mark("runtime.handle_command_finished", success=result.success, action=result.action, streamed=result.data.get("streamed_output"))
         result.data["timing"] = timing.to_dict()
         self.last_timing = timing
         self.logger.log_result(result)

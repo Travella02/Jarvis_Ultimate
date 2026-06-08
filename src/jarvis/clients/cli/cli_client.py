@@ -31,8 +31,21 @@ def main() -> None:
             print(f"Jarvis: {runtime.timing_last()}")
             continue
 
-        result = runtime.handle_command(command)
-        print(f"Jarvis: {result.message}")
+        state = {"started": False}
+
+        def print_stream_chunk(chunk: str) -> None:
+            if not state["started"]:
+                print("Jarvis: ", end="", flush=True)
+                state["started"] = True
+            print(chunk, end="", flush=True)
+
+        result = runtime.handle_command(command, stream_callback=print_stream_chunk)
+        if state["started"]:
+            print()
+            if not result.success:
+                print(f"Jarvis: {result.message}")
+        else:
+            print(f"Jarvis: {result.message}")
 
 
 if __name__ == "__main__":

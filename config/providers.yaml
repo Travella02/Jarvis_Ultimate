@@ -11,6 +11,9 @@ providers:
     # False avoids the pre-chat /v1/models lookup. Set true only when you want
     # Jarvis to ask LM Studio which model is loaded before the first chat.
     resolve_auto_model: false
+    # 0.0.5 streams tokens to clients that provide a stream callback, including
+    # the CLI. Set false if you need to temporarily return to full-response mode.
+    streaming: true
     timeout_seconds: 90
     temperature: 0.7
     max_tokens: 512

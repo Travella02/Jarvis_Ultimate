@@ -23,6 +23,7 @@ def create_llm_provider(config: Any | None = None):
             temperature=float(getattr(config, "llm_temperature", 0.7)),
             max_tokens=int(getattr(config, "llm_max_tokens", 512)),
             resolve_auto_model=bool(getattr(config, "llm_resolve_auto_model", False)),
+            streaming_enabled=bool(getattr(config, "llm_streaming", True)),
         )
 
     # Safe fallback for unknown provider names.

@@ -34,11 +34,12 @@ class Agent:
             llm_provider = context.get("llm_provider")
             provider_name = getattr(llm_provider, "provider_name", "unknown") if llm_provider else "none"
             provider_model = getattr(llm_provider, "model", "unknown") if llm_provider else "none"
+            streaming = getattr(llm_provider, "streaming_enabled", False) if llm_provider else False
             return JarvisResult.ok(
-                f"Jarvis 3 core is online. Agent registry is active with {agent_count} enabled agents. LLM provider: {provider_name} ({provider_model}).",
+                f"Jarvis 3 core is online. Agent registry is active with {agent_count} enabled agents. LLM provider: {provider_name} ({provider_model}). Streaming: {'enabled' if streaming else 'disabled'}.",
                 agent_name=self.name,
                 action="status",
-                data={"enabled_agent_count": agent_count, "llm_provider": provider_name, "llm_model": provider_model},
+                data={"enabled_agent_count": agent_count, "llm_provider": provider_name, "llm_model": provider_model, "llm_streaming": streaming},
             )
 
         if intent_name == "list_agents":
@@ -58,6 +59,7 @@ class Agent:
     def _handle_general_chat(self, command: str, *, context: dict[str, Any]) -> JarvisResult:
         llm_provider = context.get("llm_provider")
         timing = context.get("timing")
+        stream_callback = context.get("stream_callback")
         if llm_provider is None:
             return JarvisResult.ok(
                 "I can route conversation now, but no LLM provider is attached yet.",
@@ -67,9 +69,17 @@ class Agent:
             )
 
         messages = [{"role": "user", "content": command.strip()}]
-        self._mark(timing, "conversation.llm_chat_start")
-        response = llm_provider.chat(messages, system_prompt=SYSTEM_PROMPT, timing=timing)
-        self._mark(timing, "conversation.llm_chat_finished", success=response.success, provider=response.provider, model=response.model)
+        self._mark(timing, "conversation.llm_chat_start", stream_callback=stream_callback is not None)
+        response = llm_provider.chat(messages, system_prompt=SYSTEM_PROMPT, timing=timing, stream_callback=stream_callback)
+        did_stream = bool(response.raw.get("streamed")) if isinstance(response.raw, dict) else False
+        self._mark(
+            timing,
+            "conversation.llm_chat_finished",
+            success=response.success,
+            provider=response.provider,
+            model=response.model,
+            streamed=did_stream,
+        )
 
         provider_name = getattr(llm_provider, "provider_name", response.provider)
         if response.success:
@@ -81,6 +91,7 @@ class Agent:
                     "llm_enabled": True,
                     "llm_provider": provider_name,
                     "llm_model": response.model,
+                    "streamed_output": did_stream,
                 },
             )
 
@@ -95,6 +106,7 @@ class Agent:
                 "llm_enabled": False,
                 "llm_provider": provider_name,
                 "llm_model": response.model,
+                "streamed_output": did_stream,
             },
         )
 

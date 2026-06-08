@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from jarvis.providers.llm.base import ChatMessage, LLMResponse
+from jarvis.providers.llm.base import ChatMessage, LLMResponse, LLMStreamCallback
 
 
 class MockLLMProvider:
@@ -27,9 +27,11 @@ class MockLLMProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timing: Any | None = None,
+        stream_callback: LLMStreamCallback | None = None,
+        stream: bool | None = None,
     ) -> LLMResponse:
         if timing is not None and hasattr(timing, "mark"):
-            timing.mark("mock_llm.request_start", model=self.model)
+            timing.mark("mock_llm.request_start", model=self.model, stream=stream_callback is not None)
         if self.canned_response:
             content = self.canned_response
         else:
@@ -39,6 +41,13 @@ class MockLLMProvider:
                     user_message = message.get("content", "")
                     break
             content = f"Mock Jarvis response: {user_message}" if user_message else "Mock Jarvis response."
+
+        did_stream = stream_callback is not None and stream is not False
+        if did_stream:
+            if timing is not None and hasattr(timing, "mark"):
+                timing.mark("mock_llm.first_chunk", model=self.model, chars=len(content))
+            stream_callback(content)
+
         if timing is not None and hasattr(timing, "mark"):
-            timing.mark("mock_llm.request_finished", model=self.model)
-        return LLMResponse.ok(content, provider=self.provider_name, model=self.model)
+            timing.mark("mock_llm.request_finished", model=self.model, stream=did_stream)
+        return LLMResponse.ok(content, provider=self.provider_name, model=self.model, raw={"streamed": did_stream})

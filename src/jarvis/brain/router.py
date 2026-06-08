@@ -8,6 +8,7 @@ from jarvis.brain.intent_classifier import IntentClassifier
 from jarvis.core.events import EventBus
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
+from jarvis.providers.llm.base import LLMStreamCallback
 
 
 INTENT_AGENT_MAP = {
@@ -42,7 +43,7 @@ class JarvisRouter:
         self.classifier = classifier or IntentClassifier()
         self.llm_provider = llm_provider
 
-    def handle(self, command: str, *, timing: Any | None = None) -> JarvisResult:
+    def handle(self, command: str, *, timing: Any | None = None, stream_callback: LLMStreamCallback | None = None) -> JarvisResult:
         self._mark(timing, "brain.router_received")
         self.events.emit("user.command.received", source="brain.router", message=command)
         self.events.emit("brain.routing_started", source="brain.router")
@@ -77,6 +78,7 @@ class JarvisRouter:
             "events": self.events,
             "llm_provider": self.llm_provider,
             "timing": timing,
+            "stream_callback": stream_callback,
         }
 
         try:

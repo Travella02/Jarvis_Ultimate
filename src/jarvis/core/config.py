@@ -23,6 +23,7 @@ def _read_simple_provider_config(path: Path) -> dict[str, Any]:
             default: lm_studio
             model: auto
             base_url: http://localhost:1234/v1
+            streaming: true
     """
     if not path.exists():
         return {}
@@ -74,6 +75,7 @@ class JarvisConfig:
     llm_temperature: float = 0.7
     llm_max_tokens: int = 512
     llm_resolve_auto_model: bool = False
+    llm_streaming: bool = True
 
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
@@ -94,5 +96,9 @@ class JarvisConfig:
             llm_resolve_auto_model=_as_bool(
                 os.getenv("JARVIS_LLM_RESOLVE_AUTO_MODEL", provider_config.get("resolve_auto_model", "false")),
                 default=False,
+            ),
+            llm_streaming=_as_bool(
+                os.getenv("JARVIS_LLM_STREAMING", provider_config.get("streaming", "true")),
+                default=True,
             ),
         )

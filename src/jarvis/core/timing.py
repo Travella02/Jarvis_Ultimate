@@ -86,13 +86,22 @@ class TurnTimer:
 
         request_start = self.get_mark("lm_studio.request_start")
         request_finish = self.get_mark("lm_studio.request_finished")
+        first_chunk = self.get_mark("lm_studio.first_chunk")
         if request_start and request_finish:
             before_request = request_start.elapsed_ms
             request_time = max(0.0, request_finish.elapsed_ms - request_start.elapsed_ms)
             lines.append(f"Pre-LM Studio request time: {before_request:.1f} ms")
+            if first_chunk:
+                first_chunk_time = max(0.0, first_chunk.elapsed_ms - request_start.elapsed_ms)
+                remaining_stream_time = max(0.0, request_finish.elapsed_ms - first_chunk.elapsed_ms)
+                lines.append(f"LM Studio time to first streamed chunk: {first_chunk_time:.1f} ms")
+                lines.append(f"LM Studio remaining stream time: {remaining_stream_time:.1f} ms")
             lines.append(f"LM Studio request/response time: {request_time:.1f} ms")
         elif request_start:
             lines.append(f"Pre-LM Studio request time: {request_start.elapsed_ms:.1f} ms")
+            if first_chunk:
+                first_chunk_time = max(0.0, first_chunk.elapsed_ms - request_start.elapsed_ms)
+                lines.append(f"LM Studio time to first streamed chunk: {first_chunk_time:.1f} ms")
             lines.append("LM Studio request did not finish cleanly.")
         else:
             lines.append("No LM Studio request was recorded for the last command.")
