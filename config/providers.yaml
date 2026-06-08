@@ -81,16 +81,26 @@ providers:
     enabled: true
     fallback_providers: mock
     model: base.en
-    # auto chooses CUDA when available, otherwise CPU. Set cuda to force GPU.
-    device: auto
-    # auto = float16 on CUDA, int8 on CPU. Try int8_float16 if CUDA VRAM gets tight.
-    compute_type: auto
+    # 0.0.9c keeps CPU/int8 as the default stable path. GPU can still be
+    # tested later by setting device: auto or cuda after CUDA DLLs are configured.
+    device: cpu
+    compute_type: int8
     gpu_fallback_to_cpu: true
     device_index: 0
     warmup_on_boot: false
     language: en
     output_dir: data/stt
-    record_seconds: 4.0
+    # 0.0.9c low-latency listen mode. smart records until speech ends plus
+    # silence_seconds. fixed records exactly record_seconds.
+    listen_mode: smart
+    record_seconds: 2.0
+    max_listen_seconds: 8.0
+    silence_seconds: 1.0
+    min_record_seconds: 0.35
+    start_timeout_seconds: 5.0
+    energy_threshold: 0.012
+    pre_roll_seconds: 0.25
+    frame_ms: 30
     sample_rate: 16000
     channels: 1
     microphone_device:

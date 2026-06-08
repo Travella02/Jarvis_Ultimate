@@ -27,7 +27,15 @@ class STTManager:
         self.project_root = Path(getattr(config, "project_root", Path.cwd()))
         self.output_dir = self._resolve_project_path(getattr(config, "stt_output_dir", "data/stt"))
         self.language = str(getattr(config, "stt_language", "en") or "").strip() or None
-        self.record_seconds = float(getattr(config, "stt_record_seconds", 4.0))
+        self.record_seconds = float(getattr(config, "stt_record_seconds", 2.0))
+        self.listen_mode = _normalize_listen_mode(getattr(config, "stt_listen_mode", "smart"))
+        self.max_listen_seconds = float(getattr(config, "stt_max_listen_seconds", 8.0))
+        self.silence_seconds = float(getattr(config, "stt_silence_seconds", 1.0))
+        self.min_record_seconds = float(getattr(config, "stt_min_record_seconds", 0.35))
+        self.start_timeout_seconds = float(getattr(config, "stt_start_timeout_seconds", 5.0))
+        self.energy_threshold = float(getattr(config, "stt_energy_threshold", 0.012))
+        self.pre_roll_seconds = float(getattr(config, "stt_pre_roll_seconds", 0.25))
+        self.frame_ms = int(getattr(config, "stt_frame_ms", 30))
         self.sample_rate = int(getattr(config, "stt_sample_rate", 16000))
         self.channels = int(getattr(config, "stt_channels", 1))
         self.microphone_device = str(getattr(config, "stt_microphone_device", "") or "").strip() or None
@@ -54,7 +62,12 @@ class STTManager:
             f"- compute type: {getattr(self.config, 'stt_compute_type', 'auto')}",
             f"- GPU fallback to CPU: {getattr(self.config, 'stt_gpu_fallback_to_cpu', True)}",
             f"- warmup on boot: {getattr(self.config, 'stt_warmup_on_boot', False)}",
-            f"- record seconds: {self.record_seconds}",
+            f"- fixed record seconds: {self.record_seconds}",
+            f"- listen mode: {self.listen_mode}",
+            f"- max listen seconds: {self.max_listen_seconds}",
+            f"- silence stop seconds: {self.silence_seconds}",
+            f"- start timeout seconds: {self.start_timeout_seconds}",
+            f"- energy threshold: {self.energy_threshold}",
             f"- sample rate: {self.sample_rate}",
             f"- channels: {self.channels}",
             f"- output dir: {self.output_dir}",
@@ -80,7 +93,7 @@ class STTManager:
             marker = "preferred" if index == 1 else "fallback"
             lines.append(f"{index}. {provider_name} ({marker}) - {self.get_provider(provider_name).status().format_line()}")
         lines.append("Use 'stt warmup' before live voice tests so the first transcription is not delayed by model loading.")
-        lines.append("Use 'listen once' to record and transcribe a short microphone clip. Use 'stt transcribe <path>' to test an audio file.")
+        lines.append("Use 'listen once' for smart silence-based endpointing, 'listen fixed 2' for a fixed timer, or 'stt transcribe <path>' to test an audio file.")
         return "\n".join(lines)
 
     def gpu_status(self) -> str:
@@ -130,12 +143,40 @@ class STTManager:
         self.last_recording = result
         return format_record_result(result)
 
-    def listen_once(self, *, duration_seconds: float | None = None) -> STTResult:
+    def listen_settings_summary(self) -> str:
+        """Return the current low-latency listen settings."""
+        return "\n".join([
+            "STT listen/endpointing settings:",
+            f"- listen mode: {self.listen_mode}",
+            f"- fixed record seconds: {self.record_seconds}",
+            f"- max listen seconds: {self.max_listen_seconds}",
+            f"- silence stop seconds: {self.silence_seconds}",
+            f"- min record seconds: {self.min_record_seconds}",
+            f"- start timeout seconds: {self.start_timeout_seconds}",
+            f"- energy threshold: {self.energy_threshold}",
+            f"- pre-roll seconds: {self.pre_roll_seconds}",
+            f"- frame ms: {self.frame_ms}",
+            "Tip: lower silence stop seconds feels faster but can cut you off; raise it if Jarvis stops listening too early.",
+        ])
+
+    def listen_once(self, *, duration_seconds: float | None = None, mode: str | None = None, silence_seconds: float | None = None) -> STTResult:
         if not self.enabled:
             result = STTResult.fail("STT is disabled. Set JARVIS_STT_ENABLED=true to enable microphone input.", provider="stt_manager")
             self.last_result = result
             return result
-        record_result = self.recorder.record(duration_seconds=duration_seconds or self.record_seconds)
+        listen_mode = _normalize_listen_mode(mode or self.listen_mode)
+        if listen_mode == "smart":
+            record_result = self.recorder.record_until_silence(
+                max_duration_seconds=duration_seconds or self.max_listen_seconds,
+                silence_seconds=silence_seconds or self.silence_seconds,
+                min_record_seconds=self.min_record_seconds,
+                start_timeout_seconds=self.start_timeout_seconds,
+                energy_threshold=self.energy_threshold,
+                pre_roll_seconds=self.pre_roll_seconds,
+                frame_ms=self.frame_ms,
+            )
+        else:
+            record_result = self.recorder.record(duration_seconds=duration_seconds or self.record_seconds)
         self.last_recording = record_result
         if not record_result.success or record_result.output_path is None:
             result = STTResult.fail(
@@ -243,3 +284,10 @@ class STTManager:
 
 def format_stt_manager_result(result: STTResult) -> str:
     return format_stt_result(result)
+
+
+def _normalize_listen_mode(value: object) -> str:
+    text = str(value or "smart").strip().lower().replace("-", "_")
+    if text in {"fixed", "timer", "duration", "manual"}:
+        return "fixed"
+    return "smart"

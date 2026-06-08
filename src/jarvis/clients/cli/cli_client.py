@@ -14,7 +14,8 @@ MEMORY_CLEAR_COMMANDS = {"memory clear", "clear memory", "short memory clear", "
 STT_STATUS_COMMANDS = {"stt status", "mic status", "microphone status", "voice input status", "speech input status"}
 STT_PROVIDERS_COMMANDS = {"stt providers", "mic providers", "speech input providers"}
 STT_RECORD_COMMANDS = {"stt record", "mic record", "record mic", "record microphone"}
-STT_LISTEN_ONCE_COMMANDS = {"listen once", "stt listen", "mic listen", "microphone listen", "stt test mic", "test microphone"}
+STT_LISTEN_ONCE_COMMANDS = {"listen once", "stt listen", "mic listen", "microphone listen", "stt test mic", "test microphone", "listen until done"}
+STT_LISTEN_SETTINGS_COMMANDS = {"stt listen settings", "listen settings", "mic listen settings", "endpointing settings", "stt endpointing"}
 STT_DEBUG_LAST_COMMANDS = {"stt debug last", "stt debug", "mic debug last", "speech input debug"}
 STT_GPU_STATUS_COMMANDS = {"stt gpu", "stt gpu status", "stt cuda", "stt cuda status", "mic gpu status"}
 STT_WARMUP_COMMANDS = {"stt warmup", "warm up stt", "stt load model", "load stt model", "mic warmup"}
@@ -54,7 +55,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, stt status, stt gpu status, stt warmup, listen once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, listen once, listen fixed 2, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
@@ -109,14 +110,25 @@ def main() -> None:
             print(f"Jarvis: {runtime.stt_warmup()}")
             continue
 
+        if normalized in STT_LISTEN_SETTINGS_COMMANDS:
+            print(f"Jarvis: {runtime.stt_listen_settings()}")
+            continue
+
         if normalized in STT_RECORD_COMMANDS:
             print("Jarvis: Recording a short microphone clip...")
             print(f"Jarvis: {runtime.stt_record()}")
             continue
 
-        if normalized in STT_LISTEN_ONCE_COMMANDS:
-            print("Jarvis: Listening once...")
-            print(f"Jarvis: {runtime.stt_listen_once()}")
+        listen_options = _parse_stt_listen_command(command)
+        if listen_options is not None:
+            mode_label = listen_options.get("mode") or "configured"
+            print(f"Jarvis: Listening once ({mode_label})...")
+            output = runtime.stt_listen_once(
+                duration_seconds=listen_options.get("duration_seconds"),
+                mode=listen_options.get("mode"),
+                silence_seconds=listen_options.get("silence_seconds"),
+            )
+            print(f"Jarvis: {output}")
             continue
 
         if normalized in STT_DEBUG_LAST_COMMANDS:
@@ -363,6 +375,72 @@ def _parse_tts_reference_command(command: str) -> dict[str, object] | None:
         if lowered.startswith(prefix):
             return {"path": stripped[len(prefix):].strip().strip('"'), "import_to_default": False}
     return None
+
+
+
+def _parse_stt_listen_command(command: str) -> dict[str, float | str | None] | None:
+    """Parse low-latency listen commands.
+
+    Supported examples:
+    - listen once
+    - listen smart
+    - listen smart max 6 silence 0.8
+    - listen fixed 2
+    - listen 2              # duration override using configured listen mode
+    """
+    stripped = command.strip()
+    lowered = stripped.lower()
+    if lowered in STT_LISTEN_ONCE_COMMANDS:
+        return {"mode": None, "duration_seconds": None, "silence_seconds": None}
+
+    words = lowered.split()
+    if not words:
+        return None
+    if words[0] == "stt" and len(words) >= 2 and words[1] == "listen":
+        words = words[1:]
+    if not words or words[0] != "listen":
+        return None
+
+    mode: str | None = None
+    duration_seconds: float | None = None
+    silence_seconds: float | None = None
+    recognized = False
+    index = 1
+    if index < len(words) and words[index] in {"once", "smart", "fixed"}:
+        recognized = True
+        if words[index] in {"smart", "fixed"}:
+            mode = words[index]
+        index += 1
+
+    while index < len(words):
+        token = words[index]
+        if token in {"max", "duration", "for", "seconds"} and index + 1 < len(words):
+            duration_seconds = _parse_positive_float(words[index + 1])
+            recognized = recognized or duration_seconds is not None
+            index += 2
+            continue
+        if token in {"silence", "pause", "quiet"} and index + 1 < len(words):
+            silence_seconds = _parse_positive_float(words[index + 1])
+            recognized = recognized or silence_seconds is not None
+            index += 2
+            continue
+        number = _parse_positive_float(token)
+        if number is not None and duration_seconds is None:
+            duration_seconds = number
+            recognized = True
+        index += 1
+
+    if not recognized:
+        return None
+    return {"mode": mode, "duration_seconds": duration_seconds, "silence_seconds": silence_seconds}
+
+
+def _parse_positive_float(value: str) -> float | None:
+    try:
+        number = float(value)
+    except ValueError:
+        return None
+    return number if number > 0 else None
 
 
 def _parse_stt_transcribe_command(command: str) -> str | None:

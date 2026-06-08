@@ -156,13 +156,17 @@ class JarvisRuntime:
         """Warm the active STT model so the first voice turn feels faster."""
         return format_stt_manager_result(self.stt_manager.warmup())
 
+    def stt_listen_settings(self) -> str:
+        """Return low-latency microphone endpointing settings."""
+        return self.stt_manager.listen_settings_summary()
+
     def stt_record(self) -> str:
         """Record a short microphone WAV without transcription."""
         return self.stt_manager.record_once()
 
-    def stt_listen_once(self) -> str:
-        """Record a short microphone clip and transcribe it."""
-        return format_stt_manager_result(self.stt_manager.listen_once())
+    def stt_listen_once(self, *, duration_seconds: float | None = None, mode: str | None = None, silence_seconds: float | None = None) -> str:
+        """Record a microphone clip with fixed or smart endpointing and transcribe it."""
+        return format_stt_manager_result(self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds))
 
     def stt_transcribe_file(self, path: str) -> str:
         """Transcribe an audio file through the STT provider chain."""

@@ -81,3 +81,54 @@ stt debug last
 ```
 
 Important: faster-whisper uses CTranslate2 for inference, not PyTorch. `torch.cuda.is_available()` can prove the NVIDIA driver/PyTorch CUDA path works, but CTranslate2 GPU inference may still require CUDA/cuBLAS/cuDNN runtime DLLs on Windows. If `stt warmup` or `listen once` falls back to CPU, run `stt debug last` and check the CUDA error message.
+
+## 0.0.9c Low-latency listen mode
+
+0.0.9c makes Jarvis's microphone input feel more natural on CPU by replacing a fixed wait with optional silence-based endpointing.
+
+Recommended default settings:
+
+```env
+JARVIS_STT_DEVICE=cpu
+JARVIS_STT_COMPUTE_TYPE=int8
+JARVIS_STT_LISTEN_MODE=smart
+JARVIS_STT_RECORD_SECONDS=2.0
+JARVIS_STT_MAX_LISTEN_SECONDS=8.0
+JARVIS_STT_SILENCE_SECONDS=1.0
+JARVIS_STT_MIN_RECORD_SECONDS=0.35
+JARVIS_STT_START_TIMEOUT_SECONDS=5.0
+JARVIS_STT_ENERGY_THRESHOLD=0.012
+JARVIS_STT_PRE_ROLL_SECONDS=0.25
+JARVIS_STT_FRAME_MS=30
+```
+
+How it works:
+
+```text
+listen starts
+→ Jarvis waits for speech energy above the threshold
+→ Jarvis keeps recording while you talk
+→ after speech starts, Jarvis stops when it hears about JARVIS_STT_SILENCE_SECONDS of quiet
+→ the saved clip is transcribed with the configured STT provider
+```
+
+Useful commands:
+
+```text
+stt listen settings
+listen once
+listen smart
+listen smart max 8 silence 0.8
+listen fixed 2
+stt debug last
+```
+
+Tuning guidance:
+
+- Lower `JARVIS_STT_SILENCE_SECONDS` such as `0.7` or `0.8` makes Jarvis stop listening faster.
+- Raise `JARVIS_STT_SILENCE_SECONDS` such as `1.2` or `1.5` if Jarvis cuts you off between words.
+- Lower `JARVIS_STT_ENERGY_THRESHOLD` if Jarvis fails to notice your voice.
+- Raise `JARVIS_STT_ENERGY_THRESHOLD` if fans, keyboard noise, or room noise trigger recording too easily.
+- Keep `JARVIS_STT_MAX_LISTEN_SECONDS` bounded because Jarvis is intended to become always-running.
+
+GPU STT remains available, but CPU/int8 is the recommended stable default until the Windows CUDA/cuBLAS/cuDNN dependency path is intentionally configured.

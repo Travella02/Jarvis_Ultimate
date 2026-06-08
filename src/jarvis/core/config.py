@@ -67,6 +67,14 @@ _ENV_ALIASES = {
     "stt_language": ("JARVIS_STT_LANGUAGE",),
     "stt_output_dir": ("JARVIS_STT_OUTPUT_DIR",),
     "stt_record_seconds": ("JARVIS_STT_RECORD_SECONDS", "JARVIS_MIC_RECORD_SECONDS"),
+    "stt_listen_mode": ("JARVIS_STT_LISTEN_MODE", "JARVIS_MIC_LISTEN_MODE"),
+    "stt_max_listen_seconds": ("JARVIS_STT_MAX_LISTEN_SECONDS", "JARVIS_MIC_MAX_LISTEN_SECONDS"),
+    "stt_silence_seconds": ("JARVIS_STT_SILENCE_SECONDS", "JARVIS_MIC_SILENCE_SECONDS"),
+    "stt_min_record_seconds": ("JARVIS_STT_MIN_RECORD_SECONDS", "JARVIS_MIC_MIN_RECORD_SECONDS"),
+    "stt_start_timeout_seconds": ("JARVIS_STT_START_TIMEOUT_SECONDS", "JARVIS_MIC_START_TIMEOUT_SECONDS"),
+    "stt_energy_threshold": ("JARVIS_STT_ENERGY_THRESHOLD", "JARVIS_MIC_ENERGY_THRESHOLD"),
+    "stt_pre_roll_seconds": ("JARVIS_STT_PRE_ROLL_SECONDS", "JARVIS_MIC_PRE_ROLL_SECONDS"),
+    "stt_frame_ms": ("JARVIS_STT_FRAME_MS", "JARVIS_MIC_FRAME_MS"),
     "stt_sample_rate": ("JARVIS_STT_SAMPLE_RATE", "JARVIS_MIC_SAMPLE_RATE"),
     "stt_channels": ("JARVIS_STT_CHANNELS", "JARVIS_MIC_CHANNELS"),
     "stt_microphone_device": ("JARVIS_STT_MICROPHONE_DEVICE", "JARVIS_MIC_DEVICE"),
@@ -273,7 +281,15 @@ class JarvisConfig:
     stt_warmup_on_boot: bool = False
     stt_language: str = "en"
     stt_output_dir: str = "data/stt"
-    stt_record_seconds: float = 4.0
+    stt_record_seconds: float = 2.0
+    stt_listen_mode: str = "smart"
+    stt_max_listen_seconds: float = 8.0
+    stt_silence_seconds: float = 1.0
+    stt_min_record_seconds: float = 0.35
+    stt_start_timeout_seconds: float = 5.0
+    stt_energy_threshold: float = 0.012
+    stt_pre_roll_seconds: float = 0.25
+    stt_frame_ms: int = 30
     stt_sample_rate: int = 16000
     stt_channels: int = 1
     stt_microphone_device: str = ""
@@ -385,7 +401,15 @@ class JarvisConfig:
             stt_warmup_on_boot=_as_bool(_setting(_ENV_ALIASES["stt_warmup_on_boot"], env_file, stt_config.get("warmup_on_boot", "false")), default=False),
             stt_language=str(_setting(_ENV_ALIASES["stt_language"], env_file, stt_config.get("language", "en"))),
             stt_output_dir=str(_setting(_ENV_ALIASES["stt_output_dir"], env_file, stt_config.get("output_dir", "data/stt"))),
-            stt_record_seconds=float(_setting(_ENV_ALIASES["stt_record_seconds"], env_file, stt_config.get("record_seconds", "4.0"))),
+            stt_record_seconds=float(_setting(_ENV_ALIASES["stt_record_seconds"], env_file, stt_config.get("record_seconds", "2.0"))),
+            stt_listen_mode=str(_setting(_ENV_ALIASES["stt_listen_mode"], env_file, stt_config.get("listen_mode", "smart"))).strip().lower(),
+            stt_max_listen_seconds=float(_setting(_ENV_ALIASES["stt_max_listen_seconds"], env_file, stt_config.get("max_listen_seconds", "8.0"))),
+            stt_silence_seconds=float(_setting(_ENV_ALIASES["stt_silence_seconds"], env_file, stt_config.get("silence_seconds", "1.0"))),
+            stt_min_record_seconds=float(_setting(_ENV_ALIASES["stt_min_record_seconds"], env_file, stt_config.get("min_record_seconds", "0.35"))),
+            stt_start_timeout_seconds=float(_setting(_ENV_ALIASES["stt_start_timeout_seconds"], env_file, stt_config.get("start_timeout_seconds", "5.0"))),
+            stt_energy_threshold=float(_setting(_ENV_ALIASES["stt_energy_threshold"], env_file, stt_config.get("energy_threshold", "0.012"))),
+            stt_pre_roll_seconds=float(_setting(_ENV_ALIASES["stt_pre_roll_seconds"], env_file, stt_config.get("pre_roll_seconds", "0.25"))),
+            stt_frame_ms=int(_setting(_ENV_ALIASES["stt_frame_ms"], env_file, stt_config.get("frame_ms", "30"))),
             stt_sample_rate=int(_setting(_ENV_ALIASES["stt_sample_rate"], env_file, stt_config.get("sample_rate", "16000"))),
             stt_channels=int(_setting(_ENV_ALIASES["stt_channels"], env_file, stt_config.get("channels", "1"))),
             stt_microphone_device=str(_setting(_ENV_ALIASES["stt_microphone_device"], env_file, stt_config.get("microphone_device", ""))),
