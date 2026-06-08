@@ -81,8 +81,13 @@ providers:
     enabled: true
     fallback_providers: mock
     model: base.en
-    device: cpu
-    compute_type: int8
+    # auto chooses CUDA when available, otherwise CPU. Set cuda to force GPU.
+    device: auto
+    # auto = float16 on CUDA, int8 on CPU. Try int8_float16 if CUDA VRAM gets tight.
+    compute_type: auto
+    gpu_fallback_to_cpu: true
+    device_index: 0
+    warmup_on_boot: false
     language: en
     output_dir: data/stt
     record_seconds: 4.0

@@ -14,9 +14,11 @@ def create_stt_provider(name: str, config: Any) -> STTProvider:
     if provider == "faster_whisper":
         return FasterWhisperSTTProvider(
             model_name=getattr(config, "stt_model", "base.en"),
-            device=getattr(config, "stt_device", "cpu"),
-            compute_type=getattr(config, "stt_compute_type", "int8"),
+            device=getattr(config, "stt_device", "auto"),
+            compute_type=getattr(config, "stt_compute_type", "auto"),
             vad_filter=bool(getattr(config, "stt_vad_filter", True)),
+            gpu_fallback_to_cpu=bool(getattr(config, "stt_gpu_fallback_to_cpu", True)),
+            device_index=int(getattr(config, "stt_device_index", 0) or 0),
         )
     return MockSTTProvider(text=getattr(config, "stt_mock_text", "Hello sir, this is a mock transcription."))
 

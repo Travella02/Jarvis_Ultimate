@@ -9,6 +9,7 @@ from jarvis.core.events import EventBus
 from jarvis.providers.stt.audio_recorder import MicrophoneRecorder, format_record_result
 from jarvis.providers.stt.base import STTProvider, STTRequest, STTResult, format_stt_result
 from jarvis.providers.stt.factory import create_stt_provider, normalize_provider_name, parse_fallback_chain
+from jarvis.providers.stt.faster_whisper_provider import stt_gpu_diagnostics
 
 
 class STTManager:
@@ -49,8 +50,10 @@ class STTManager:
             f"- fallback providers: {', '.join(self.fallback_providers) if self.fallback_providers else 'none'}",
             f"- model: {getattr(self.config, 'stt_model', 'base.en')}",
             f"- language: {self.language or 'auto'}",
-            f"- device: {getattr(self.config, 'stt_device', 'cpu')}",
-            f"- compute type: {getattr(self.config, 'stt_compute_type', 'int8')}",
+            f"- requested device: {getattr(self.config, 'stt_device', 'auto')}",
+            f"- compute type: {getattr(self.config, 'stt_compute_type', 'auto')}",
+            f"- GPU fallback to CPU: {getattr(self.config, 'stt_gpu_fallback_to_cpu', True)}",
+            f"- warmup on boot: {getattr(self.config, 'stt_warmup_on_boot', False)}",
             f"- record seconds: {self.record_seconds}",
             f"- sample rate: {self.sample_rate}",
             f"- channels: {self.channels}",
@@ -58,6 +61,14 @@ class STTManager:
         ]
         mic = self.recorder.status()
         lines.append(f"- microphone: {'ready' if mic.get('ready') else 'unavailable'} - {mic.get('message', '')}")
+        gpu = stt_gpu_diagnostics()
+        lines.append(f"- CUDA detected for STT: {gpu.get('cuda_detected')}")
+        if gpu.get("torch_gpu_name"):
+            lines.append(f"- torch GPU: {gpu.get('torch_gpu_name')}")
+        if gpu.get("ctranslate2_cuda_devices") is not None:
+            lines.append(f"- CTranslate2 CUDA devices: {gpu.get('ctranslate2_cuda_devices')}")
+        if gpu.get("notes"):
+            lines.append("- GPU notes: " + " | ".join(str(item) for item in gpu.get("notes", [])))
         lines.append("Provider checks:")
         for provider_name in self.provider_chain():
             lines.append(f"- {self.get_provider(provider_name).status().format_line()}")
@@ -68,8 +79,51 @@ class STTManager:
         for index, provider_name in enumerate(self.provider_chain(), start=1):
             marker = "preferred" if index == 1 else "fallback"
             lines.append(f"{index}. {provider_name} ({marker}) - {self.get_provider(provider_name).status().format_line()}")
+        lines.append("Use 'stt warmup' before live voice tests so the first transcription is not delayed by model loading.")
         lines.append("Use 'listen once' to record and transcribe a short microphone clip. Use 'stt transcribe <path>' to test an audio file.")
         return "\n".join(lines)
+
+    def gpu_status(self) -> str:
+        gpu = stt_gpu_diagnostics()
+        lines = ["STT GPU diagnostics:"]
+        lines.append(f"- requested device: {getattr(self.config, 'stt_device', 'auto')}")
+        lines.append(f"- compute type: {getattr(self.config, 'stt_compute_type', 'auto')}")
+        lines.append(f"- CUDA detected: {gpu.get('cuda_detected')}")
+        lines.append(f"- torch cuda available: {gpu.get('torch_cuda_available')}")
+        if gpu.get("torch_gpu_name"):
+            lines.append(f"- torch GPU: {gpu.get('torch_gpu_name')}")
+        lines.append(f"- CTranslate2 CUDA devices: {gpu.get('ctranslate2_cuda_devices')}")
+        notes = gpu.get("notes") or []
+        if notes:
+            lines.append("Notes:")
+            lines.extend(f"- {note}" for note in notes)
+        lines.append("If CUDA is detected but model load fails, run 'stt debug last'. On Windows, CTranslate2 may still need NVIDIA cuBLAS/cuDNN DLLs in PATH.")
+        return "\n".join(lines)
+
+    def warmup(self) -> STTResult:
+        if not self.enabled:
+            result = STTResult.fail("STT is disabled. Set JARVIS_STT_ENABLED=true to enable microphone input.", provider="stt_manager")
+            self.last_result = result
+            return result
+        provider = self.get_provider(self.provider_name)
+        if not hasattr(provider, "warmup"):
+            result = STTResult.fail(f"Provider '{self.provider_name}' does not support warmup.", provider=self.provider_name)
+            self.last_result = result
+            return result
+        result = provider.warmup()  # type: ignore[attr-defined]
+        self.last_result = result
+        self.last_attempts = [
+            {
+                "provider": self.provider_name,
+                "success": result.success,
+                "ready": result.success,
+                "available": True,
+                "message": result.message,
+                "error": result.error or "",
+                "data": result.data,
+            }
+        ]
+        return result
 
     def record_once(self, *, duration_seconds: float | None = None) -> str:
         result = self.recorder.record(duration_seconds=duration_seconds or self.record_seconds)
@@ -156,8 +210,15 @@ class STTManager:
                 lines.append(f"{index}. {attempt.get('provider')} success={attempt.get('success')} ready={attempt.get('ready')} available={attempt.get('available')}")
                 if attempt.get("status_message"):
                     lines.append(f"   status: {attempt['status_message']}")
+                data = attempt.get("data") or {}
                 if attempt.get("text"):
                     lines.append(f"   text: {attempt['text']}")
+                if data.get("device"):
+                    lines.append(f"   device: {data.get('device')} ({data.get('compute_type', 'unknown compute type')})")
+                if data.get("elapsed_ms") is not None:
+                    lines.append(f"   elapsed_ms: {float(data.get('elapsed_ms')):.1f}")
+                if data.get("fallback_used"):
+                    lines.append("   fallback_used: True")
                 if attempt.get("error"):
                     lines.append(f"   error: {attempt['error']}")
         return "\n".join(lines)

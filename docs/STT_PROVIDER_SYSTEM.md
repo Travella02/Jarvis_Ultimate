@@ -48,3 +48,36 @@ microphone input
 ```
 
 The always-running version should add wake/sleep state, echo cancellation/ducking, stop commands, and safeguards before enabling continuous listening.
+
+## 0.0.9b GPU STT acceleration
+
+Jarvis now supports GPU-aware faster-whisper configuration.
+
+Recommended settings:
+
+```env
+JARVIS_STT_DEVICE=auto
+JARVIS_STT_COMPUTE_TYPE=auto
+JARVIS_STT_GPU_FALLBACK_TO_CPU=true
+JARVIS_STT_DEVICE_INDEX=0
+JARVIS_STT_WARMUP_ON_BOOT=false
+```
+
+Behavior:
+
+- `device=auto` chooses CUDA when Jarvis detects a usable NVIDIA GPU, otherwise CPU.
+- `compute_type=auto` becomes `float16` on CUDA and `int8` on CPU.
+- `JARVIS_STT_GPU_FALLBACK_TO_CPU=true` keeps Jarvis usable if CUDA/CTranslate2 fails.
+- `stt warmup` loads the model before voice testing so the first real spoken request does not pay the full model-load cost.
+
+Useful commands:
+
+```text
+stt status
+stt gpu status
+stt warmup
+listen once
+stt debug last
+```
+
+Important: faster-whisper uses CTranslate2 for inference, not PyTorch. `torch.cuda.is_available()` can prove the NVIDIA driver/PyTorch CUDA path works, but CTranslate2 GPU inference may still require CUDA/cuBLAS/cuDNN runtime DLLs on Windows. If `stt warmup` or `listen once` falls back to CPU, run `stt debug last` and check the CUDA error message.

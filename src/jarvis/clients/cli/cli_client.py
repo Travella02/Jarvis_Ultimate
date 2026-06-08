@@ -16,6 +16,8 @@ STT_PROVIDERS_COMMANDS = {"stt providers", "mic providers", "speech input provid
 STT_RECORD_COMMANDS = {"stt record", "mic record", "record mic", "record microphone"}
 STT_LISTEN_ONCE_COMMANDS = {"listen once", "stt listen", "mic listen", "microphone listen", "stt test mic", "test microphone"}
 STT_DEBUG_LAST_COMMANDS = {"stt debug last", "stt debug", "mic debug last", "speech input debug"}
+STT_GPU_STATUS_COMMANDS = {"stt gpu", "stt gpu status", "stt cuda", "stt cuda status", "mic gpu status"}
+STT_WARMUP_COMMANDS = {"stt warmup", "warm up stt", "stt load model", "load stt model", "mic warmup"}
 TTS_STATUS_COMMANDS = {"tts status", "speech status"}
 VOICE_STATUS_COMMANDS = {"voice status", "spoken status", "auto voice status"}
 TTS_QUEUE_STATUS_COMMANDS = {"tts queue", "tts queue status", "voice queue", "voice queue status"}
@@ -52,7 +54,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, stt status, listen once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, stt status, stt gpu status, stt warmup, listen once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
@@ -96,6 +98,15 @@ def main() -> None:
 
         if normalized in STT_PROVIDERS_COMMANDS:
             print(f"Jarvis: {runtime.stt_providers()}")
+            continue
+
+        if normalized in STT_GPU_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.stt_gpu_status()}")
+            continue
+
+        if normalized in STT_WARMUP_COMMANDS:
+            print("Jarvis: Warming STT model...")
+            print(f"Jarvis: {runtime.stt_warmup()}")
             continue
 
         if normalized in STT_RECORD_COMMANDS:

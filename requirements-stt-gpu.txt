@@ -1,0 +1,12 @@
+# Jarvis Ultimate optional STT GPU helper requirements
+# Install after requirements-stt.txt with:
+#   python -m pip install -r requirements-stt-gpu.txt
+#
+# These are Python-level packages only. On Windows, CTranslate2 GPU may also
+# need NVIDIA cuBLAS/cuDNN DLLs available on PATH. See docs/STT_PROVIDER_SYSTEM.md.
+
+-r requirements-stt.txt
+
+# Keep torch optional here because Jarvis uses CTranslate2 for faster-whisper,
+# not PyTorch, but torch helps diagnostics detect the installed NVIDIA GPU.
+torch

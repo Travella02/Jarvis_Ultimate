@@ -64,6 +64,9 @@ class JarvisRuntime:
             short_term_memory=self.short_term_memory,
         )
         self.started = True
+        stt_warmup_result = None
+        if getattr(self.config, "stt_warmup_on_boot", False):
+            stt_warmup_result = self.stt_manager.warmup()
         agent_names = self.registry.names(enabled_only=True)
         result = JarvisResult.ok(
             f"Jarvis 3 is online. Registered {len(agent_names)} agents.",
@@ -88,6 +91,8 @@ class JarvisRuntime:
                     "enabled": self.stt_manager.enabled,
                     "provider": self.stt_manager.provider_name,
                     "record_seconds": self.stt_manager.record_seconds,
+                    "warmup_on_boot": getattr(self.config, "stt_warmup_on_boot", False),
+                    "warmup_success": getattr(stt_warmup_result, "success", None),
                 },
             },
         )
@@ -142,6 +147,14 @@ class JarvisRuntime:
     def stt_providers(self) -> str:
         """Return the configured STT provider chain."""
         return self.stt_manager.providers_summary()
+
+    def stt_gpu_status(self) -> str:
+        """Return GPU diagnostics for the active STT provider."""
+        return self.stt_manager.gpu_status()
+
+    def stt_warmup(self) -> str:
+        """Warm the active STT model so the first voice turn feels faster."""
+        return format_stt_manager_result(self.stt_manager.warmup())
 
     def stt_record(self) -> str:
         """Record a short microphone WAV without transcription."""

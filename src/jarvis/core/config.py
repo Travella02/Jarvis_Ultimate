@@ -61,6 +61,9 @@ _ENV_ALIASES = {
     "stt_model": ("JARVIS_STT_MODEL", "JARVIS_WHISPER_MODEL"),
     "stt_device": ("JARVIS_STT_DEVICE",),
     "stt_compute_type": ("JARVIS_STT_COMPUTE_TYPE",),
+    "stt_gpu_fallback_to_cpu": ("JARVIS_STT_GPU_FALLBACK_TO_CPU",),
+    "stt_device_index": ("JARVIS_STT_DEVICE_INDEX",),
+    "stt_warmup_on_boot": ("JARVIS_STT_WARMUP_ON_BOOT",),
     "stt_language": ("JARVIS_STT_LANGUAGE",),
     "stt_output_dir": ("JARVIS_STT_OUTPUT_DIR",),
     "stt_record_seconds": ("JARVIS_STT_RECORD_SECONDS", "JARVIS_MIC_RECORD_SECONDS"),
@@ -263,8 +266,11 @@ class JarvisConfig:
     stt_provider: str = "faster_whisper"
     stt_fallback_providers: str = "mock"
     stt_model: str = "base.en"
-    stt_device: str = "cpu"
-    stt_compute_type: str = "int8"
+    stt_device: str = "auto"
+    stt_compute_type: str = "auto"
+    stt_gpu_fallback_to_cpu: bool = True
+    stt_device_index: int = 0
+    stt_warmup_on_boot: bool = False
     stt_language: str = "en"
     stt_output_dir: str = "data/stt"
     stt_record_seconds: float = 4.0
@@ -372,8 +378,11 @@ class JarvisConfig:
             stt_provider=str(_setting(_ENV_ALIASES["stt_provider"], env_file, stt_config.get("default", "faster_whisper"))).strip().lower(),
             stt_fallback_providers=str(_setting(_ENV_ALIASES["stt_fallback_providers"], env_file, stt_config.get("fallback_providers", "mock"))),
             stt_model=str(_setting(_ENV_ALIASES["stt_model"], env_file, stt_config.get("model", "base.en"))),
-            stt_device=str(_setting(_ENV_ALIASES["stt_device"], env_file, stt_config.get("device", "cpu"))).strip().lower(),
-            stt_compute_type=str(_setting(_ENV_ALIASES["stt_compute_type"], env_file, stt_config.get("compute_type", "int8"))).strip().lower(),
+            stt_device=str(_setting(_ENV_ALIASES["stt_device"], env_file, stt_config.get("device", "auto"))).strip().lower(),
+            stt_compute_type=str(_setting(_ENV_ALIASES["stt_compute_type"], env_file, stt_config.get("compute_type", "auto"))).strip().lower(),
+            stt_gpu_fallback_to_cpu=_as_bool(_setting(_ENV_ALIASES["stt_gpu_fallback_to_cpu"], env_file, stt_config.get("gpu_fallback_to_cpu", "true")), default=True),
+            stt_device_index=int(_setting(_ENV_ALIASES["stt_device_index"], env_file, stt_config.get("device_index", "0"))),
+            stt_warmup_on_boot=_as_bool(_setting(_ENV_ALIASES["stt_warmup_on_boot"], env_file, stt_config.get("warmup_on_boot", "false")), default=False),
             stt_language=str(_setting(_ENV_ALIASES["stt_language"], env_file, stt_config.get("language", "en"))),
             stt_output_dir=str(_setting(_ENV_ALIASES["stt_output_dir"], env_file, stt_config.get("output_dir", "data/stt"))),
             stt_record_seconds=float(_setting(_ENV_ALIASES["stt_record_seconds"], env_file, stt_config.get("record_seconds", "4.0"))),
