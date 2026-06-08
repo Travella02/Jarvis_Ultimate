@@ -7,13 +7,27 @@ from jarvis.core.lifecycle import JarvisRuntime
 
 EXIT_COMMANDS = {"exit", "quit", "q", "bye"}
 TIMING_LAST_COMMANDS = {"timing last", "last timing", "show timing", "latency last"}
+PROMPT_DIAGNOSTIC_COMMANDS = {"prompt stats", "prompt diagnostics", "llm prompt", "llm diagnostics"}
+BENCHMARK_PREFIXES = {
+    ("benchmark", "llm"),
+    ("benchmark", "lm"),
+    ("llm", "benchmark"),
+    ("llm", "speed"),
+    ("speed", "test"),
+}
+PROMPT_MODE_WORDS = {"normal", "minimal", "off", "none", "fast", "short"}
+API_MODE_WORDS = {"openai", "native"}
+REASONING_WORDS = {"auto", "default", "off", "low", "medium", "high", "on"}
 
 
 def main() -> None:
     runtime = JarvisRuntime()
     boot_result = runtime.boot()
     print(boot_result.message)
-    print("Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, timing last")
+    print(
+        "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
+        "timing last, prompt stats, benchmark llm, benchmark lm native off"
+    )
 
     while True:
         try:
@@ -31,6 +45,16 @@ def main() -> None:
             print(f"Jarvis: {runtime.timing_last()}")
             continue
 
+        if normalized in PROMPT_DIAGNOSTIC_COMMANDS:
+            print(f"Jarvis: {runtime.prompt_diagnostics()}")
+            continue
+
+        benchmark_options = _parse_benchmark_command(normalized)
+        if benchmark_options is not None:
+            print("Jarvis: Running direct LLM benchmark...")
+            print(f"Jarvis: {runtime.benchmark_llm(**benchmark_options)}")
+            continue
+
         state = {"started": False}
 
         def print_stream_chunk(chunk: str) -> None:
@@ -46,6 +70,39 @@ def main() -> None:
                 print(f"Jarvis: {result.message}")
         else:
             print(f"Jarvis: {result.message}")
+
+
+def _parse_benchmark_command(normalized_command: str) -> dict[str, str | None] | None:
+    """Parse direct benchmark commands.
+
+    Supported examples:
+    - benchmark llm
+    - benchmark llm minimal
+    - benchmark llm off        # old behavior: prompt mode off
+    - benchmark lm openai
+    - benchmark lm native
+    - benchmark lm native off  # native API, reasoning/thinking off
+    - benchmark lm native low
+    """
+    words = normalized_command.split()
+    if len(words) < 2:
+        return None
+    if tuple(words[:2]) not in BENCHMARK_PREFIXES:
+        return None
+
+    tokens = words[2:]
+    api_mode_present = any(token in API_MODE_WORDS for token in tokens)
+    options: dict[str, str | None] = {"prompt_mode": None, "api_mode": None, "reasoning": None}
+
+    for token in tokens:
+        if token in API_MODE_WORDS:
+            options["api_mode"] = token
+        elif token in REASONING_WORDS and api_mode_present:
+            options["reasoning"] = "auto" if token == "default" else token
+        elif token in PROMPT_MODE_WORDS:
+            options["prompt_mode"] = token
+
+    return options
 
 
 if __name__ == "__main__":

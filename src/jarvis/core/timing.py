@@ -84,6 +84,42 @@ class TurnTimer:
                 extras = f" ({pairs})"
             lines.append(f"- {mark.name}: +{mark.delta_ms:.1f} ms / {mark.elapsed_ms:.1f} ms{extras}")
 
+        prepare_finished = self.get_mark("lm_studio.prepare_finished")
+        if prepare_finished:
+            payload_bytes = prepare_finished.data.get("payload_bytes")
+            prompt_chars = prepare_finished.data.get("prompt_chars")
+            system_chars = prepare_finished.data.get("system_chars")
+            user_chars = prepare_finished.data.get("user_chars")
+            max_tokens = prepare_finished.data.get("max_tokens")
+            api_mode = prepare_finished.data.get("api_mode")
+            path = prepare_finished.data.get("path")
+            reasoning = prepare_finished.data.get("reasoning")
+            context_length = prepare_finished.data.get("context_length")
+            mode_details = f", api_mode={api_mode}" if api_mode else ""
+            if path:
+                mode_details += f", path={path}"
+            if reasoning:
+                mode_details += f", reasoning={reasoning}"
+            if context_length:
+                mode_details += f", context_length={context_length}"
+            lines.append(
+                "LM Studio prompt payload: "
+                f"{payload_bytes} bytes, {prompt_chars} prompt chars "
+                f"(system={system_chars}, user={user_chars}), max_tokens={max_tokens}{mode_details}"
+            )
+
+        native_stats = self.get_mark("lm_studio.native_stats")
+        if native_stats:
+            stats = native_stats.data
+            lines.append(
+                "LM Studio native stats: "
+                f"input_tokens={stats.get('input_tokens')}, "
+                f"output_tokens={stats.get('total_output_tokens')}, "
+                f"reasoning_tokens={stats.get('reasoning_output_tokens')}, "
+                f"ttft={stats.get('time_to_first_token_seconds')}s, "
+                f"tokens_per_second={stats.get('tokens_per_second')}"
+            )
+
         request_start = self.get_mark("lm_studio.request_start")
         request_finish = self.get_mark("lm_studio.request_finished")
         first_chunk = self.get_mark("lm_studio.first_chunk")

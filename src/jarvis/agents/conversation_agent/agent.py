@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from jarvis.agents.conversation_agent.prompts import SYSTEM_PROMPT
+from jarvis.agents.conversation_agent.prompts import get_prompt_stats, get_system_prompt
 from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
 
@@ -68,9 +68,14 @@ class Agent:
                 data={"llm_enabled": False},
             )
 
+        config = context.get("config")
+        prompt_mode = getattr(config, "conversation_prompt_mode", "normal") if config else "normal"
+        system_prompt = get_system_prompt(prompt_mode)
+        prompt_stats = get_prompt_stats(prompt_mode)
         messages = [{"role": "user", "content": command.strip()}]
+        self._mark(timing, "conversation.prompt_selected", **prompt_stats)
         self._mark(timing, "conversation.llm_chat_start", stream_callback=stream_callback is not None)
-        response = llm_provider.chat(messages, system_prompt=SYSTEM_PROMPT, timing=timing, stream_callback=stream_callback)
+        response = llm_provider.chat(messages, system_prompt=system_prompt, timing=timing, stream_callback=stream_callback)
         did_stream = bool(response.raw.get("streamed")) if isinstance(response.raw, dict) else False
         self._mark(
             timing,
@@ -92,6 +97,8 @@ class Agent:
                     "llm_provider": provider_name,
                     "llm_model": response.model,
                     "streamed_output": did_stream,
+                    "prompt_mode": prompt_stats["mode"],
+                    "system_prompt_chars": prompt_stats["chars"],
                 },
             )
 
@@ -107,6 +114,8 @@ class Agent:
                 "llm_provider": provider_name,
                 "llm_model": response.model,
                 "streamed_output": did_stream,
+                "prompt_mode": prompt_stats["mode"],
+                "system_prompt_chars": prompt_stats["chars"],
             },
         )
 

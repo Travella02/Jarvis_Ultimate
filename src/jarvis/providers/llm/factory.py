@@ -17,13 +17,18 @@ def create_llm_provider(config: Any | None = None):
 
     if provider_name in {"lm_studio", "lmstudio", "local"}:
         return LMStudioProvider(
-            base_url=getattr(config, "llm_base_url", "http://localhost:1234/v1"),
+            base_url=getattr(config, "llm_base_url", "http://127.0.0.1:1234/v1"),
             model=getattr(config, "llm_model", "auto"),
             timeout_seconds=float(getattr(config, "llm_timeout_seconds", 90.0)),
             temperature=float(getattr(config, "llm_temperature", 0.7)),
             max_tokens=int(getattr(config, "llm_max_tokens", 512)),
             resolve_auto_model=bool(getattr(config, "llm_resolve_auto_model", False)),
             streaming_enabled=bool(getattr(config, "llm_streaming", True)),
+            api_mode=getattr(config, "llm_api_mode", "openai"),
+            native_base_url=getattr(config, "llm_native_base_url", "http://127.0.0.1:1234"),
+            reasoning=getattr(config, "llm_reasoning", "auto"),
+            context_length=getattr(config, "llm_context_length", None),
+            store_native_chats=bool(getattr(config, "llm_store_native_chats", False)),
         )
 
     # Safe fallback for unknown provider names.

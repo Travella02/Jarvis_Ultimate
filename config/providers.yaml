@@ -2,7 +2,7 @@ providers:
   llm:
     # Jarvis uses LM Studio through its OpenAI-compatible local API.
     default: lm_studio
-    base_url: http://localhost:1234/v1
+    base_url: http://127.0.0.1:1234/v1
     # Keep this as auto for LM Studio's local server fast path, or replace it
     # with the exact model id shown in LM Studio. Jarvis 0.0.5a also reads the
     # project-root .env file, so you can set JARVIS_LLM_MODEL or JARVIS_LM_MODEL
@@ -14,9 +14,24 @@ providers:
     # 0.0.5 streams tokens to clients that provide a stream callback, including
     # the CLI. Set false if you need to temporarily return to full-response mode.
     streaming: true
+    # 0.0.5c request mode diagnostics. Keep openai for the known-compatible path,
+    # or set native to use LM Studio's /api/v1/chat endpoint. Native mode can
+    # send reasoning/thinking controls that match LM Studio's chat UI more closely.
+    api_mode: openai
+    native_base_url: http://127.0.0.1:1234
+    # auto = omit the setting. off/low/medium/high/on are sent only in native mode.
+    reasoning: auto
+    # Optional native request context length override. Empty/default means LM Studio decides.
+    context_length:
+    # Keep false for now so diagnostic native requests do not create stored chats.
+    store_native_chats: false
     timeout_seconds: 90
     temperature: 0.7
     max_tokens: 512
+    # 0.0.5b speed diagnostics. These can also be set in the project-root .env.
+    conversation_prompt_mode: normal
+    benchmark_max_tokens: 64
+    benchmark_prompt: Reply with exactly one short sentence saying you are ready.
 
   ocr:
     default: mock

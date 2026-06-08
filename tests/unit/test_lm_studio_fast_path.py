@@ -41,7 +41,7 @@ class TestLMStudioFastPath(unittest.TestCase):
 
         self.assertTrue(response.success)
         self.assertEqual(response.model, "local-model")
-        self.assertEqual(requested_urls, ["http://localhost:1234/v1/chat/completions"])
+        self.assertEqual(requested_urls, ["http://127.0.0.1:1234/v1/chat/completions"])
         self.assertTrue(timer.has_mark("lm_studio.request_start"))
         self.assertTrue(timer.has_mark("lm_studio.model_resolved"))
 
@@ -59,8 +59,8 @@ class TestLMStudioFastPath(unittest.TestCase):
 
         self.assertTrue(response.success)
         self.assertEqual(response.model, "loaded-model")
-        self.assertEqual(requested_urls[0], "http://localhost:1234/v1/models")
-        self.assertEqual(requested_urls[1], "http://localhost:1234/v1/chat/completions")
+        self.assertEqual(requested_urls[0], "http://127.0.0.1:1234/v1/models")
+        self.assertEqual(requested_urls[1], "http://127.0.0.1:1234/v1/chat/completions")
 
 
 if __name__ == "__main__":

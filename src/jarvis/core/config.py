@@ -25,6 +25,14 @@ _ENV_ALIASES = {
     "llm_max_tokens": ("JARVIS_LLM_MAX_TOKENS", "JARVIS_LM_MAX_TOKENS"),
     "llm_resolve_auto_model": ("JARVIS_LLM_RESOLVE_AUTO_MODEL", "JARVIS_LM_RESOLVE_AUTO_MODEL"),
     "llm_streaming": ("JARVIS_LLM_STREAMING", "JARVIS_LM_STREAMING"),
+    "llm_api_mode": ("JARVIS_LLM_API_MODE", "JARVIS_LM_API_MODE"),
+    "llm_native_base_url": ("JARVIS_LM_STUDIO_NATIVE_BASE_URL", "JARVIS_LLM_STUDIO_NATIVE_BASE_URL", "JARVIS_LLM_NATIVE_BASE_URL", "JARVIS_LM_NATIVE_BASE_URL"),
+    "llm_reasoning": ("JARVIS_LLM_REASONING", "JARVIS_LM_REASONING", "JARVIS_LM_THINKING"),
+    "llm_context_length": ("JARVIS_LLM_CONTEXT_LENGTH", "JARVIS_LM_CONTEXT_LENGTH"),
+    "llm_store_native_chats": ("JARVIS_LLM_STORE_NATIVE_CHATS", "JARVIS_LM_STORE_NATIVE_CHATS"),
+    "conversation_prompt_mode": ("JARVIS_CONVERSATION_PROMPT_MODE", "JARVIS_CHAT_SYSTEM_PROMPT_MODE", "JARVIS_LLM_PROMPT_MODE"),
+    "llm_benchmark_max_tokens": ("JARVIS_LLM_BENCHMARK_MAX_TOKENS", "JARVIS_LM_BENCHMARK_MAX_TOKENS"),
+    "llm_benchmark_prompt": ("JARVIS_LLM_BENCHMARK_PROMPT", "JARVIS_LM_BENCHMARK_PROMPT"),
 }
 
 
@@ -100,6 +108,28 @@ def _setting(names: Iterable[str], env_file: dict[str, str], default: Any) -> An
     return default
 
 
+def _normalize_prompt_mode(value: Any) -> str:
+    text = str(value or "normal").strip().lower().replace("-", "_")
+    if text in {"minimal", "small", "short", "fast"}:
+        return "minimal"
+    if text in {"off", "none", "no_system", "disabled", "false", "0"}:
+        return "off"
+    return "normal"
+
+
+def _as_optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"auto", "default", "none", "off", "0"}:
+        return None
+    try:
+        number = int(text)
+    except ValueError:
+        return None
+    return number if number > 0 else None
+
+
 def _as_bool(value: Any, *, default: bool = False) -> bool:
     if value is None:
         return default
@@ -123,12 +153,20 @@ class JarvisConfig:
 
     llm_provider: str = "lm_studio"
     llm_model: str = "auto"
-    llm_base_url: str = "http://localhost:1234/v1"
+    llm_base_url: str = "http://127.0.0.1:1234/v1"
     llm_timeout_seconds: float = 90.0
     llm_temperature: float = 0.7
     llm_max_tokens: int = 512
     llm_resolve_auto_model: bool = False
     llm_streaming: bool = True
+    llm_api_mode: str = "openai"
+    llm_native_base_url: str = "http://127.0.0.1:1234"
+    llm_reasoning: str = "auto"
+    llm_context_length: int | None = None
+    llm_store_native_chats: bool = False
+    conversation_prompt_mode: str = "normal"
+    llm_benchmark_max_tokens: int = 64
+    llm_benchmark_prompt: str = "Reply with exactly one short sentence saying you are ready."
 
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
@@ -143,7 +181,7 @@ class JarvisConfig:
             environment=str(_setting(_ENV_ALIASES["environment"], env_file, "development")),
             llm_provider=str(_setting(_ENV_ALIASES["llm_provider"], env_file, provider_config.get("default", "lm_studio"))),
             llm_model=str(_setting(_ENV_ALIASES["llm_model"], env_file, provider_config.get("model", "auto"))),
-            llm_base_url=str(_setting(_ENV_ALIASES["llm_base_url"], env_file, provider_config.get("base_url", "http://localhost:1234/v1"))),
+            llm_base_url=str(_setting(_ENV_ALIASES["llm_base_url"], env_file, provider_config.get("base_url", "http://127.0.0.1:1234/v1"))),
             llm_timeout_seconds=float(_setting(_ENV_ALIASES["llm_timeout_seconds"], env_file, provider_config.get("timeout_seconds", "90"))),
             llm_temperature=float(_setting(_ENV_ALIASES["llm_temperature"], env_file, provider_config.get("temperature", "0.7"))),
             llm_max_tokens=int(_setting(_ENV_ALIASES["llm_max_tokens"], env_file, provider_config.get("max_tokens", "512"))),
@@ -154,5 +192,28 @@ class JarvisConfig:
             llm_streaming=_as_bool(
                 _setting(_ENV_ALIASES["llm_streaming"], env_file, provider_config.get("streaming", "true")),
                 default=True,
+            ),
+            llm_api_mode=str(_setting(_ENV_ALIASES["llm_api_mode"], env_file, provider_config.get("api_mode", "openai"))).strip().lower(),
+            llm_native_base_url=str(
+                _setting(_ENV_ALIASES["llm_native_base_url"], env_file, provider_config.get("native_base_url", "http://127.0.0.1:1234"))
+            ),
+            llm_reasoning=str(_setting(_ENV_ALIASES["llm_reasoning"], env_file, provider_config.get("reasoning", "auto"))).strip().lower(),
+            llm_context_length=_as_optional_int(_setting(_ENV_ALIASES["llm_context_length"], env_file, provider_config.get("context_length", ""))),
+            llm_store_native_chats=_as_bool(
+                _setting(_ENV_ALIASES["llm_store_native_chats"], env_file, provider_config.get("store_native_chats", "false")),
+                default=False,
+            ),
+            conversation_prompt_mode=_normalize_prompt_mode(
+                _setting(_ENV_ALIASES["conversation_prompt_mode"], env_file, provider_config.get("conversation_prompt_mode", "normal"))
+            ),
+            llm_benchmark_max_tokens=int(
+                _setting(_ENV_ALIASES["llm_benchmark_max_tokens"], env_file, provider_config.get("benchmark_max_tokens", "64"))
+            ),
+            llm_benchmark_prompt=str(
+                _setting(
+                    _ENV_ALIASES["llm_benchmark_prompt"],
+                    env_file,
+                    provider_config.get("benchmark_prompt", "Reply with exactly one short sentence saying you are ready."),
+                )
             ),
         )
