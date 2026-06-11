@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.1.9b"
+APP_SHELL_VERSION = "0.1.9a"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -48,10 +48,6 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "auto_sleep_wake_startup",
         "state_color_palette_refinement",
         "dim_sleep_mode_motion",
-        "constant_grey_sleep_mode",
-        "holographic_transparent_panels",
-        "blended_state_color_transitions",
-        "voice_panel_overflow_fix",
     )
 
 

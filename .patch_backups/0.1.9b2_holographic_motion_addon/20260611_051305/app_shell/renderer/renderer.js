@@ -7,8 +7,8 @@ const DEFAULT_STATE = {
 };
 
 const PANEL_KEYS = ['runtime', 'voice', 'workspace', 'conversation', 'diagnostics'];
-const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v019b2';
-const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v019b2';
+const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v019b';
+const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v019b';
 
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
@@ -142,7 +142,7 @@ function setVisualState(state, message, label) {
   if (next !== activeVisualState) {
     document.body.classList.add('state-fading');
     window.clearTimeout(stateFadeTimer);
-    stateFadeTimer = window.setTimeout(() => document.body.classList.remove('state-fading'), 2350);
+    stateFadeTimer = window.setTimeout(() => document.body.classList.remove('state-fading'), 1450);
     activeVisualState = next;
   }
   renderBodyClasses(next);

@@ -12,7 +12,7 @@ class TestAppShellInterfaceControls019a(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_version_and_capabilities_include_019a_controls(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.1.9b")
+        self.assertEqual(APP_SHELL_VERSION, "0.1.9a")
         capabilities = app_shell_capabilities()
         self.assertIn("panel_visibility_controls", capabilities)
         self.assertIn("orb_only_focus_mode", capabilities)
@@ -40,9 +40,9 @@ class TestAppShellInterfaceControls019a(unittest.TestCase):
         self.assertIn("body.state-sleeping", self.styles_css)
         self.assertIn("--orb-opacity: .52", self.styles_css)
         self.assertIn("body.state-thinking", self.styles_css)
-        self.assertIn("--state-r: 168", self.styles_css)
+        self.assertIn("#a855f7", self.styles_css)
         self.assertIn("body.state-speaking", self.styles_css)
-        self.assertIn("--state-r: 31", self.styles_css)
+        self.assertIn("#1f75ff", self.styles_css)
         self.assertIn("panel-runtime-hidden", self.styles_css)
         self.assertIn("body.orb-focus", self.styles_css)
         self.assertIn("left-rail-empty", self.styles_css)
