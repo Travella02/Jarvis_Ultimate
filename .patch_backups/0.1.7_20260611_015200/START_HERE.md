@@ -28,22 +28,3 @@ python -m unittest discover -s tests -v
 The next coding milestone should be:
 
 `0.1.0 — Core Boot + Agent Registry + Event System`
-
-## Native app shell launcher
-
-0.1.7 adds the first native Jarvis app-shell foundation. After applying the patch, you can still use the existing Tkinter desktop launcher:
-
-```powershell
-python scripts/start_jarvis.py
-```
-
-To use the new HTML/CSS/JavaScript app shell wrapped as a desktop app:
-
-```powershell
-cd app_shell
-npm install
-cd ..
-python scripts/start_jarvis_app.py
-```
-
-Or double-click `Start_Jarvis_Ultimate_App.bat`.

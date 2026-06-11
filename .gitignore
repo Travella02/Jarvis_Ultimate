@@ -21,3 +21,7 @@ data/screenshots/*
 Thumbs.db
 .vscode/
 .idea/
+
+app_shell/node_modules/
+
+app_shell/node_modules/

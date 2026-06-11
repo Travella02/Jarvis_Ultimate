@@ -12,14 +12,6 @@ ui:
     avatar_style: futuristic_orb
     event_feed_limit: 36
     workspace_cards_limit: 50
-
-  app_shell:
-    enabled: true
-    shell: electron
-    api_host: 127.0.0.1
-    api_port: 8765
-    renderer: html_css_js_orb
-    fallback_client: desktop
   panels:
     registry_enabled: true
     dynamic_open_events: true
@@ -29,10 +21,6 @@ ui:
       - chat
       - workspace
       - events
-
-# 0.1.7 native app shell notes:
-# The Electron app shell is now the path toward the main Jarvis interface.
-# The existing Tkinter desktop remains available as a fallback.
 
 # 0.1.6b futuristic UI notes:
 # The UI uses theme tokens + a drop-in panel registry so future agents can add
