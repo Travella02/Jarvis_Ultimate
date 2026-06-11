@@ -17,6 +17,14 @@ from jarvis.core.lifecycle import JarvisRuntime
 from jarvis.core.result import JarvisEvent
 from jarvis.ui.components import format_workspace_card, panel_header, summarize_payload
 from jarvis.ui.themes import get_theme, state_color, status_color
+from jarvis.ui.orb_renderer import (
+    orbital_ring_plan,
+    orb_highlights,
+    particle_positions,
+    renderer_capabilities,
+    solid_orb_layers,
+    state_orb_palette,
+)
 from jarvis.ui.visual_state import classify_voice_status, orb_profile_for_state
 from jarvis.ui.workspace import UIWorkspaceState
 
@@ -465,71 +473,140 @@ class JarvisDesktopApp:
         state = self.workspace.avatar.state
         profile = orb_profile_for_state(state)
         color = state_color(profile.state, self.theme)
+        palette = state_orb_palette(profile.state, self.theme)
         width, height = self._avatar_canvas_size
-        center_x, center_y = width // 2, int(height * 0.48)
+        center_x, center_y = width // 2, int(height * 0.47)
         tick = self._orb_tick
         phase = (tick / 360.0) * math.tau
         pulse = (math.sin(phase * max(profile.pulse_speed, 0.1)) + 1.0) / 2.0
-        breathing = 1.0 + (0.055 * math.sin(phase * 0.7) if profile.breathing else 0.0)
-        core_scale = profile.core_scale * breathing
-        glow = int(10 + 18 * profile.glow_strength + pulse * 10)
-        outer_radius = int((118 + pulse * 12) * core_scale)
-        mid_radius = int((84 + pulse * 5) * core_scale)
-        inner_radius = int((32 + pulse * 6) * core_scale)
+        breathe = math.sin(phase * 0.65) if profile.breathing else math.sin(phase * max(profile.pulse_speed, 0.1))
+        core_scale = profile.core_scale * (1.0 + 0.045 * breathe)
+        orb_radius = int((94 + pulse * 7) * core_scale)
+        outer_glow_radius = int(orb_radius * (1.72 + profile.glow_strength * 0.20))
 
-        # Holographic grid behind the core.
-        for y in range(40, height - 55, 28):
-            canvas.create_line(40, y, width - 40, y, fill=self.theme["panel_glow"], width=1)
-        for x in range(60, width - 48, 46):
-            canvas.create_line(x, 48, x, height - 68, fill=self.theme["panel_glow"], width=1)
+        # Deep dimensional backdrop.  This makes the center feel like a chamber
+        # rather than a flat canvas, and it keeps the orb visually dominant.
+        canvas.create_rectangle(0, 0, width, height, fill=self.theme["panel"], outline="")
+        for layer in range(8, 0, -1):
+            radius = outer_glow_radius + layer * 16
+            shade = self.theme["panel_glow"] if layer > 3 else palette["dark_glass"]
+            canvas.create_oval(center_x - radius, center_y - int(radius * 0.72), center_x + radius, center_y + int(radius * 0.72), outline=shade, width=1)
 
-        # Soft pseudo-3D glow shells.
-        for layer in range(5, 0, -1):
-            radius = outer_radius + layer * glow
-            outline = self.theme["accent_soft"] if layer > 2 else color
-            canvas.create_oval(center_x - radius, center_y - radius, center_x + radius, center_y + radius, outline=outline, width=1)
+        # Subtle holographic grid, clipped visually behind the core.
+        for y in range(42, height - 58, 28):
+            canvas.create_line(44, y, width - 44, y, fill=self.theme["panel_glow"], width=1)
+        for x in range(58, width - 52, 46):
+            canvas.create_line(x, 48, x, height - 70, fill=self.theme["panel_glow"], width=1)
 
-        # Rotating orbital arcs. Tk arcs make the 2D fallback feel like a 3D renderer.
-        ring_specs = [
-            (outer_radius + 16, 84, 220, 3),
-            (outer_radius - 4, 265, 170, 2),
-            (mid_radius + 12, 35, 130, 2),
-            (mid_radius - 8, 195, 110, 1),
-        ]
-        speed = max(profile.ring_speed, 0.1)
-        for index, (radius, base_start, extent, ring_width) in enumerate(ring_specs):
-            start = (base_start + tick * speed * (1.4 + index * 0.28)) % 360
+        # State-reactive outer glow shells.
+        glow_layers = 10
+        for index in range(glow_layers, 0, -1):
+            t = index / glow_layers
+            radius = int(orb_radius * (1.05 + t * 0.62 + pulse * 0.05))
+            y_radius = int(radius * (0.88 + t * 0.08))
+            outline = palette["outer"] if index > 4 else color
+            width_line = 1 if index > 3 else 2
+            canvas.create_oval(center_x - radius, center_y - y_radius, center_x + radius, center_y + y_radius, outline=outline, width=width_line)
+
+        # Rotating rings behind the solid orb.
+        for ring in orbital_ring_plan(orb_radius, tick, profile.ring_speed)[:2]:
+            rx = int(ring["rx"])
+            ry = int(ring["ry"])
             canvas.create_arc(
-                center_x - radius,
-                center_y - int(radius * (0.72 + index * 0.03)),
-                center_x + radius,
-                center_y + int(radius * (0.72 + index * 0.03)),
-                start=start,
-                extent=extent,
-                outline=color if index % 2 == 0 else self.theme["accent_soft"],
-                width=ring_width,
+                center_x - rx,
+                center_y - ry,
+                center_x + rx,
+                center_y + ry,
+                start=float(ring["start"]),
+                extent=float(ring["extent"]),
+                outline=palette["ring"],
+                width=int(ring["width"]),
                 style="arc",
             )
 
-        # Glass sphere/body.
-        canvas.create_oval(center_x - outer_radius, center_y - outer_radius, center_x + outer_radius, center_y + outer_radius, outline=color, width=3)
-        canvas.create_oval(center_x - mid_radius, center_y - mid_radius, center_x + mid_radius, center_y + mid_radius, outline=self.theme["accent_soft"], width=2)
-        canvas.create_oval(center_x - inner_radius, center_y - inner_radius, center_x + inner_radius, center_y + inner_radius, outline=color, width=4)
-        canvas.create_oval(center_x - 15, center_y - 15, center_x + 15, center_y + 15, fill=self.theme["panel"], outline=color, width=3)
+        # Main solid orb body.  Layered circles create a practical 3D sphere in
+        # Tkinter while preserving a later WebGL/real-3D upgrade path.
+        shadow_radius = int(orb_radius * 1.02)
+        canvas.create_oval(
+            center_x - shadow_radius + 10,
+            center_y - shadow_radius + 14,
+            center_x + shadow_radius + 10,
+            center_y + shadow_radius + 14,
+            fill=palette["shadow"],
+            outline="",
+        )
+        for layer in solid_orb_layers(orb_radius, profile.state, self.theme, layer_count=38):
+            radius = int(layer["radius"])
+            ox = int(layer["offset_x"])
+            oy = int(layer["offset_y"])
+            canvas.create_oval(
+                center_x - radius + ox,
+                center_y - radius + oy,
+                center_x + radius + ox,
+                center_y + radius + oy,
+                fill=str(layer["fill"]),
+                outline="",
+            )
 
-        # Orbiting particle sparks.
-        particle_count = min(profile.particle_count, 28)
-        for index in range(particle_count):
-            angle = phase * speed + (math.tau * index / max(particle_count, 1))
-            radius = outer_radius + 26 + (index % 4) * 8
-            px = center_x + math.cos(angle) * radius
-            py = center_y + math.sin(angle) * radius * 0.62
-            size = 1 + (index % 3)
-            canvas.create_oval(px - size, py - size, px + size, py + size, fill=color, outline="")
+        # Glass outline and inner luminous core.
+        canvas.create_oval(center_x - orb_radius, center_y - orb_radius, center_x + orb_radius, center_y + orb_radius, outline=palette["ring"], width=3)
+        core_radius = int(orb_radius * (0.24 + pulse * 0.03))
+        canvas.create_oval(
+            center_x - core_radius,
+            center_y - core_radius,
+            center_x + core_radius,
+            center_y + core_radius,
+            fill=palette["dark_glass"],
+            outline=palette["highlight"],
+            width=3,
+        )
+        inner_radius = max(6, int(core_radius * 0.45))
+        canvas.create_oval(
+            center_x - inner_radius,
+            center_y - inner_radius,
+            center_x + inner_radius,
+            center_y + inner_radius,
+            fill=palette["core"],
+            outline="",
+        )
 
-        # State text and future-renderer notice.
-        canvas.create_text(center_x, height - 52, text=profile.label.upper(), fill=color, font=(self.theme["font_family"], 12, "bold"))
-        canvas.create_text(center_x, height - 28, text="CENTRAL ORB RENDERER · 3D AVATAR READY", fill=self.theme["muted"], font=(self.theme["font_family"], 8))
+        # Highlights and glass reflections.
+        for mark in orb_highlights(orb_radius, profile.state, self.theme):
+            dx = int(float(mark["dx"]) * orb_radius)
+            dy = int(float(mark["dy"]) * orb_radius)
+            rx = int(float(mark["rx"]) * orb_radius)
+            ry = int(float(mark["ry"]) * orb_radius)
+            if mark["kind"] == "oval":
+                canvas.create_oval(center_x + dx - rx, center_y + dy - ry, center_x + dx + rx, center_y + dy + ry, fill=str(mark["fill"]), outline="")
+            else:
+                canvas.create_arc(center_x + dx - rx, center_y + dy - ry, center_x + dx + rx, center_y + dy + ry, start=18, extent=145, outline=str(mark["outline"]), width=2, style="arc")
+
+        # Rotating rings in front of the orb to create depth and movement.
+        for ring in orbital_ring_plan(orb_radius, tick + 38, profile.ring_speed)[2:]:
+            rx = int(ring["rx"])
+            ry = int(ring["ry"])
+            canvas.create_arc(
+                center_x - rx,
+                center_y - ry,
+                center_x + rx,
+                center_y + ry,
+                start=float(ring["start"]),
+                extent=float(ring["extent"]),
+                outline=color,
+                width=int(ring["width"]),
+                style="arc",
+            )
+
+        # Orbiting sparks.
+        for particle in particle_positions(profile.particle_count, tick, profile.ring_speed, orb_radius):
+            px = center_x + float(particle["x"])
+            py = center_y + float(particle["y"])
+            size = float(particle["size"])
+            canvas.create_oval(px - size, py - size, px + size, py + size, fill=palette["particle"], outline="")
+
+        # State text and renderer notice.
+        canvas.create_text(center_x, height - 56, text=profile.label.upper(), fill=color, font=(self.theme["font_family"], 13, "bold"))
+        canvas.create_text(center_x, height - 31, text="SOLID ORB RENDERER · STATE-REACTIVE CORE", fill=self.theme["muted"], font=(self.theme["font_family"], 8))
 
         self._widgets["avatar_state"].configure(text=f"State: {profile.label}")
         self._widgets["avatar_message"].configure(text=self.workspace.avatar.message or "Ready, sir.")
@@ -555,6 +632,12 @@ class JarvisDesktopApp:
             f"STT: {self.runtime.stt_manager.provider_name} (enabled={self.runtime.stt_manager.enabled})",
             f"Wake words: {', '.join(self.runtime.wake_word_manager.wake_words)}",
             f"Short-term memory turns: {self.runtime.short_term_memory.status().get('turns', 0)}",
+            "",
+            "Orb renderer:",
+            "- solid layered 3D-style core",
+            "- rotating orbital rings",
+            "- state-reactive glow/pulse",
+            f"- capabilities: {', '.join(renderer_capabilities()[:4])}",
             "",
             "Orb animation profile:",
             f"- ring speed: {visual_profile.ring_speed}",
