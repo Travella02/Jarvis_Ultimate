@@ -6,19 +6,9 @@ const DEFAULT_STATE = {
   voice: { mode: 'idle', running: false, last_transcript: '', last_status: 'Ready.', warmup_complete: false, warmup_status: 'Voice warmup has not run yet.' }
 };
 
-const PANEL_KEYS = ['runtime', 'voice', 'workspace', 'conversation', 'diagnostics'];
-const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v019a';
-const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v019a';
-
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
 let diagnosticsOpen = false;
-let orbFocus = false;
-let autoSleepWakeEnabled = loadAutoSleepWakeEnabled();
-let autoSleepWakeAttempted = false;
-let autoSleepWakeBusy = false;
-let manualVoiceStopRequested = false;
-let panelVisibility = loadPanelVisibility();
 
 const els = {
   bridgeStatus: document.getElementById('bridgeStatus'),
@@ -45,11 +35,7 @@ const els = {
   voiceMode: document.getElementById('voiceMode'),
   voiceTranscript: document.getElementById('voiceTranscript'),
   voiceStatus: document.getElementById('voiceStatus'),
-  voiceWarmup: document.getElementById('voiceWarmup'),
-  autoWakeToggle: document.getElementById('autoWakeToggle'),
-  orbFocusButton: document.getElementById('orbFocusButton'),
-  panelToggleButtons: Array.from(document.querySelectorAll('[data-panel-toggle]')),
-  panelCloseButtons: Array.from(document.querySelectorAll('[data-panel-close]'))
+  voiceWarmup: document.getElementById('voiceWarmup')
 };
 
 function escapeHtml(value) {
@@ -73,69 +59,10 @@ function titleCase(value) {
   return readable(value).replace(/\b\w/g, character => character.toUpperCase());
 }
 
-function loadPanelVisibility() {
-  const defaults = {
-    runtime: true,
-    voice: true,
-    workspace: true,
-    conversation: true,
-    diagnostics: true
-  };
-  try {
-    const saved = JSON.parse(localStorage.getItem(PANEL_STORAGE_KEY) || '{}');
-    return { ...defaults, ...saved };
-  } catch (error) {
-    return defaults;
-  }
-}
-
-function savePanelVisibility() {
-  localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(panelVisibility));
-}
-
-function loadAutoSleepWakeEnabled() {
-  const saved = localStorage.getItem(AUTO_WAKE_STORAGE_KEY);
-  return saved === null ? true : saved === 'true';
-}
-
-function saveAutoSleepWakeEnabled() {
-  localStorage.setItem(AUTO_WAKE_STORAGE_KEY, String(autoSleepWakeEnabled));
-}
-
-function leftRailEmpty() {
-  return !panelVisibility.runtime && !panelVisibility.voice && !panelVisibility.workspace;
-}
-
-function renderBodyClasses(nextState = lastState.avatar?.state || DEFAULT_STATE.avatar.state) {
-  const classes = [`state-${normalizeState(nextState)}`];
-  classes.push(diagnosticsOpen ? 'diagnostics-open' : 'diagnostics-collapsed');
-  if (orbFocus) classes.push('orb-focus');
-  if (leftRailEmpty()) classes.push('left-rail-empty');
-  for (const key of PANEL_KEYS) {
-    if (!panelVisibility[key]) classes.push(`panel-${key}-hidden`);
-  }
-  document.body.className = classes.join(' ');
-}
-
-function updatePanelControls() {
-  for (const button of els.panelToggleButtons) {
-    const key = button.dataset.panelToggle;
-    const visible = Boolean(panelVisibility[key]);
-    button.setAttribute('aria-pressed', String(visible));
-    button.classList.toggle('panel-off', !visible);
-  }
-  if (els.orbFocusButton) {
-    els.orbFocusButton.setAttribute('aria-pressed', String(orbFocus));
-  }
-  if (els.autoWakeToggle) {
-    els.autoWakeToggle.setAttribute('aria-pressed', String(autoSleepWakeEnabled));
-    els.autoWakeToggle.textContent = `Auto Wake: ${autoSleepWakeEnabled ? 'On' : 'Off'}`;
-  }
-}
-
 function setVisualState(state, message, label) {
   const next = normalizeState(state);
-  renderBodyClasses(next);
+  const diagnosticsClass = diagnosticsOpen ? 'diagnostics-open' : 'diagnostics-collapsed';
+  document.body.className = `state-${next} ${diagnosticsClass}`;
   els.stateLabel.textContent = label || titleCase(next);
   els.stateMessage.textContent = message || 'Ready, sir.';
 }
@@ -176,7 +103,6 @@ function renderState(snapshot) {
 
   setVisualState(avatar.state, avatar.message, avatar.label || avatar.profile?.label);
   renderVoice(voice);
-  updatePanelControls();
 
   const online = app.bridge_status === 'online';
   els.bridgeStatus.textContent = online ? 'Bridge Online' : 'Bridge Offline';
@@ -207,8 +133,6 @@ function renderState(snapshot) {
     ? events.slice(-30).map(event => `${escapeHtml(event.timestamp || '')} | ${escapeHtml(event.event_type || '')} | ${escapeHtml(event.message || '')}`).join('<br>')
     : 'No events yet.';
   els.eventsLog.scrollTop = els.eventsLog.scrollHeight;
-
-  maybeAutoStartSleepWake(lastState);
 }
 
 async function fetchJson(path, options = {}) {
@@ -271,41 +195,20 @@ async function postVoice(path, body = {}) {
 }
 
 async function startVoiceOnce() {
-  manualVoiceStopRequested = false;
   setVisualState('listening', 'Listening for one real microphone turn...', 'Listening');
   await postVoice('/api/voice/once', { speak: true });
   setTimeout(refreshState, 350);
 }
 
-async function startSleepWake({ automatic = false } = {}) {
-  if (!automatic) {
-    manualVoiceStopRequested = false;
-    autoSleepWakeAttempted = true;
-  }
-  setVisualState('sleeping', automatic ? 'Auto sleep/wake is starting. Say the wake phrase when ready.' : 'Starting sleep/wake voice mode...', 'Sleep Mode');
+async function startSleepWake() {
+  setVisualState('wake_listening', 'Starting sleep/wake voice mode...', 'Listening for Wake Word');
   await postVoice('/api/voice/sleep-wake/start', { max_turns: 0, speak: true });
   setTimeout(refreshState, 350);
 }
 
 async function stopVoice() {
-  manualVoiceStopRequested = true;
   await postVoice('/api/voice/stop', {});
   setTimeout(refreshState, 350);
-}
-
-function maybeAutoStartSleepWake(snapshot) {
-  const app = snapshot.app || DEFAULT_STATE.app;
-  const voice = snapshot.voice || DEFAULT_STATE.voice;
-  const warmed = voice.warmup_complete !== false;
-  const running = Boolean(voice.running || voice.thread_alive);
-  const mode = normalizeState(voice.mode || 'idle');
-  if (!autoSleepWakeEnabled || autoSleepWakeAttempted || autoSleepWakeBusy || manualVoiceStopRequested) return;
-  if (app.bridge_status !== 'online' || !warmed || running || mode !== 'idle') return;
-  autoSleepWakeAttempted = true;
-  autoSleepWakeBusy = true;
-  startSleepWake({ automatic: true }).finally(() => {
-    autoSleepWakeBusy = false;
-  });
 }
 
 function toggleDiagnostics() {
@@ -313,32 +216,6 @@ function toggleDiagnostics() {
   els.diagnosticsToggle.textContent = diagnosticsOpen ? 'Hide Diagnostics' : 'Show Diagnostics';
   const avatar = lastState.avatar || DEFAULT_STATE.avatar;
   setVisualState(avatar.state, avatar.message, avatar.label || avatar.profile?.label);
-}
-
-function togglePanel(key, visible = undefined) {
-  if (!PANEL_KEYS.includes(key)) return;
-  panelVisibility[key] = visible === undefined ? !panelVisibility[key] : Boolean(visible);
-  if (key === 'diagnostics' && !panelVisibility[key]) diagnosticsOpen = false;
-  savePanelVisibility();
-  updatePanelControls();
-  const avatar = lastState.avatar || DEFAULT_STATE.avatar;
-  setVisualState(avatar.state, avatar.message, avatar.label || avatar.profile?.label);
-}
-
-function toggleOrbFocus() {
-  orbFocus = !orbFocus;
-  updatePanelControls();
-  const avatar = lastState.avatar || DEFAULT_STATE.avatar;
-  setVisualState(avatar.state, avatar.message, avatar.label || avatar.profile?.label);
-}
-
-function toggleAutoSleepWake() {
-  autoSleepWakeEnabled = !autoSleepWakeEnabled;
-  autoSleepWakeAttempted = false;
-  manualVoiceStopRequested = false;
-  saveAutoSleepWakeEnabled();
-  updatePanelControls();
-  maybeAutoStartSleepWake(lastState);
 }
 
 async function boot() {
@@ -350,16 +227,8 @@ async function boot() {
   els.refreshButton.addEventListener('click', refreshState);
   els.diagnosticsToggle.addEventListener('click', toggleDiagnostics);
   els.voiceOnceButton.addEventListener('click', startVoiceOnce);
-  els.sleepWakeButton.addEventListener('click', () => startSleepWake({ automatic: false }));
+  els.sleepWakeButton.addEventListener('click', startSleepWake);
   els.stopVoiceButton.addEventListener('click', stopVoice);
-  if (els.autoWakeToggle) els.autoWakeToggle.addEventListener('click', toggleAutoSleepWake);
-  if (els.orbFocusButton) els.orbFocusButton.addEventListener('click', toggleOrbFocus);
-  for (const button of els.panelToggleButtons) {
-    button.addEventListener('click', () => togglePanel(button.dataset.panelToggle));
-  }
-  for (const button of els.panelCloseButtons) {
-    button.addEventListener('click', () => togglePanel(button.dataset.panelClose, false));
-  }
   els.commandForm.addEventListener('submit', event => {
     event.preventDefault();
     const command = els.commandInput.value.trim();
@@ -368,10 +237,9 @@ async function boot() {
     sendCommand(command);
   });
 
-  updatePanelControls();
   renderState({
     ...DEFAULT_STATE,
-    avatar: { state: 'working', label: 'Initializing Jarvis', message: 'Connecting to the local bridge, warming voice systems, then entering sleep/wake mode...' }
+    avatar: { state: 'working', label: 'Initializing Jarvis', message: 'Connecting to the local bridge and warming interface systems...' }
   });
   refreshState();
   setInterval(refreshState, 900);

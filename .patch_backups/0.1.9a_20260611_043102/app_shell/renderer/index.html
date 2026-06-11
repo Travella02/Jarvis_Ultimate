@@ -14,33 +14,17 @@
         <p class="eyebrow">Native App Shell</p>
         <h1>JARVIS ULTIMATE</h1>
       </div>
-      <div class="top-controls" aria-label="Interface controls">
-        <div class="view-toggle-row" aria-label="Panel visibility controls">
-          <button type="button" class="view-toggle" data-panel-toggle="runtime" aria-pressed="true">Runtime</button>
-          <button type="button" class="view-toggle" data-panel-toggle="voice" aria-pressed="true">Voice</button>
-          <button type="button" class="view-toggle" data-panel-toggle="workspace" aria-pressed="true">Workspace</button>
-          <button type="button" class="view-toggle" data-panel-toggle="conversation" aria-pressed="true">Chat</button>
-          <button type="button" class="view-toggle" data-panel-toggle="diagnostics" aria-pressed="false">Diagnostics</button>
-          <button type="button" class="view-toggle focus-toggle" id="orbFocusButton" aria-pressed="false">Orb Only</button>
-        </div>
-        <div class="top-status-row" aria-label="Bridge and voice readiness">
-          <button type="button" class="mini-status auto-wake-toggle" id="autoWakeToggle" aria-pressed="true">Auto Wake: On</button>
-          <div class="mini-status" id="warmupPill">Voice Warmup: warming</div>
-          <div class="status-pill" id="bridgeStatus">Bridge Offline</div>
-        </div>
+      <div class="top-status-row" aria-label="Bridge and voice readiness">
+        <div class="mini-status" id="warmupPill">Voice Warmup: warming</div>
+        <div class="status-pill" id="bridgeStatus">Bridge Offline</div>
       </div>
     </header>
 
-    <section class="interface-grid" id="interfaceGrid">
-      <aside class="left-rail" id="leftRail">
-        <section class="system-card glass-panel" data-panel="runtime">
-          <div class="panel-heading compact">
-            <div>
-              <p class="panel-kicker">Runtime</p>
-              <h2>Core Systems</h2>
-            </div>
-            <button type="button" class="panel-close" data-panel-close="runtime" title="Hide runtime panel">Hide</button>
-          </div>
+    <section class="interface-grid">
+      <aside class="left-rail">
+        <section class="system-card glass-panel">
+          <p class="panel-kicker">Runtime</p>
+          <h2>Core Systems</h2>
           <dl class="metric-list">
             <div><dt>LLM</dt><dd id="llmStatus">unknown</dd></div>
             <div><dt>STT</dt><dd id="sttStatus">unknown</dd></div>
@@ -49,16 +33,13 @@
           </dl>
         </section>
 
-        <section class="voice-card glass-panel" data-panel="voice" aria-label="Jarvis voice controls">
+        <section class="voice-card glass-panel" aria-label="Jarvis voice controls">
           <div class="panel-heading compact">
             <div>
               <p class="panel-kicker">Voice</p>
               <h2>Conversation Control</h2>
             </div>
-            <div class="panel-actions">
-              <span class="voice-chip" id="voiceMode">idle</span>
-              <button type="button" class="panel-close" data-panel-close="voice" title="Hide voice panel">Hide</button>
-            </div>
+            <span class="voice-chip" id="voiceMode">idle</span>
           </div>
           <div class="voice-control-panel">
             <button id="voiceOnceButton" class="primary-action">Listen Once</button>
@@ -72,14 +53,9 @@
           </div>
         </section>
 
-        <section class="workspace-card glass-panel" data-panel="workspace">
-          <div class="panel-heading compact">
-            <div>
-              <p class="panel-kicker">Workspace</p>
-              <h2>Available Panels</h2>
-            </div>
-            <button type="button" class="panel-close" data-panel-close="workspace" title="Hide workspace panel">Hide</button>
-          </div>
+        <section class="workspace-card glass-panel">
+          <p class="panel-kicker">Workspace</p>
+          <h2>Available Panels</h2>
           <ul class="panel-list" id="panelList"></ul>
         </section>
       </aside>
@@ -119,16 +95,13 @@
         </div>
       </section>
 
-      <aside class="conversation-dock glass-panel" data-panel="conversation">
+      <aside class="conversation-dock glass-panel">
         <div class="panel-heading">
           <div>
             <p class="panel-kicker">Conversation</p>
             <h2>Talk to Jarvis</h2>
           </div>
-          <div class="panel-actions">
-            <button id="refreshButton" class="ghost-action">Refresh</button>
-            <button type="button" class="panel-close" data-panel-close="conversation" title="Hide conversation panel">Hide</button>
-          </div>
+          <button id="refreshButton" class="ghost-action">Refresh</button>
         </div>
         <div class="chat-log" id="chatLog" aria-live="polite"></div>
         <form class="command-form" id="commandForm">
@@ -138,7 +111,7 @@
       </aside>
     </section>
 
-    <section class="diagnostics-drawer glass-panel" data-panel="diagnostics" aria-label="Diagnostics and live event hooks">
+    <section class="diagnostics-drawer glass-panel" aria-label="Diagnostics and live event hooks">
       <button id="diagnosticsToggle" class="drawer-toggle" type="button">Show Diagnostics</button>
       <div class="diagnostics-content">
         <div class="panel-heading compact">
@@ -146,10 +119,7 @@
             <p class="panel-kicker">Diagnostics</p>
             <h2>Live Event Stream</h2>
           </div>
-          <div class="panel-actions">
-            <p class="muted small">Debug hooks stay out of the main interface until you need them.</p>
-            <button type="button" class="panel-close" data-panel-close="diagnostics" title="Hide diagnostics panel">Hide</button>
-          </div>
+          <p class="muted small">Debug hooks stay out of the main interface until you need them.</p>
         </div>
         <div class="events-log" id="eventsLog"></div>
       </div>

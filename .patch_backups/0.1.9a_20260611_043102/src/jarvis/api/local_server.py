@@ -1,7 +1,7 @@
 """Dependency-free local HTTP API for Jarvis's native app shell.
 
 This standard-library server is the live bridge between the Electron
-HTML/CSS/JS interface and the Python Jarvis runtime.  0.1.9a refines panel controls, state colors, and automatic sleep/wake startup and keeps diagnostics out of the way so the orb stays in the speaking
+HTML/CSS/JS interface and the Python Jarvis runtime.  0.1.9 polishes the native app shell into the main Jarvis interface and keeps diagnostics out of the way so the orb stays in the speaking
 state for real playback, the controls remain visible, and the app shell warms
 voice systems before accepting a conversation.
 """
@@ -146,7 +146,7 @@ class LocalJarvisAPI:
             )
         with self._lock:
             self.workspace.add_notice("Voice systems warmed and ready.")
-            self.workspace.avatar.set_state("sleeping", expression="calm", message="Voice systems warmed and ready. Entering sleep/wake mode, sir.")
+            self.workspace.avatar.set_state("idle", expression="neutral", message="Voice systems warmed and ready. I am ready for conversation, sir.")
 
     def _warm_voice_managers_for_app_shell(self) -> str:
         lines = ["App-shell voice warmup:"]
@@ -294,7 +294,7 @@ class LocalJarvisAPI:
             if mode == "one_turn":
                 self.workspace.avatar.set_state("listening", expression="focused", message="Listening for one voice turn...")
             else:
-                self.workspace.avatar.set_state("sleeping", expression="calm", message="Sleep/wake mode is running. Say a wake phrase to activate Jarvis.")
+                self.workspace.avatar.set_state("wake_listening", expression="calm", message="Sleep/wake mode is running. Say a wake phrase to activate Jarvis.")
             self.workspace.add_notice(f"Voice session started from app shell: {mode}.")
         return api_ok({"voice": self.voice_session_snapshot(), "state": self.snapshot()}, message=f"Started {mode} voice session.")
 
@@ -422,7 +422,7 @@ class LocalJarvisAPI:
             message="App-shell sleep/wake voice session started.",
             data={"max_turns": max_turns, "infinite": infinite, "active_timeout_seconds": active_timeout_seconds},
         )
-        self._set_voice_visual("Sleep mode is active. Waiting for wake phrase...", state="sleeping", expression="calm")
+        self._set_voice_visual("Sleep/wake mode is active. Waiting for wake phrase...", state="wake_listening", expression="calm")
 
         try:
             for turn_index in range(1, turn_limit + 1):
@@ -430,7 +430,7 @@ class LocalJarvisAPI:
                     stopped_by = "voice_stop_requested"
                     break
                 label = f"Listening for wake phrase ({turn_index})..." if state == "asleep" else f"Listening while awake ({turn_index})..."
-                self._set_voice_visual(label, state="sleeping" if state == "asleep" else "listening", expression="calm" if state == "asleep" else "focused")
+                self._set_voice_visual(label, state="wake_listening" if state == "asleep" else "listening", expression="focused")
                 stt_result = self.runtime.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
                 transcript = (getattr(stt_result, "text", "") or "").strip()
                 last_transcript = transcript
@@ -457,7 +457,7 @@ class LocalJarvisAPI:
                         else:
                             self._set_voice_visual("No speech detected while awake.", state="listening")
                     else:
-                        self._set_voice_visual("No wake phrase heard; staying asleep.", state="sleeping", expression="calm")
+                        self._set_voice_visual("No wake phrase heard; staying asleep.", state="wake_listening")
                     continue
                 idle_seconds = 0.0
                 normalized_transcript = self.runtime._voice_loop_normalize_phrase(transcript)
@@ -470,7 +470,7 @@ class LocalJarvisAPI:
                     if not match.detected:
                         turns_ignored += 1
                         self._update_voice_session(turns_ignored=turns_ignored)
-                        self._set_voice_visual("Wake phrase not detected; staying asleep.", state="sleeping", expression="calm")
+                        self._set_voice_visual("Wake phrase not detected; staying asleep.", state="wake_listening")
                         continue
                     state = "awake"
                     command = (match.command or "").strip()
@@ -611,7 +611,7 @@ def _json_bytes(payload: dict[str, Any] | list[Any]) -> bytes:
 
 def make_handler(api: LocalJarvisAPI) -> type[BaseHTTPRequestHandler]:
     class JarvisLocalAPIHandler(BaseHTTPRequestHandler):
-        server_version = "JarvisLocalAPI/0.1.9a"
+        server_version = "JarvisLocalAPI/0.1.9"
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
             return
