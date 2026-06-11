@@ -633,6 +633,7 @@ class JarvisRuntime:
         transcript_callback: Any | None = None,
         status_callback: Any | None = None,
         speak: bool = True,
+        stop_event: Any | None = None,
     ) -> JarvisResult:
         """Run a blocking sleep/wake hands-free loop.
 
@@ -672,17 +673,23 @@ class JarvisRuntime:
             "voice.sleep_wake_loop_started",
             source="lifecycle",
             message="Sleep/wake voice loop started.",
-            data={"max_turns": max_turns, "infinite": infinite, "active_timeout_seconds": active_timeout_seconds},
+            data={"max_turns": max_turns, "infinite": infinite, "active_timeout_seconds": active_timeout_seconds, "external_stop_supported": stop_event is not None},
         )
 
         turn_iter = itertools.count(1) if infinite else range(1, max_turns + 1)
         for turn_index in turn_iter:
+            if stop_event is not None and stop_event.is_set():
+                stopped_by = "external_stop"
+                break
             if callable(status_callback):
                 label = "sleeping" if state == "asleep" else "awake"
                 limit_label = "∞" if infinite else str(max_turns)
                 status_callback(f"Listening turn {turn_index}/{limit_label} ({label})...")
 
             stt_result = self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
+            if stop_event is not None and stop_event.is_set():
+                stopped_by = "external_stop"
+                break
             transcript = (stt_result.text or "").strip()
             last_transcript = transcript
             if transcript and callable(transcript_callback):

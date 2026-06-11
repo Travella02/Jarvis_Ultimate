@@ -1,11 +1,14 @@
 ui:
-  default_client: cli
+  default_client: desktop
   desktop:
-    enabled: false
-    window_title: Jarvis 3
+    enabled: true
+    window_title: Jarvis Ultimate
     start_maximized: false
+    auto_start_voice: true
+    voice_start_mode: sleep_wake
 
 # 0.1.6 desktop UI foundation notes:
 # The desktop UI is a client/body for Jarvis Core, not the brain.
 # Future agents can open dynamic panels through ui.open_panel/ui.update_panel events.
 # Core Jarvis must continue to run headless from CLI.
+# 0.1.6a connects the desktop body to the real Jarvis sleep/wake voice runtime.

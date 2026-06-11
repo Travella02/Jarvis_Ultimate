@@ -106,6 +106,8 @@ _ENV_ALIASES = {
     "voice_sleep_timeout_seconds": ("JARVIS_VOICE_SLEEP_TIMEOUT_SECONDS", "JARVIS_HANDSFREE_SLEEP_TIMEOUT_SECONDS", "JARVIS_VOICE_IDLE_TIMEOUT_SECONDS"),
     "voice_sleep_phrases": ("JARVIS_VOICE_SLEEP_PHRASES", "JARVIS_HANDSFREE_SLEEP_PHRASES"),
     "voice_exit_phrases": ("JARVIS_VOICE_EXIT_PHRASES", "JARVIS_HANDSFREE_EXIT_PHRASES"),
+    "desktop_auto_start_voice": ("JARVIS_DESKTOP_AUTO_START_VOICE", "JARVIS_UI_AUTO_START_VOICE"),
+    "desktop_voice_start_mode": ("JARVIS_DESKTOP_VOICE_START_MODE", "JARVIS_UI_VOICE_START_MODE"),
 }
 
 
@@ -353,6 +355,9 @@ class JarvisConfig:
     voice_sleep_phrases: str = "that's all jarvis,thats all jarvis,that is all jarvis,that will be all jarvis,that'll be all jarvis,go to sleep,sleep mode,stop listening"
     voice_exit_phrases: str = "exit voice mode,stop handsfree,stop voice loop,goodbye jarvis,shut down voice loop"
 
+    desktop_auto_start_voice: bool = True
+    desktop_voice_start_mode: str = "sleep_wake"
+
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
         root = Path(project_root) if project_root else Path.cwd()
@@ -499,4 +504,6 @@ class JarvisConfig:
             voice_sleep_timeout_seconds=float(_setting(_ENV_ALIASES["voice_sleep_timeout_seconds"], env_file, "45.0")),
             voice_sleep_phrases=str(_setting(_ENV_ALIASES["voice_sleep_phrases"], env_file, "that's all jarvis,thats all jarvis,that is all jarvis,that will be all jarvis,that'll be all jarvis,go to sleep,sleep mode,stop listening")),
             voice_exit_phrases=str(_setting(_ENV_ALIASES["voice_exit_phrases"], env_file, "exit voice mode,stop handsfree,stop voice loop,goodbye jarvis,shut down voice loop")),
+            desktop_auto_start_voice=_as_bool(_setting(_ENV_ALIASES["desktop_auto_start_voice"], env_file, "true"), default=True),
+            desktop_voice_start_mode=str(_setting(_ENV_ALIASES["desktop_voice_start_mode"], env_file, "sleep_wake")).strip().lower(),
         )

@@ -19,7 +19,12 @@ from jarvis.ui.workspace import UIWorkspaceState
 
 
 class JarvisDesktopApp:
-    """First desktop body for Jarvis."""
+    """First desktop body for Jarvis.
+
+    The desktop is a client/body attached to the same JarvisRuntime used by the
+    CLI. 0.1.6a adds a background sleep/wake voice runtime so the window can be
+    Jarvis's normal always-ready interface instead of only a typed chat shell.
+    """
 
     def __init__(self, *, runtime: JarvisRuntime | None = None, project_root: str | Path | None = None) -> None:
         self.runtime = runtime or JarvisRuntime(project_root=project_root)
@@ -29,6 +34,11 @@ class JarvisDesktopApp:
         self._root: Any | None = None
         self._widgets: dict[str, Any] = {}
         self._command_lock = threading.Lock()
+        self._voice_lock = threading.Lock()
+        self._voice_thread: threading.Thread | None = None
+        self._voice_stop_event: threading.Event | None = None
+        self._voice_state_message = "Voice runtime is stopped."
+        self._voice_response_active = False
 
         self.runtime.events.subscribe("*", self._on_runtime_event)
 
@@ -36,6 +46,8 @@ class JarvisDesktopApp:
         result = self.runtime.boot()
         self.workspace.add_chat_message("jarvis", result.message)
         self._hydrate_agent_status()
+        if self._should_auto_start_voice():
+            self.start_voice_runtime(auto=True)
         return result.message
 
     def run(self) -> None:
@@ -50,6 +62,7 @@ class JarvisDesktopApp:
         root.title("Jarvis Ultimate")
         root.geometry("1180x760")
         root.configure(bg=self.theme["background"])
+        root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         style = ttk.Style(root)
         try:
@@ -98,6 +111,13 @@ class JarvisDesktopApp:
         state_label.pack(anchor="w")
         message_label = ttk.Label(frame, text="Waiting for wake phrase.", style="Panel.TLabel", wraplength=240)
         message_label.pack(anchor="w", pady=(4, 0))
+
+        controls = ttk.Frame(frame, style="Panel.TFrame")
+        controls.pack(fill="x", pady=(10, 0))
+        ttk.Button(controls, text="Start Voice", command=self.start_voice_runtime, style="Jarvis.TButton").pack(side="left")
+        ttk.Button(controls, text="Stop Voice", command=self.stop_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(6, 0))
+        ttk.Button(controls, text="Warm Up", command=self.warmup_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(6, 0))
+
         self._widgets["avatar_canvas"] = canvas
         self._widgets["avatar_state"] = state_label
         self._widgets["avatar_message"] = message_label
@@ -156,6 +176,141 @@ class JarvisDesktopApp:
         text.configure(state="disabled")
         return text
 
+    def _should_auto_start_voice(self) -> bool:
+        return bool(getattr(self.runtime.config, "desktop_auto_start_voice", True)) and bool(
+            getattr(self.runtime.config, "voice_always_listening_on_startup", False)
+        )
+
+    def voice_runtime_running(self) -> bool:
+        thread = self._voice_thread
+        return bool(thread and thread.is_alive())
+
+    def start_voice_runtime(self, *, auto: bool = False) -> str:
+        """Start the sleep/wake voice runtime in a background thread."""
+
+        with self._voice_lock:
+            if self.voice_runtime_running():
+                message = "Voice runtime is already running, sir."
+                if not auto:
+                    self.workspace.add_chat_message("jarvis", message)
+                    self._schedule_refresh()
+                return message
+            self._voice_stop_event = threading.Event()
+            self._voice_state_message = "Starting sleep/wake voice runtime..."
+            self.workspace.avatar.set_state("wake_listening", expression="calm", message="Starting voice runtime...")
+            if not auto:
+                self.workspace.add_chat_message("jarvis", "Starting voice runtime. I will wait in sleep mode for your wake phrase, sir.")
+            else:
+                self.workspace.add_chat_message("jarvis", "Desktop voice runtime is starting. I will wait in sleep mode for your wake phrase, sir.")
+            self._voice_thread = threading.Thread(target=self._run_voice_runtime_thread, name="jarvis-desktop-voice", daemon=True)
+            self._voice_thread.start()
+            self._schedule_refresh()
+            return "Voice runtime started."
+
+    def stop_voice_runtime(self) -> str:
+        """Request the background voice runtime to stop."""
+
+        with self._voice_lock:
+            if self._voice_stop_event is not None:
+                self._voice_stop_event.set()
+            running = self.voice_runtime_running()
+        self.runtime.tts_stop()
+        if running:
+            message = "Stopping voice runtime after the current listen turn, sir."
+        else:
+            message = "Voice runtime is not running, sir."
+        self._voice_state_message = message
+        self.workspace.add_chat_message("jarvis", message)
+        self.workspace.avatar.set_state("idle", expression="neutral", message=message)
+        self._schedule_refresh()
+        return message
+
+    def warmup_voice_runtime(self) -> str:
+        """Warm STT/TTS in the background so the UI stays responsive."""
+
+        def warmup() -> None:
+            self.workspace.avatar.set_state("working", expression="focused", message="Warming voice systems...")
+            self._voice_state_message = "Warming voice systems..."
+            self._schedule_refresh()
+            try:
+                summary = self.runtime.warmup_all()
+                self.workspace.add_chat_message("jarvis", summary)
+                self._voice_state_message = "Voice warmup complete."
+                self.workspace.avatar.set_state("idle", expression="neutral", message="Voice warmup complete, sir.")
+            except Exception as exc:  # pragma: no cover - defensive UI boundary
+                self.workspace.add_chat_message("jarvis", f"Voice warmup failed, sir: {exc}")
+                self.workspace.avatar.set_state("error", expression="alert", message=str(exc))
+            finally:
+                self._schedule_refresh()
+
+        threading.Thread(target=warmup, name="jarvis-desktop-warmup", daemon=True).start()
+        return "Voice warmup started."
+
+    def _run_voice_runtime_thread(self) -> None:
+        stop_event = self._voice_stop_event or threading.Event()
+        self._voice_response_active = False
+
+        def status_callback(message: str) -> None:
+            self._voice_state_message = message
+            lowered = message.lower()
+            if "sleep" in lowered or "wake phrase" in lowered:
+                self.workspace.avatar.set_state("wake_listening", expression="calm", message=message)
+            elif "wake detected" in lowered or "awake" in lowered:
+                self.workspace.avatar.set_state("listening", expression="active", message=message)
+            elif "returning to sleep" in lowered:
+                self.workspace.avatar.set_state("sleeping", expression="calm", message=message)
+            elif "stt failed" in lowered or "failed" in lowered:
+                self.workspace.avatar.set_state("error", expression="alert", message=message)
+            else:
+                self.workspace.avatar.set_state("listening", expression="focused", message=message)
+            self.runtime.events.emit("ui.voice_status", source="desktop", message=message, data={"running": True})
+            self._schedule_refresh()
+
+        def transcript_callback(transcript: str) -> None:
+            self._voice_response_active = False
+            self.workspace.add_chat_message("user", transcript)
+            self.workspace.avatar.set_state("transcribing", expression="focused", message="Heard voice input.")
+            self._schedule_refresh()
+
+        def stream_callback(chunk: str) -> None:
+            if not self._voice_response_active:
+                self.workspace.add_chat_message("jarvis", "")
+                self._voice_response_active = True
+            try:
+                self.workspace.chat_messages[-1]["text"] += chunk
+            except IndexError:  # pragma: no cover - defensive
+                self.workspace.add_chat_message("jarvis", chunk)
+            self.workspace.avatar.set_state("speaking", expression="active", message="Speaking response...")
+            self._schedule_refresh()
+
+        try:
+            result = self.runtime.voice_sleep_wake_loop(
+                max_turns=int(getattr(self.runtime.config, "voice_always_listening_max_turns", 0) or 0),
+                active_timeout_seconds=float(getattr(self.runtime.config, "voice_sleep_timeout_seconds", 45.0) or 45.0),
+                duration_seconds=None,
+                mode=getattr(self.runtime.config, "stt_listen_mode", "smart"),
+                silence_seconds=float(getattr(self.runtime.config, "stt_silence_seconds", 0.65) or 0.65),
+                stream_callback=stream_callback,
+                transcript_callback=transcript_callback,
+                status_callback=status_callback,
+                speak=True,
+                stop_event=stop_event,
+            )
+            self._voice_state_message = result.message
+            if result.data.get("final_state") == "asleep":
+                self.workspace.avatar.set_state("sleeping", expression="calm", message=result.message)
+            else:
+                self.workspace.avatar.set_state("idle", expression="neutral", message=result.message)
+            self.workspace.add_chat_message("jarvis", result.message)
+        except Exception as exc:  # pragma: no cover - defensive UI boundary
+            self._voice_state_message = f"Voice runtime error: {exc}"
+            self.workspace.avatar.set_state("error", expression="alert", message=str(exc))
+            self.workspace.add_chat_message("jarvis", f"Voice runtime error, sir: {exc}")
+        finally:
+            self._voice_response_active = False
+            self.runtime.events.emit("ui.voice_status", source="desktop", message=self._voice_state_message, data={"running": False})
+            self._schedule_refresh()
+
     def submit_command(self) -> None:
         entry = self._widgets.get("command_entry")
         if entry is None:
@@ -164,6 +319,16 @@ class JarvisDesktopApp:
         if not command:
             return
         entry.delete(0, "end")
+        normalized = command.lower()
+        if normalized in {"start voice", "voice start", "start listening", "start always listening"}:
+            self.start_voice_runtime()
+            return
+        if normalized in {"stop voice", "voice stop", "stop listening", "stop always listening", "exit voice mode"}:
+            self.stop_voice_runtime()
+            return
+        if normalized in {"warmup", "warm up", "warmup all", "warm voice", "voice warmup"}:
+            self.warmup_voice_runtime()
+            return
         self.workspace.add_chat_message("user", command)
         self.workspace.avatar.set_state("thinking", expression="focused", message="Routing command...")
         self.refresh()
@@ -255,6 +420,9 @@ class JarvisDesktopApp:
     def _render_status(self) -> None:
         lines = [
             f"Avatar: {self.workspace.avatar.label}",
+            f"Desktop voice runtime: {'running' if self.voice_runtime_running() else 'stopped'}",
+            f"Voice status: {self._voice_state_message}",
+            f"Auto-start voice: {getattr(self.runtime.config, 'desktop_auto_start_voice', True)}",
             f"LLM: {getattr(self.runtime.llm_provider, 'provider_name', 'unknown')} / {getattr(self.runtime.llm_provider, 'model', 'unknown')}",
             f"TTS: {self.runtime.tts_manager.provider_name} (enabled={self.runtime.tts_manager.enabled})",
             f"STT: {self.runtime.stt_manager.provider_name} (enabled={self.runtime.stt_manager.enabled})",
@@ -302,6 +470,11 @@ class JarvisDesktopApp:
         widget.insert("1.0", value)
         widget.configure(state="disabled")
         widget.see("end")
+
+    def _on_close(self) -> None:
+        self.stop_voice_runtime()
+        if self._root is not None:
+            self._root.after(150, self._root.destroy)
 
 
 def main() -> None:
