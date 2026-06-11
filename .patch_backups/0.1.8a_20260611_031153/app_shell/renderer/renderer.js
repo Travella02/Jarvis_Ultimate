@@ -3,7 +3,7 @@ const DEFAULT_STATE = {
   runtime: { llm_provider: 'unknown', llm_model: 'unknown', tts_provider: 'unknown', stt_provider: 'unknown', agent_count: 0 },
   workspace: { chat_messages: [], events: [], panels: {} },
   app: { bridge_status: 'offline', api_url: 'http://127.0.0.1:8765' },
-  voice: { mode: 'idle', running: false, last_transcript: '', last_status: 'Ready.', warmup_complete: false, warmup_status: 'Voice warmup has not run yet.' }
+  voice: { mode: 'idle', running: false, last_transcript: '', last_status: 'Ready.' }
 };
 
 let apiUrl = DEFAULT_STATE.app.api_url;
@@ -28,8 +28,7 @@ const els = {
   stopVoiceButton: document.getElementById('stopVoiceButton'),
   voiceMode: document.getElementById('voiceMode'),
   voiceTranscript: document.getElementById('voiceTranscript'),
-  voiceStatus: document.getElementById('voiceStatus'),
-  voiceWarmup: document.getElementById('voiceWarmup')
+  voiceStatus: document.getElementById('voiceStatus')
 };
 
 function escapeHtml(value) {
@@ -59,13 +58,11 @@ function setVisualState(state, message, label) {
 function renderVoice(voice) {
   const session = voice || DEFAULT_STATE.voice;
   const running = Boolean(session.running || session.thread_alive);
-  const warmed = session.warmup_complete !== false;
   els.voiceMode.textContent = running ? `${readable(session.mode)} running` : readable(session.mode || 'idle');
   els.voiceTranscript.textContent = session.last_transcript || 'none yet';
-  els.voiceStatus.textContent = session.last_error || session.last_status || (warmed ? 'Ready.' : 'Warming voice systems...');
-  els.voiceWarmup.textContent = warmed ? 'ready' : (session.warmup_status || 'warming');
-  els.voiceOnceButton.disabled = !warmed || running;
-  els.sleepWakeButton.disabled = !warmed || running;
+  els.voiceStatus.textContent = session.last_error || session.last_status || 'Ready.';
+  els.voiceOnceButton.disabled = running;
+  els.sleepWakeButton.disabled = running;
   els.stopVoiceButton.disabled = !running;
 }
 

@@ -1,9 +1,9 @@
 """Dependency-free local HTTP API for Jarvis's native app shell.
 
 This standard-library server is the live bridge between the Electron
-HTML/CSS/JS interface and the Python Jarvis runtime.  0.1.8a tightens the voice/UI bridge so the orb stays in the speaking
-state for real playback, the controls remain visible, and the app shell warms
-voice systems before accepting a conversation.
+HTML/CSS/JS interface and the Python Jarvis runtime.  0.1.8 adds direct voice
+controls so the app shell can use the same STT -> LLM -> TTS pipeline as the
+CLI without turning the UI into a browser tab.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from jarvis.api.schemas import api_error, api_ok
 from jarvis.clients.app_shell.bridge import DEFAULT_API_URL, build_app_shell_snapshot
 from jarvis.core.lifecycle import JarvisRuntime
 from jarvis.core.result import JarvisResult
-from jarvis.providers.tts.base import TTSResult
 from jarvis.ui.visual_state import classify_voice_status
 from jarvis.ui.workspace import UIWorkspaceState
 
@@ -71,7 +70,6 @@ class LocalJarvisAPI:
         self._voice_thread: threading.Thread | None = None
         self._voice_stop_requested = threading.Event()
         self._voice_session: dict[str, Any] = self._new_voice_session()
-        self._app_shell_voice_warmed = False
         self._booted = bool(getattr(self.runtime, "started", False))
         self.runtime.events.subscribe("*", self._on_runtime_event)
 
@@ -82,14 +80,12 @@ class LocalJarvisAPI:
     def boot(self) -> None:
         with self._lock:
             if self._booted:
-                self._ensure_app_shell_voice_warmup()
                 return
             result = self.runtime.boot()
             self.workspace.add_chat_message("jarvis", result.message)
             for record in self.runtime.registry.enabled_records():
                 self.workspace.set_agent_status(record.name, "registered")
             self.workspace.add_notice("Local app-shell API bridge initialized.")
-            self._ensure_app_shell_voice_warmup(result)
             self.workspace.add_notice("Voice bridge ready: one-turn and sleep/wake controls are available.")
             self._booted = True
 
@@ -101,89 +97,6 @@ class LocalJarvisAPI:
             "runtime_started": bool(getattr(self.runtime, "started", False)),
             "voice": self.voice_session_snapshot(),
         }
-
-    def _ensure_app_shell_voice_warmup(self, boot_result: JarvisResult | None = None) -> None:
-        """Warm STT/TTS before the app shell accepts voice conversation.
-
-        ``JarvisRuntime.boot`` already performs this when
-        JARVIS_VOICE_WARMUP_ON_BOOT=true.  The app shell still enforces a
-        readiness gate so Tanner does not get a "ready" interface while the
-        first voice turn is about to pay model-loading cost.
-        """
-
-        with self._voice_lock:
-            if self._app_shell_voice_warmed:
-                return
-            self._voice_session.update(
-                {
-                    "warmup_complete": False,
-                    "warmup_status": "Warming voice systems before conversation...",
-                    "last_status": "Warming voice systems before conversation...",
-                }
-            )
-        with self._lock:
-            self.workspace.avatar.set_state("working", expression="focused", message="Warming voice systems before conversation...")
-            self.workspace.add_notice("App shell is warming voice systems before conversation.")
-
-        summary = ""
-        if boot_result is not None:
-            data = getattr(boot_result, "data", {}) if boot_result is not None else {}
-            voice_warmup = data.get("voice_warmup", {}) if isinstance(data, dict) else {}
-            summary = str(voice_warmup.get("summary") or "").strip() if isinstance(voice_warmup, dict) else ""
-
-        if not summary:
-            summary = self._warm_voice_managers_for_app_shell()
-
-        with self._voice_lock:
-            self._app_shell_voice_warmed = True
-            self._voice_session.update(
-                {
-                    "warmup_complete": True,
-                    "warmup_status": "Voice systems warmed and ready.",
-                    "warmup_summary": summary,
-                    "last_status": "Voice systems warmed and ready.",
-                }
-            )
-        with self._lock:
-            self.workspace.add_notice("Voice systems warmed and ready.")
-            self.workspace.avatar.set_state("idle", expression="neutral", message="Voice systems warmed and ready. I am ready for conversation, sir.")
-
-    def _warm_voice_managers_for_app_shell(self) -> str:
-        lines = ["App-shell voice warmup:"]
-        if bool(getattr(self.runtime.config, "voice_warmup_stt", True)):
-            stt_warmup = getattr(self.runtime.stt_manager, "warmup", None)
-            if callable(stt_warmup):
-                try:
-                    result = stt_warmup()
-                    lines.append("STT: " + str(getattr(result, "message", result)))
-                except Exception as exc:  # pragma: no cover - defensive warmup boundary
-                    lines.append(f"STT: warmup failed: {exc}")
-            else:
-                lines.append("STT: warmup unavailable for this manager")
-        else:
-            lines.append("STT: skipped")
-
-        if bool(getattr(self.runtime.config, "voice_warmup_tts", True)):
-            tts_warmup = getattr(self.runtime.tts_manager, "warmup", None)
-            if callable(tts_warmup):
-                try:
-                    result = tts_warmup()
-                    if isinstance(result, TTSResult):
-                        lines.append("TTS: " + result.message)
-                    else:
-                        lines.append("TTS: " + str(getattr(result, "message", result)))
-                except Exception as exc:  # pragma: no cover - defensive warmup boundary
-                    lines.append(f"TTS: warmup failed: {exc}")
-            else:
-                lines.append("TTS: warmup unavailable for this manager")
-        else:
-            lines.append("TTS: skipped")
-
-        if bool(getattr(self.runtime.config, "voice_warmup_llm", False)):
-            lines.append("LLM: skipped; LM Studio stays warm through normal command use")
-        else:
-            lines.append("LLM: skipped")
-        return "\n".join(lines)
 
     def snapshot(self) -> dict[str, Any]:
         self.boot()
@@ -282,7 +195,6 @@ class LocalJarvisAPI:
 
     def _start_voice_thread(self, mode: str, target: Any, options: dict[str, Any]) -> dict[str, Any]:
         self.boot()
-        self._ensure_app_shell_voice_warmup()
         with self._voice_lock:
             if self._voice_thread is not None and self._voice_thread.is_alive():
                 return api_error("A Jarvis voice session is already running.", status=409, data={"voice": self.voice_session_snapshot()})
@@ -316,9 +228,6 @@ class LocalJarvisAPI:
             "last_status": "Ready.",
             "last_error": "",
             "final_state": "idle",
-            "warmup_complete": self._app_shell_voice_warmed if hasattr(self, "_app_shell_voice_warmed") else False,
-            "warmup_status": "Voice systems warmed and ready." if getattr(self, "_app_shell_voice_warmed", False) else "Voice warmup has not run yet.",
-            "warmup_summary": "",
             "options": options or {},
         }
 
@@ -376,9 +285,6 @@ class LocalJarvisAPI:
                 speak=bool(options.get("speak", True)),
             )
             response_text = "".join(chunks).strip() or result.message
-            if bool(options.get("speak", True)) and self.runtime.tts_manager.enabled and result.success:
-                self._set_voice_visual("Jarvis is finishing speech playback...", state="speaking", expression="active")
-                self.runtime.spoken_pipeline.wait_until_idle(timeout=120.0)
             handled = 1 if result.success else 0
             failures = 0 if result.success else 1
             self._update_voice_session(
@@ -478,7 +384,6 @@ class LocalJarvisAPI:
                     if not command:
                         prompt = self.runtime.wake_word_manager.empty_response
                         if speak and self.runtime.tts_manager.enabled:
-                            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
                             self.runtime.tts_manager.say(prompt, play_audio=True)
                         self._update_voice_session(last_command="", last_response=prompt)
                         with self._lock:
@@ -489,7 +394,6 @@ class LocalJarvisAPI:
                         state = "asleep"
                         message = "Sleep phrase detected; returning to sleep mode."
                         if speak and self.runtime.tts_manager.enabled:
-                            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
                             self.runtime.tts_manager.say("Going back to sleep, sir.", play_audio=True)
                         self._set_voice_visual(message, state="sleeping")
                         continue
@@ -502,7 +406,6 @@ class LocalJarvisAPI:
                 if self.runtime._voice_loop_sleep_phrase_matches(command_normalized, self.runtime._voice_loop_sleep_phrases()):
                     state = "asleep"
                     if speak and self.runtime.tts_manager.enabled:
-                        self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
                         self.runtime.tts_manager.say("Going back to sleep, sir.", play_audio=True)
                     self._set_voice_visual("Sleep phrase detected; returning to sleep mode.", state="sleeping")
                     continue
@@ -530,8 +433,7 @@ class LocalJarvisAPI:
                 spoken_chunks = 0
                 if spoken_stream is not None:
                     spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
-                    self._set_voice_visual("Jarvis is finishing speech playback...", state="speaking", expression="active")
-                    self.runtime.spoken_pipeline.wait_until_idle(timeout=120.0)
+                    self.runtime.spoken_pipeline.wait_until_idle(timeout=30.0)
                 response_text = "".join(chunks).strip() or chat_result.message
                 last_response = response_text
                 with self._lock:
@@ -601,8 +503,6 @@ class LocalJarvisAPI:
     def _on_runtime_event(self, event: Any) -> None:
         with self._lock:
             self.workspace.apply_event(event)
-            if str(getattr(event, "event_type", "")) in {"voice.speech_chunk_started", "voice.speaking_finished", "voice.tts_generated"}:
-                self.workspace.avatar.set_state("speaking", expression="active", message=getattr(event, "message", "Jarvis is speaking..."))
 
 
 def _json_bytes(payload: dict[str, Any] | list[Any]) -> bytes:
@@ -611,7 +511,7 @@ def _json_bytes(payload: dict[str, Any] | list[Any]) -> bytes:
 
 def make_handler(api: LocalJarvisAPI) -> type[BaseHTTPRequestHandler]:
     class JarvisLocalAPIHandler(BaseHTTPRequestHandler):
-        server_version = "JarvisLocalAPI/0.1.8a"
+        server_version = "JarvisLocalAPI/0.1.8"
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
             return

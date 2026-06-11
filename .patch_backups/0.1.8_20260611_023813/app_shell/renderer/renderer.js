@@ -2,8 +2,7 @@ const DEFAULT_STATE = {
   avatar: { state: 'sleeping', label: 'Sleep Mode', message: 'Waiting for wake phrase.' },
   runtime: { llm_provider: 'unknown', llm_model: 'unknown', tts_provider: 'unknown', stt_provider: 'unknown', agent_count: 0 },
   workspace: { chat_messages: [], events: [], panels: {} },
-  app: { bridge_status: 'offline', api_url: 'http://127.0.0.1:8765' },
-  voice: { mode: 'idle', running: false, last_transcript: '', last_status: 'Ready.', warmup_complete: false, warmup_status: 'Voice warmup has not run yet.' }
+  app: { bridge_status: 'offline', api_url: 'http://127.0.0.1:8765' }
 };
 
 let apiUrl = DEFAULT_STATE.app.api_url;
@@ -22,14 +21,7 @@ const els = {
   eventsLog: document.getElementById('eventsLog'),
   commandForm: document.getElementById('commandForm'),
   commandInput: document.getElementById('commandInput'),
-  refreshButton: document.getElementById('refreshButton'),
-  voiceOnceButton: document.getElementById('voiceOnceButton'),
-  sleepWakeButton: document.getElementById('sleepWakeButton'),
-  stopVoiceButton: document.getElementById('stopVoiceButton'),
-  voiceMode: document.getElementById('voiceMode'),
-  voiceTranscript: document.getElementById('voiceTranscript'),
-  voiceStatus: document.getElementById('voiceStatus'),
-  voiceWarmup: document.getElementById('voiceWarmup')
+  refreshButton: document.getElementById('refreshButton')
 };
 
 function escapeHtml(value) {
@@ -45,28 +37,11 @@ function normalizeState(state) {
   return String(state || 'idle').trim().toLowerCase().replaceAll(' ', '_');
 }
 
-function readable(value) {
-  return String(value || 'idle').replaceAll('_', ' ');
-}
-
 function setVisualState(state, message, label) {
   const next = normalizeState(state);
   document.body.className = `state-${next}`;
-  els.stateLabel.textContent = label || readable(next);
+  els.stateLabel.textContent = label || next.replaceAll('_', ' ');
   els.stateMessage.textContent = message || 'Ready, sir.';
-}
-
-function renderVoice(voice) {
-  const session = voice || DEFAULT_STATE.voice;
-  const running = Boolean(session.running || session.thread_alive);
-  const warmed = session.warmup_complete !== false;
-  els.voiceMode.textContent = running ? `${readable(session.mode)} running` : readable(session.mode || 'idle');
-  els.voiceTranscript.textContent = session.last_transcript || 'none yet';
-  els.voiceStatus.textContent = session.last_error || session.last_status || (warmed ? 'Ready.' : 'Warming voice systems...');
-  els.voiceWarmup.textContent = warmed ? 'ready' : (session.warmup_status || 'warming');
-  els.voiceOnceButton.disabled = !warmed || running;
-  els.sleepWakeButton.disabled = !warmed || running;
-  els.stopVoiceButton.disabled = !running;
 }
 
 function renderState(snapshot) {
@@ -75,10 +50,8 @@ function renderState(snapshot) {
   const runtime = lastState.runtime || DEFAULT_STATE.runtime;
   const workspace = lastState.workspace || DEFAULT_STATE.workspace;
   const app = lastState.app || DEFAULT_STATE.app;
-  const voice = lastState.voice || DEFAULT_STATE.voice;
 
   setVisualState(avatar.state, avatar.message, avatar.label || avatar.profile?.label);
-  renderVoice(voice);
 
   const online = app.bridge_status === 'online';
   els.bridgeStatus.textContent = online ? 'Bridge Online' : 'Bridge Offline';
@@ -148,40 +121,6 @@ async function sendCommand(command) {
   }
 }
 
-async function postVoice(path, body = {}) {
-  try {
-    const payload = await fetchJson(path, {
-      method: 'POST',
-      body: JSON.stringify(body)
-    });
-    renderState(payload.data.state || payload.data);
-    return payload;
-  } catch (error) {
-    renderState({
-      ...lastState,
-      avatar: { state: 'error', label: 'Voice Error', message: error.message }
-    });
-    return null;
-  }
-}
-
-async function startVoiceOnce() {
-  setVisualState('listening', 'Listening for one real microphone turn...', 'Listening');
-  await postVoice('/api/voice/once', { speak: true });
-  setTimeout(refreshState, 350);
-}
-
-async function startSleepWake() {
-  setVisualState('wake_listening', 'Starting sleep/wake voice mode...', 'Listening for Wake Word');
-  await postVoice('/api/voice/sleep-wake/start', { max_turns: 0, speak: true });
-  setTimeout(refreshState, 350);
-}
-
-async function stopVoice() {
-  await postVoice('/api/voice/stop', {});
-  setTimeout(refreshState, 350);
-}
-
 async function boot() {
   if (window.jarvisNative?.getConfig) {
     const config = await window.jarvisNative.getConfig();
@@ -196,9 +135,6 @@ async function boot() {
   });
 
   els.refreshButton.addEventListener('click', refreshState);
-  els.voiceOnceButton.addEventListener('click', startVoiceOnce);
-  els.sleepWakeButton.addEventListener('click', startSleepWake);
-  els.stopVoiceButton.addEventListener('click', stopVoice);
   els.commandForm.addEventListener('submit', event => {
     event.preventDefault();
     const command = els.commandInput.value.trim();
@@ -209,7 +145,7 @@ async function boot() {
 
   renderState(DEFAULT_STATE);
   refreshState();
-  setInterval(refreshState, 900);
+  setInterval(refreshState, 1200);
 }
 
 boot();

@@ -337,13 +337,6 @@ class JarvisRuntime:
         spoken_chunks = 0
         if spoken_stream is not None:
             spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
-            self.events.emit(
-                "voice.speech_playback_wait_started",
-                source="lifecycle",
-                message="Waiting for spoken response playback to finish.",
-                data={"spoken_chunks": spoken_chunks},
-            )
-            self.spoken_pipeline.wait_until_idle(timeout=120.0)
 
         data = dict(chat_result.data)
         data.update(
