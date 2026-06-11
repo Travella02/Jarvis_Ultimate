@@ -22,6 +22,8 @@ class UIPanelSpec:
     icon: str = ""
     default_open: bool = False
     payload: dict[str, Any] = field(default_factory=dict)
+    region: str = "workspace"
+    order: int = 100
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -32,6 +34,8 @@ class UIPanelSpec:
             "icon": self.icon,
             "default_open": self.default_open,
             "payload": dict(self.payload),
+            "region": self.region,
+            "order": self.order,
         }
 
 
@@ -54,10 +58,13 @@ class UIPanelRegistry:
         return sorted(self._panels)
 
     def all(self) -> list[UIPanelSpec]:
-        return [self._panels[name] for name in self.names()]
+        return sorted(self._panels.values(), key=lambda spec: (spec.region, spec.order, spec.panel_id))
 
     def openable(self) -> list[UIPanelSpec]:
         return self.all()
+
+    def by_region(self, region: str) -> list[UIPanelSpec]:
+        return [spec for spec in self.all() if spec.region == region]
 
 
 def create_default_panel_registry() -> UIPanelRegistry:
@@ -65,13 +72,19 @@ def create_default_panel_registry() -> UIPanelRegistry:
 
     registry = UIPanelRegistry()
     for spec in [
-        UIPanelSpec("chat", "Chat", "chat", "Conversation stream and typed commands.", "💬", True),
-        UIPanelSpec("avatar", "Avatar", "avatar", "Jarvis visual body/state display.", "◉", True),
-        UIPanelSpec("status", "Status", "status", "Runtime, voice, memory, and provider state.", "◆", True),
-        UIPanelSpec("agents", "Agents", "agents", "Registered agents and their status.", "☷", True),
-        UIPanelSpec("events", "Event Log", "events", "Recent Jarvis events for debugging and UI state.", "☰", True),
-        UIPanelSpec("workspace", "Workspace", "workspace", "Future dynamic cards: web, reminders, images, files, and tools.", "▣", True),
-        UIPanelSpec("debug", "Debug", "debug", "Timing/debug output and runtime notes.", "⚙", False),
+        UIPanelSpec("avatar", "Avatar", "avatar", "Jarvis visual body/state display.", "◉", True, region="left", order=10),
+        UIPanelSpec("status", "Status", "status", "Runtime, voice, memory, and provider state.", "◆", True, region="left", order=20),
+        UIPanelSpec("chat", "Chat", "chat", "Conversation stream and typed commands.", "💬", True, region="center", order=10),
+        UIPanelSpec("workspace", "Workspace", "workspace", "Future dynamic cards: web, reminders, images, files, and tools.", "▣", True, region="right", order=10),
+        UIPanelSpec("events", "Event Log", "events", "Recent Jarvis events for debugging and UI state.", "☰", True, region="right", order=20),
+        UIPanelSpec("agents", "Agents", "agents", "Registered agents and their status.", "☷", False, region="workspace", order=30),
+        UIPanelSpec("debug", "Debug", "debug", "Timing/debug output and runtime notes.", "⚙", False, region="workspace", order=40),
+        UIPanelSpec("reminders", "Reminders", "cards", "Reminder cards Jarvis can create or manage.", "⏰", False, region="workspace", order=50),
+        UIPanelSpec("web_results", "Web Results", "results", "Search results and web summaries.", "◎", False, region="workspace", order=60),
+        UIPanelSpec("generated_images", "Generated Images", "image_grid", "Images created or edited by Jarvis.", "▧", False, region="workspace", order=70),
+        UIPanelSpec("file_results", "Files", "file_list", "Files Jarvis found or created.", "▤", False, region="workspace", order=80),
+        UIPanelSpec("screen_context", "Screen Context", "screen", "Screen capture, active window, and OCR context.", "▣", False, region="workspace", order=90),
+        UIPanelSpec("agent_dashboard", "Agent Dashboard", "agents", "Detailed agent activity and routing state.", "☷", False, region="workspace", order=100),
     ]:
         registry.register(spec)
     return registry

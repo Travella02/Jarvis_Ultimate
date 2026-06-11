@@ -1,9 +1,9 @@
 """Desktop UI shell for Jarvis Ultimate.
 
-This is intentionally a lightweight, dependency-free Tkinter shell. It gives
-Jarvis a first visual body/workspace while keeping the brain headless-capable.
-Future UI panels can be added through the UIWorkspaceState/UIPanelRegistry
-without rewriting the core runtime.
+0.1.6b turns the first Tkinter shell into a more polished Jarvis workspace:
+modern dark theme tokens, state-reactive avatar/orb rendering, modular panel
+summaries, and cleaner runtime/status surfaces.  It still uses the same
+JarvisRuntime and stays dependency-free so the core can remain headless.
 """
 
 from __future__ import annotations
@@ -14,22 +14,24 @@ from typing import Any
 
 from jarvis.core.lifecycle import JarvisRuntime
 from jarvis.core.result import JarvisEvent
-from jarvis.ui.themes import get_theme
+from jarvis.ui.components import format_workspace_card, panel_header, summarize_payload
+from jarvis.ui.themes import get_theme, state_color, status_color
 from jarvis.ui.workspace import UIWorkspaceState
 
 
 class JarvisDesktopApp:
-    """First desktop body for Jarvis.
+    """Desktop body for Jarvis.
 
     The desktop is a client/body attached to the same JarvisRuntime used by the
-    CLI. 0.1.6a adds a background sleep/wake voice runtime so the window can be
-    Jarvis's normal always-ready interface instead of only a typed chat shell.
+    CLI.  It can run the sleep/wake voice runtime in the background, update the
+    avatar state from events, and show future drop-in panels through the
+    UIWorkspaceState panel registry.
     """
 
-    def __init__(self, *, runtime: JarvisRuntime | None = None, project_root: str | Path | None = None) -> None:
+    def __init__(self, *, runtime: JarvisRuntime | None = None, project_root: str | Path | None = None, theme_name: str | None = None) -> None:
         self.runtime = runtime or JarvisRuntime(project_root=project_root)
         self.workspace = UIWorkspaceState()
-        self.theme = get_theme()
+        self.theme = get_theme(theme_name or self._resolve_theme_name())
         self._tk: Any | None = None
         self._root: Any | None = None
         self._widgets: dict[str, Any] = {}
@@ -39,12 +41,37 @@ class JarvisDesktopApp:
         self._voice_stop_event: threading.Event | None = None
         self._voice_state_message = "Voice runtime is stopped."
         self._voice_response_active = False
+        self._orb_tick = 0
 
         self.runtime.events.subscribe("*", self._on_runtime_event)
+
+    def _resolve_theme_name(self) -> str:
+        """Resolve the UI theme from the project .env or config/ui.yaml if present."""
+
+        root = getattr(self.runtime.config, "project_root", Path.cwd())
+        env_path = Path(root) / ".env"
+        if env_path.exists():
+            try:
+                for line in env_path.read_text(encoding="utf-8").splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("JARVIS_UI_THEME="):
+                        return stripped.split("=", 1)[1].strip().strip('"').strip("'") or "jarvis_dark"
+            except OSError:
+                pass
+        ui_yaml = Path(root) / "config" / "ui.yaml"
+        if ui_yaml.exists():
+            try:
+                for line in ui_yaml.read_text(encoding="utf-8").splitlines():
+                    if line.strip().startswith("theme:"):
+                        return line.split(":", 1)[1].strip() or "jarvis_dark"
+            except OSError:
+                pass
+        return "jarvis_dark"
 
     def boot(self) -> str:
         result = self.runtime.boot()
         self.workspace.add_chat_message("jarvis", result.message)
+        self.workspace.add_notice("Jarvis desktop body initialized.")
         self._hydrate_agent_status()
         if self._should_auto_start_voice():
             self.start_voice_runtime(auto=True)
@@ -60,7 +87,8 @@ class JarvisDesktopApp:
         root = tk.Tk()
         self._root = root
         root.title("Jarvis Ultimate")
-        root.geometry("1180x760")
+        root.geometry("1240x800")
+        root.minsize(1060, 680)
         root.configure(bg=self.theme["background"])
         root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -69,51 +97,77 @@ class JarvisDesktopApp:
             style.theme_use("clam")
         except tk.TclError:
             pass
-        style.configure("Jarvis.TFrame", background=self.theme["background"])
-        style.configure("Panel.TFrame", background=self.theme["panel"], relief="flat")
-        style.configure("Jarvis.TLabel", background=self.theme["background"], foreground=self.theme["text"])
-        style.configure("Panel.TLabel", background=self.theme["panel"], foreground=self.theme["text"])
-        style.configure("Accent.TLabel", background=self.theme["panel"], foreground=self.theme["accent"], font=("Segoe UI", 12, "bold"))
-        style.configure("Jarvis.TButton", background=self.theme["panel_alt"], foreground=self.theme["text"])
 
-        self._build_layout(root, ttk)
+        font = self.theme["font_family"]
+        mono = self.theme["mono_font_family"]
+        style.configure("Jarvis.TFrame", background=self.theme["background"])
+        style.configure("Surface.TFrame", background=self.theme["surface"])
+        style.configure("Panel.TFrame", background=self.theme["panel"], relief="flat")
+        style.configure("Jarvis.TLabel", background=self.theme["background"], foreground=self.theme["text"], font=(font, 10))
+        style.configure("Panel.TLabel", background=self.theme["panel"], foreground=self.theme["text"], font=(font, 10))
+        style.configure("Muted.TLabel", background=self.theme["panel"], foreground=self.theme["muted"], font=(font, 9))
+        style.configure("Accent.TLabel", background=self.theme["panel"], foreground=self.theme["accent"], font=(font, 12, "bold"))
+        style.configure("Header.TLabel", background=self.theme["background"], foreground=self.theme["accent"], font=(font, 18, "bold"))
+        style.configure("Jarvis.TButton", background=self.theme["surface_raised"], foreground=self.theme["text"], borderwidth=1, focusthickness=0)
+        style.configure("Jarvis.TEntry", fieldbackground=self.theme["panel_alt"], foreground=self.theme["text"], insertcolor=self.theme["accent"])
+
+        self._build_layout(root, ttk, mono)
         self.boot()
         self.refresh()
-        root.after(500, self._periodic_refresh)
+        root.after(360, self._periodic_refresh)
         root.mainloop()
 
-    def _build_layout(self, root: Any, ttk: Any) -> None:
-        root.grid_columnconfigure(0, weight=2)
-        root.grid_columnconfigure(1, weight=4)
-        root.grid_columnconfigure(2, weight=3)
-        root.grid_rowconfigure(0, weight=1)
+    def _build_layout(self, root: Any, ttk: Any, mono_font: str) -> None:
+        root.grid_columnconfigure(0, weight=1)
+        root.grid_rowconfigure(1, weight=1)
 
-        left = ttk.Frame(root, style="Jarvis.TFrame", padding=10)
-        center = ttk.Frame(root, style="Jarvis.TFrame", padding=10)
-        right = ttk.Frame(root, style="Jarvis.TFrame", padding=10)
-        left.grid(row=0, column=0, sticky="nsew")
-        center.grid(row=0, column=1, sticky="nsew")
-        right.grid(row=0, column=2, sticky="nsew")
+        header = ttk.Frame(root, style="Jarvis.TFrame", padding=(16, 10, 16, 4))
+        header.grid(row=0, column=0, sticky="ew")
+        ttk.Label(header, text="JARVIS ULTIMATE", style="Header.TLabel").pack(side="left")
+        self._widgets["top_badge"] = ttk.Label(header, text="SYSTEM ONLINE", style="Jarvis.TLabel")
+        self._widgets["top_badge"].pack(side="right")
+
+        shell = ttk.Frame(root, style="Jarvis.TFrame", padding=(12, 8, 12, 12))
+        shell.grid(row=1, column=0, sticky="nsew")
+        shell.grid_columnconfigure(0, weight=3)
+        shell.grid_columnconfigure(1, weight=4)
+        shell.grid_columnconfigure(2, weight=3)
+        shell.grid_rowconfigure(0, weight=1)
+
+        left = ttk.Frame(shell, style="Surface.TFrame", padding=8)
+        center = ttk.Frame(shell, style="Surface.TFrame", padding=8)
+        right = ttk.Frame(shell, style="Surface.TFrame", padding=8)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        center.grid(row=0, column=1, sticky="nsew", padx=4)
+        right.grid(row=0, column=2, sticky="nsew", padx=(8, 0))
 
         self._build_avatar_panel(left, ttk)
-        self._build_status_panel(left, ttk)
-        self._build_chat_panel(center, ttk)
-        self._build_workspace_panel(right, ttk)
-        self._build_events_panel(right, ttk)
+        self._build_status_panel(left, ttk, mono_font)
+        self._build_chat_panel(center, ttk, mono_font)
+        self._build_workspace_panel(right, ttk, mono_font)
+        self._build_events_panel(right, ttk, mono_font)
+
+    def _panel(self, parent: Any, ttk: Any, title: str, *, icon: str = "", fill: str = "both", expand: bool = True, pady: tuple[int, int] = (0, 10)) -> Any:
+        outer = ttk.Frame(parent, style="Panel.TFrame", padding=2)
+        outer.pack(fill=fill, expand=expand, pady=pady)
+        header = ttk.Frame(outer, style="Panel.TFrame")
+        header.pack(fill="x", padx=10, pady=(8, 0))
+        ttk.Label(header, text=panel_header(title, icon), style="Accent.TLabel").pack(side="left", anchor="w")
+        body = ttk.Frame(outer, style="Panel.TFrame", padding=10)
+        body.pack(fill="both", expand=True)
+        return body
 
     def _build_avatar_panel(self, parent: Any, ttk: Any) -> None:
-        frame = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        frame.pack(fill="x", pady=(0, 10))
-        ttk.Label(frame, text="JARVIS", style="Accent.TLabel").pack(anchor="w")
-        canvas = self._tk.Canvas(frame, width=220, height=220, bg=self.theme["panel"], highlightthickness=0)
-        canvas.pack(pady=8)
+        frame = self._panel(parent, ttk, "Avatar Core", icon="◉", fill="x", expand=False, pady=(0, 10))
+        canvas = self._tk.Canvas(frame, width=280, height=260, bg=self.theme["panel"], highlightthickness=0)
+        canvas.pack(pady=(0, 8), fill="x")
         state_label = ttk.Label(frame, text="State: sleeping", style="Panel.TLabel")
         state_label.pack(anchor="w")
-        message_label = ttk.Label(frame, text="Waiting for wake phrase.", style="Panel.TLabel", wraplength=240)
+        message_label = ttk.Label(frame, text="Waiting for wake phrase.", style="Muted.TLabel", wraplength=310)
         message_label.pack(anchor="w", pady=(4, 0))
 
         controls = ttk.Frame(frame, style="Panel.TFrame")
-        controls.pack(fill="x", pady=(10, 0))
+        controls.pack(fill="x", pady=(12, 0))
         ttk.Button(controls, text="Start Voice", command=self.start_voice_runtime, style="Jarvis.TButton").pack(side="left")
         ttk.Button(controls, text="Stop Voice", command=self.stop_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(6, 0))
         ttk.Button(controls, text="Warm Up", command=self.warmup_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(6, 0))
@@ -122,24 +176,20 @@ class JarvisDesktopApp:
         self._widgets["avatar_state"] = state_label
         self._widgets["avatar_message"] = message_label
 
-    def _build_status_panel(self, parent: Any, ttk: Any) -> None:
-        frame = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="STATUS", style="Accent.TLabel").pack(anchor="w")
-        text = self._make_text(frame, height=18)
-        text.pack(fill="both", expand=True, pady=(8, 0))
+    def _build_status_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
+        frame = self._panel(parent, ttk, "Runtime Status", icon="◆", pady=(0, 0))
+        text = self._make_text(frame, height=20, font_family=mono_font)
+        text.pack(fill="both", expand=True)
         self._widgets["status_text"] = text
 
-    def _build_chat_panel(self, parent: Any, ttk: Any) -> None:
-        frame = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="CHAT", style="Accent.TLabel").pack(anchor="w")
-        chat = self._make_text(frame, height=28)
-        chat.pack(fill="both", expand=True, pady=(8, 8))
+    def _build_chat_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
+        frame = self._panel(parent, ttk, "Conversation", icon="▰", pady=(0, 0))
+        chat = self._make_text(frame, height=33, font_family=mono_font)
+        chat.pack(fill="both", expand=True, pady=(0, 10))
 
         input_frame = ttk.Frame(frame, style="Panel.TFrame")
         input_frame.pack(fill="x")
-        entry = ttk.Entry(input_frame)
+        entry = ttk.Entry(input_frame, style="Jarvis.TEntry")
         entry.pack(side="left", fill="x", expand=True)
         entry.bind("<Return>", lambda _event: self.submit_command())
         button = ttk.Button(input_frame, text="Send", command=self.submit_command, style="Jarvis.TButton")
@@ -147,31 +197,31 @@ class JarvisDesktopApp:
         self._widgets["chat_text"] = chat
         self._widgets["command_entry"] = entry
 
-    def _build_workspace_panel(self, parent: Any, ttk: Any) -> None:
-        frame = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        frame.pack(fill="both", expand=True, pady=(0, 10))
-        ttk.Label(frame, text="WORKSPACE", style="Accent.TLabel").pack(anchor="w")
-        text = self._make_text(frame, height=16)
-        text.pack(fill="both", expand=True, pady=(8, 0))
+    def _build_workspace_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
+        frame = self._panel(parent, ttk, "Workspace", icon="▣", pady=(0, 10))
+        text = self._make_text(frame, height=18, font_family=mono_font)
+        text.pack(fill="both", expand=True)
         self._widgets["workspace_text"] = text
 
-    def _build_events_panel(self, parent: Any, ttk: Any) -> None:
-        frame = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="EVENTS", style="Accent.TLabel").pack(anchor="w")
-        text = self._make_text(frame, height=14)
-        text.pack(fill="both", expand=True, pady=(8, 0))
+    def _build_events_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
+        frame = self._panel(parent, ttk, "Event Stream", icon="☰", pady=(0, 0))
+        text = self._make_text(frame, height=15, font_family=mono_font)
+        text.pack(fill="both", expand=True)
         self._widgets["events_text"] = text
 
-    def _make_text(self, parent: Any, *, height: int) -> Any:
+    def _make_text(self, parent: Any, *, height: int, font_family: str | None = None) -> Any:
         text = self._tk.Text(
             parent,
             height=height,
             bg=self.theme["panel_alt"],
             fg=self.theme["text"],
             insertbackground=self.theme["accent"],
+            selectbackground=self.theme["accent_soft"],
             relief="flat",
             wrap="word",
+            padx=10,
+            pady=8,
+            font=(font_family or self.theme["font_family"], 9),
         )
         text.configure(state="disabled")
         return text
@@ -371,7 +421,7 @@ class JarvisDesktopApp:
     def _periodic_refresh(self) -> None:
         self.refresh()
         if self._root is not None:
-            self._root.after(1000, self._periodic_refresh)
+            self._root.after(360, self._periodic_refresh)
 
     def _schedule_refresh(self) -> None:
         if self._root is not None:
@@ -380,11 +430,16 @@ class JarvisDesktopApp:
     def refresh(self) -> None:
         if self._root is None:
             return
+        self._orb_tick = (self._orb_tick + 1) % 60
         self._render_avatar()
         self._render_chat()
         self._render_status()
         self._render_workspace()
         self._render_events()
+        badge = self._widgets.get("top_badge")
+        if badge is not None:
+            status = "VOICE ONLINE" if self.voice_runtime_running() else "DESKTOP ONLINE"
+            badge.configure(text=status)
 
     def _render_avatar(self) -> None:
         canvas = self._widgets.get("avatar_canvas")
@@ -392,35 +447,40 @@ class JarvisDesktopApp:
             return
         canvas.delete("all")
         state = self.workspace.avatar.state
-        colors = {
-            "sleeping": "#155e75",
-            "wake_listening": "#0891b2",
-            "listening": "#22d3ee",
-            "transcribing": "#60a5fa",
-            "thinking": "#a78bfa",
-            "speaking": "#34d399",
-            "working": "#fbbf24",
-            "error": "#fb7185",
-            "idle": "#38bdf8",
-        }
-        color = colors.get(state, self.theme["accent"])
-        canvas.create_oval(35, 35, 185, 185, outline=color, width=4)
-        canvas.create_oval(65, 65, 155, 155, outline=self.theme["accent_soft"], width=2)
-        canvas.create_text(110, 110, text="◉", fill=color, font=("Segoe UI", 40, "bold"))
+        color = state_color(state, self.theme)
+        pulse = (self._orb_tick % 20) / 20
+        center_x, center_y = 140, 126
+        base_radius = 52
+        outer_radius = 82 + int(pulse * 10)
+
+        # Subtle grid/scan lines.
+        for y in range(22, 238, 24):
+            canvas.create_line(24, y, 256, y, fill=self.theme["panel_glow"], width=1)
+        for x in range(34, 256, 44):
+            canvas.create_line(x, 30, x, 228, fill=self.theme["panel_glow"], width=1)
+
+        canvas.create_oval(center_x - outer_radius, center_y - outer_radius, center_x + outer_radius, center_y + outer_radius, outline=color, width=3)
+        canvas.create_oval(center_x - 68, center_y - 68, center_x + 68, center_y + 68, outline=self.theme["accent_soft"], width=2)
+        canvas.create_oval(center_x - base_radius, center_y - base_radius, center_x + base_radius, center_y + base_radius, outline=self.theme["accent"], width=1)
+        canvas.create_oval(center_x - 20, center_y - 20, center_x + 20, center_y + 20, outline=color, width=4)
+        canvas.create_text(center_x, center_y, text="◉", fill=color, font=(self.theme["font_family"], 34, "bold"))
+        canvas.create_text(center_x, 232, text=self.workspace.avatar.label.upper(), fill=color, font=(self.theme["font_family"], 10, "bold"))
+
         self._widgets["avatar_state"].configure(text=f"State: {self.workspace.avatar.label}")
         self._widgets["avatar_message"].configure(text=self.workspace.avatar.message or "Ready, sir.")
 
     def _render_chat(self) -> None:
         lines = []
         for msg in self.workspace.chat_messages:
-            prefix = "You" if msg["role"] == "user" else "Jarvis"
+            prefix = "YOU" if msg["role"] == "user" else "JARVIS"
             lines.append(f"{prefix}: {msg['text']}")
         self._set_text("chat_text", "\n\n".join(lines))
 
     def _render_status(self) -> None:
+        voice = "running" if self.voice_runtime_running() else "stopped"
         lines = [
             f"Avatar: {self.workspace.avatar.label}",
-            f"Desktop voice runtime: {'running' if self.voice_runtime_running() else 'stopped'}",
+            f"Desktop voice runtime: {voice}",
             f"Voice status: {self._voice_state_message}",
             f"Auto-start voice: {getattr(self.runtime.config, 'desktop_auto_start_voice', True)}",
             f"LLM: {getattr(self.runtime.llm_provider, 'provider_name', 'unknown')} / {getattr(self.runtime.llm_provider, 'model', 'unknown')}",
@@ -429,17 +489,29 @@ class JarvisDesktopApp:
             f"Wake words: {', '.join(self.runtime.wake_word_manager.wake_words)}",
             f"Short-term memory turns: {self.runtime.short_term_memory.status().get('turns', 0)}",
             "",
+            "Status colors:",
+            f"- voice: {status_color(voice, self.theme)}",
+            f"- avatar: {state_color(self.workspace.avatar.state, self.theme)}",
+            "",
             "Agents:",
         ]
         for name in self.runtime.registry.names(enabled_only=True):
             lines.append(f"- {name}: {self.workspace.agent_status.get(name, 'registered')}")
+        if self.workspace.notices:
+            lines.append("")
+            lines.append("Notices:")
+            for notice in list(self.workspace.notices)[-5:]:
+                lines.append(f"- {notice}")
         self._set_text("status_text", "\n".join(lines))
 
     def _render_workspace(self) -> None:
-        lines = ["Drop-in panels:"]
-        for panel in self.workspace.panel_registry.all():
-            state = "open" if self.workspace.panels.get(panel.panel_id, None) and self.workspace.panels[panel.panel_id].is_open else "closed"
-            lines.append(f"- {panel.title} ({panel.panel_id}) [{state}]")
+        lines = [
+            "Drop-in panel registry:",
+        ]
+        for panel in self.workspace.panel_summaries():
+            marker = "OPEN" if panel["is_open"] else "READY"
+            lines.append(f"- {panel['title']} ({panel['panel_id']}) [{marker}] type={panel['panel_type']}")
+
         lines.append("")
         lines.append("Future Jarvis tools can open panels with ui.open_panel events:")
         lines.append("- reminders")
@@ -448,16 +520,26 @@ class JarvisDesktopApp:
         lines.append("- file results")
         lines.append("- screen/OCR context")
         lines.append("- agent dashboards")
+
         if self.workspace.workspace_cards:
             lines.append("")
             lines.append("Workspace cards:")
             for card in self.workspace.workspace_cards:
-                lines.append(f"- {card['title']} ({card['type']})")
+                lines.append(format_workspace_card(card))
+
+        open_dynamic = [panel for panel in self.workspace.open_panels() if panel.panel_id not in {"avatar", "status", "chat", "workspace", "events"}]
+        if open_dynamic:
+            lines.append("")
+            lines.append("Open dynamic panels:")
+            for panel in open_dynamic:
+                lines.append(f"{panel.title}:")
+                for preview in summarize_payload(panel.payload):
+                    lines.append(f"  {preview}")
         self._set_text("workspace_text", "\n".join(lines))
 
     def _render_events(self) -> None:
         lines = []
-        for event in list(self.workspace.events)[-30:]:
+        for event in list(self.workspace.events)[-36:]:
             lines.append(f"{event.timestamp} | {event.event_type} | {event.source} | {event.message}")
         self._set_text("events_text", "\n".join(lines))
 

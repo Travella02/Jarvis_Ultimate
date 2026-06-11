@@ -19,6 +19,8 @@ class WorkspacePanelState:
     panel_type: str = "text"
     is_open: bool = False
     payload: dict[str, Any] = field(default_factory=dict)
+    region: str = "workspace"
+    order: int = 100
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -27,6 +29,8 @@ class WorkspacePanelState:
             "panel_type": self.panel_type,
             "is_open": self.is_open,
             "payload": dict(self.payload),
+            "region": self.region,
+            "order": self.order,
         }
 
 
@@ -41,6 +45,7 @@ class UIWorkspaceState:
         self.chat_messages: deque[dict[str, str]] = deque(maxlen=200)
         self.agent_status: dict[str, str] = {}
         self.workspace_cards: deque[dict[str, Any]] = deque(maxlen=50)
+        self.notices: deque[str] = deque(maxlen=25)
         self._hydrate_default_panels()
 
     def _hydrate_default_panels(self) -> None:
@@ -51,24 +56,32 @@ class UIWorkspaceState:
                 panel_type=spec.panel_type,
                 is_open=spec.default_open,
                 payload=dict(spec.payload),
+                region=spec.region,
+                order=spec.order,
             )
 
     def add_chat_message(self, role: str, text: str) -> None:
         self.chat_messages.append({"role": role, "text": text})
+
+    def add_notice(self, message: str) -> None:
+        if message:
+            self.notices.append(message)
 
     def set_agent_status(self, agent_name: str, status: str) -> None:
         self.agent_status[agent_name] = status
 
     def open_panel(self, panel_id: str, *, title: str | None = None, panel_type: str = "text", payload: dict[str, Any] | None = None) -> WorkspacePanelState:
         panel = self.panels.get(panel_id)
+        spec = self.panel_registry.get(panel_id)
         if panel is None:
-            spec = self.panel_registry.get(panel_id)
             panel = WorkspacePanelState(
                 panel_id=panel_id,
                 title=title or (spec.title if spec else panel_id.replace("_", " ").title()),
                 panel_type=panel_type if spec is None else spec.panel_type,
                 is_open=True,
                 payload=payload or {},
+                region=spec.region if spec else "workspace",
+                order=spec.order if spec else 100,
             )
             self.panels[panel_id] = panel
         panel.is_open = True
@@ -78,11 +91,23 @@ class UIWorkspaceState:
             panel.payload = payload
         return panel
 
+    def close_panel(self, panel_id: str) -> None:
+        panel = self.panels.get(panel_id)
+        if panel is not None:
+            panel.is_open = False
+
     def update_panel(self, panel_id: str, *, payload: dict[str, Any] | None = None) -> WorkspacePanelState:
         panel = self.open_panel(panel_id)
         if payload is not None:
             panel.payload.update(payload)
         return panel
+
+    def panel_summaries(self) -> list[dict[str, Any]]:
+        panels = sorted(self.panels.values(), key=lambda panel: (panel.region, panel.order, panel.panel_id))
+        return [panel.to_dict() for panel in panels]
+
+    def open_panels(self) -> list[WorkspacePanelState]:
+        return [panel for panel in sorted(self.panels.values(), key=lambda panel: (panel.region, panel.order, panel.panel_id)) if panel.is_open]
 
     def add_workspace_card(self, card_type: str, title: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         card = {"type": card_type, "title": title, "payload": payload or {}}
@@ -111,6 +136,11 @@ class UIWorkspaceState:
         elif event.event_type == "ui.update_panel":
             payload = event.data.get("payload")
             self.update_panel(str(event.data.get("panel_id", "workspace")), payload=payload if isinstance(payload, dict) else {})
+        elif event.event_type == "ui.close_panel":
+            self.close_panel(str(event.data.get("panel_id", "workspace")))
+        elif event.event_type == "ui.workspace_card":
+            payload = event.data.get("payload")
+            self.add_workspace_card(str(event.data.get("card_type", "card")), str(event.data.get("title", event.message or "Workspace Card")), payload if isinstance(payload, dict) else {})
         elif event.event_type.startswith("agent.") and event.source:
             self.set_agent_status(event.source, event.message or event.event_type)
 
@@ -122,4 +152,5 @@ class UIWorkspaceState:
             "chat_messages": list(self.chat_messages),
             "agent_status": dict(sorted(self.agent_status.items())),
             "workspace_cards": list(self.workspace_cards),
+            "notices": list(self.notices),
         }

@@ -1,14 +1,28 @@
 ui:
   default_client: desktop
+  theme: jarvis_dark
+  density: comfortable
   desktop:
     enabled: true
     window_title: Jarvis Ultimate
     start_maximized: false
     auto_start_voice: true
     voice_start_mode: sleep_wake
+    layout: three_column_workspace
+    avatar_style: futuristic_orb
+    event_feed_limit: 36
+    workspace_cards_limit: 50
+  panels:
+    registry_enabled: true
+    dynamic_open_events: true
+    default_open:
+      - avatar
+      - status
+      - chat
+      - workspace
+      - events
 
-# 0.1.6 desktop UI foundation notes:
-# The desktop UI is a client/body for Jarvis Core, not the brain.
-# Future agents can open dynamic panels through ui.open_panel/ui.update_panel events.
-# Core Jarvis must continue to run headless from CLI.
-# 0.1.6a connects the desktop body to the real Jarvis sleep/wake voice runtime.
+# 0.1.6b futuristic UI notes:
+# The UI uses theme tokens + a drop-in panel registry so future agents can add
+# panels/cards without rewriting the desktop shell.
+# Jarvis Core must continue to run headless from CLI.
