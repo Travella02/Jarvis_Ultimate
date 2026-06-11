@@ -15,20 +15,13 @@ class FakeSTTManager:
     silence_seconds = 0.8
     record_seconds = 2.0
 
-    def __init__(self, text="Hello Jarvis"):
+    def __init__(self, text="Hey Jarvis, what is your status?"):
         self.text = text
         self.calls = []
 
     def listen_once(self, *, duration_seconds=None, mode=None, silence_seconds=None):
         self.calls.append({"duration_seconds": duration_seconds, "mode": mode, "silence_seconds": silence_seconds})
-        return STTResult.ok(
-            "fake STT complete",
-            provider="fake_stt",
-            text=self.text,
-            audio_path=Path("data/stt/fake.wav"),
-            language="en",
-            duration_seconds=1.0,
-        )
+        return STTResult.ok("fake STT complete", provider="fake_stt", text=self.text, audio_path=Path("data/stt/fake.wav"), language="en", duration_seconds=1.0)
 
     def status(self):
         return "fake STT status"
@@ -74,59 +67,50 @@ class FakeTTSManager:
         return "fake TTS status"
 
 
-class TestRuntimeVoiceLoop(unittest.TestCase):
-    def test_voice_loop_once_transcribes_routes_and_speaks(self):
+class TestRuntimeWakeWord(unittest.TestCase):
+    def test_runtime_wake_test_reports_command(self):
         with tempfile.TemporaryDirectory() as tmp:
-            stt = FakeSTTManager(text="What is your status?")
+            runtime = JarvisRuntime(project_root=tmp, llm_provider=MockLLMProvider(canned_response="Online, sir."), stt_manager=FakeSTTManager(), tts_manager=FakeTTSManager())
+            output = runtime.wake_test("Hey Jarvis, status")
+            self.assertIn("Detected: True", output)
+            self.assertIn("Command after wake word: status", output)
+
+    def test_wake_voice_once_routes_command_after_wake_word(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stt = FakeSTTManager(text="Hey Jarvis, what is your status?")
             tts = FakeTTSManager()
-            llm = MockLLMProvider(canned_response="Online, sir.")
-            runtime = JarvisRuntime(project_root=tmp, llm_provider=llm, stt_manager=stt, tts_manager=tts)
+            runtime = JarvisRuntime(project_root=tmp, llm_provider=MockLLMProvider(canned_response="Online, sir."), stt_manager=stt, tts_manager=tts)
             runtime.boot()
             printed = []
             heard = []
-
-            result = runtime.voice_loop_once(
-                mode="smart",
-                silence_seconds=0.7,
-                stream_callback=printed.append,
-                transcript_callback=heard.append,
-                speak=True,
-            )
+            result = runtime.wake_voice_once(stream_callback=printed.append, transcript_callback=heard.append, speak=True)
             self.assertTrue(result.success)
-            self.assertEqual(result.action, "voice_loop_once")
-            self.assertEqual(result.data["transcript"], "What is your status?")
-            self.assertEqual(heard, ["What is your status?"])
+            self.assertEqual(result.action, "wake_voice_once")
+            self.assertEqual(result.data["wake_word"], "hey jarvis")
+            self.assertEqual(result.data["wake_command"], "what is your status")
+            self.assertEqual(heard, ["Hey Jarvis, what is your status?"])
             self.assertEqual("".join(printed), "Online, sir.")
             self.assertTrue(runtime.spoken_pipeline.wait_until_idle(timeout=3.0))
             self.assertEqual([call[0] for call in tts.calls], ["Online, sir."])
-            self.assertEqual(stt.calls[0]["silence_seconds"], 0.7)
             runtime.spoken_pipeline.shutdown()
 
-    def test_voice_loop_rejects_empty_transcript(self):
+    def test_wake_voice_once_rejects_missing_wake_word(self):
         with tempfile.TemporaryDirectory() as tmp:
-            runtime = JarvisRuntime(
-                project_root=tmp,
-                llm_provider=MockLLMProvider(canned_response="Should not run"),
-                stt_manager=FakeSTTManager(text=""),
-                tts_manager=FakeTTSManager(),
-            )
+            runtime = JarvisRuntime(project_root=tmp, llm_provider=MockLLMProvider(canned_response="Should not run"), stt_manager=FakeSTTManager(text="What is your status?"), tts_manager=FakeTTSManager())
             runtime.boot()
-            result = runtime.voice_loop_once()
+            result = runtime.wake_voice_once()
             self.assertFalse(result.success)
-            self.assertIn("did not catch", result.message)
+            self.assertIn("Wake word was not detected", result.message)
 
-    def test_voice_loop_status_mentions_wake_word_foundation(self):
+    def test_wake_voice_once_empty_wake_says_yes_sir(self):
         with tempfile.TemporaryDirectory() as tmp:
-            runtime = JarvisRuntime(
-                project_root=tmp,
-                llm_provider=MockLLMProvider(canned_response="Online"),
-                stt_manager=FakeSTTManager(),
-                tts_manager=FakeTTSManager(),
-            )
-            status = runtime.voice_loop_status()
-            self.assertIn("one-turn", status)
-            self.assertIn("wake word:", status)
-            self.assertIn("wake voice once", status)
+            tts = FakeTTSManager()
+            runtime = JarvisRuntime(project_root=tmp, llm_provider=MockLLMProvider(canned_response="Should not run"), stt_manager=FakeSTTManager(text="Hey Jarvis"), tts_manager=tts)
+            runtime.boot()
+            result = runtime.wake_voice_once(speak=True)
+            self.assertTrue(result.success)
+            self.assertEqual(result.message, "Yes, sir?")
+            self.assertEqual(tts.calls[0][0], "Yes, sir?")
 
 
 if __name__ == "__main__":

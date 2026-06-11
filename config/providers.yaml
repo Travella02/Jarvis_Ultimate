@@ -107,5 +107,15 @@ providers:
     vad_filter: true
     mock_text: Hello sir, this is a mock transcription.
 
+  wake_word:
+    # 0.1.1 wake-word foundation. This is dependency-free phrase detection over
+    # STT transcripts, not a continuous always-on wake engine yet.
+    default: phrase
+    enabled: true
+    wake_words: hey jarvis,jarvis
+    require_wake_word: true
+    strip_wake_word: true
+    empty_response: Yes, sir?
+
   avatar:
     default: mock_avatar

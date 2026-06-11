@@ -19,6 +19,7 @@ from jarvis.providers.llm.factory import create_llm_provider
 from jarvis.providers.tts.manager import TTSManager, format_tts_result
 from jarvis.providers.tts.pipeline import SpokenResponsePipeline
 from jarvis.providers.stt.manager import STTManager, format_stt_manager_result
+from jarvis.providers.wake_word.manager import WakeWordManager, WakeWordMatch
 
 
 class JarvisRuntime:
@@ -32,6 +33,7 @@ class JarvisRuntime:
         self.llm_provider = llm_provider or create_llm_provider(self.config)
         self.tts_manager = tts_manager or TTSManager(self.config, events=self.events)
         self.stt_manager = stt_manager or STTManager(self.config, events=self.events)
+        self.wake_word_manager = WakeWordManager(self.config, events=self.events)
         self.spoken_pipeline = SpokenResponsePipeline(
             self.tts_manager,
             events=self.events,
@@ -93,6 +95,11 @@ class JarvisRuntime:
                     "record_seconds": self.stt_manager.record_seconds,
                     "warmup_on_boot": getattr(self.config, "stt_warmup_on_boot", False),
                     "warmup_success": getattr(stt_warmup_result, "success", None),
+                },
+                "wake_word": {
+                    "enabled": self.wake_word_manager.enabled,
+                    "provider": self.wake_word_manager.provider_name,
+                    "wake_words": self.wake_word_manager.wake_words,
                 },
             },
         )
@@ -176,6 +183,104 @@ class JarvisRuntime:
         """Return detailed provider-attempt diagnostics for the last STT request."""
         return self.stt_manager.format_debug_last()
 
+    def wake_status(self) -> str:
+        """Return wake-word provider status."""
+        return self.wake_word_manager.status()
+
+    def wake_test(self, transcript: str) -> str:
+        """Check typed text against the wake-word detector."""
+        match = self.wake_word_manager.detect(transcript)
+        return self.wake_word_manager.format_match(match)
+
+    def wake_listen_once(
+        self,
+        *,
+        duration_seconds: float | None = None,
+        mode: str | None = None,
+        silence_seconds: float | None = None,
+    ) -> str:
+        """Listen once, transcribe, and report whether the wake word was heard."""
+        stt_result = self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
+        if not stt_result.success:
+            return format_stt_manager_result(stt_result)
+        match = self.wake_word_manager.detect(stt_result.text)
+        lines = [format_stt_manager_result(stt_result), "", self.wake_word_manager.format_match(match)]
+        return "\n".join(lines)
+
+    def wake_voice_once(
+        self,
+        *,
+        duration_seconds: float | None = None,
+        mode: str | None = None,
+        silence_seconds: float | None = None,
+        stream_callback: LLMStreamCallback | None = None,
+        transcript_callback: Any | None = None,
+        speak: bool = True,
+    ) -> JarvisResult:
+        """Listen for a wake phrase and run one command if detected.
+
+        This is a foundation step toward hands-free Jarvis. It still listens for
+        one microphone turn only; a continuous wake loop will call this path in
+        a later version.
+        """
+        if not self.started:
+            self.boot()
+        self.events.emit("wake_word.listen_started", source="lifecycle", message="Wake-word listen turn started.")
+        stt_result = self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
+        transcript = (stt_result.text or "").strip()
+        if callable(transcript_callback) and transcript:
+            transcript_callback(transcript)
+        if not stt_result.success:
+            message = f"I could not understand the microphone input, sir. {stt_result.error or stt_result.message}"
+            return JarvisResult.fail(message, agent_name="voice_agent", action="wake_voice_once", data={"stage": "stt"})
+        match = self.wake_word_manager.detect(transcript)
+        if not match.detected and self.wake_word_manager.require_wake_word:
+            message = "Wake word was not detected, sir."
+            return JarvisResult.fail(
+                message,
+                agent_name="voice_agent",
+                action="wake_voice_once",
+                data={"stage": "wake_word", "transcript": transcript, "wake_detected": False},
+            )
+
+        command = match.command.strip() if match.detected else transcript
+        if not command:
+            message = self.wake_word_manager.empty_response
+            if speak and self.tts_manager.enabled:
+                self.tts_manager.say(message, play_audio=True)
+            return JarvisResult.ok(
+                message,
+                agent_name="voice_agent",
+                action="wake_voice_once",
+                data={"stage": "empty_wake", "transcript": transcript, "wake_word": match.wake_word, "wake_detected": True},
+            )
+
+        spoken_stream = None
+        callback = stream_callback
+        if speak and self.tts_manager.enabled:
+            spoken_stream = self.spoken_pipeline.create_stream_adapter(stream_callback, enabled=True)
+            callback = spoken_stream
+        chat_result = self.handle_command(command, stream_callback=callback)
+        spoken_chunks = 0
+        if spoken_stream is not None:
+            spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
+
+        data = dict(chat_result.data)
+        data.update(
+            {
+                "transcript": transcript,
+                "wake_word": match.wake_word,
+                "wake_detected": match.detected,
+                "wake_command": command,
+                "stt_provider": stt_result.provider,
+                "stt_audio_path": str(stt_result.audio_path) if stt_result.audio_path else "",
+                "spoken_chunks": spoken_chunks,
+            }
+        )
+        if chat_result.success:
+            return JarvisResult.ok(chat_result.message, agent_name="voice_agent", action="wake_voice_once", data=data)
+        return JarvisResult.fail(chat_result.message, agent_name="voice_agent", action="wake_voice_once", errors=chat_result.errors, data=data)
+
     def voice_loop_status(self) -> str:
         """Return user-facing status for one-turn spoken conversation."""
         lines = [
@@ -188,8 +293,9 @@ class JarvisRuntime:
             f"- TTS enabled: {self.tts_manager.enabled}",
             f"- TTS provider: {self.tts_manager.provider_name}",
             f"- playback available: {getattr(self.tts_manager, 'playback_supported', True)}",
-            "- wake word: not implemented yet; this version is push-to-talk/command-triggered voice turns",
-            "Commands: voice loop once, talk once, listen and respond, voice loop smart max 8 silence 0.8",
+            f"- wake word: {'enabled' if self.wake_word_manager.enabled else 'disabled'} ({', '.join(self.wake_word_manager.wake_words)})",
+            "- continuous wake listening: not implemented yet; this version supports wake-check one-turn commands",
+            "Commands: voice loop once, wake voice once, wake listen once, wake test hey jarvis status",
         ]
         return "\n".join(lines)
 

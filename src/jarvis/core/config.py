@@ -80,6 +80,12 @@ _ENV_ALIASES = {
     "stt_microphone_device": ("JARVIS_STT_MICROPHONE_DEVICE", "JARVIS_MIC_DEVICE"),
     "stt_vad_filter": ("JARVIS_STT_VAD_FILTER",),
     "stt_mock_text": ("JARVIS_STT_MOCK_TEXT",),
+    "wake_word_enabled": ("JARVIS_WAKE_WORD_ENABLED", "JARVIS_WAKE_ENABLED"),
+    "wake_word_provider": ("JARVIS_WAKE_WORD_PROVIDER", "JARVIS_WAKE_PROVIDER"),
+    "wake_words": ("JARVIS_WAKE_WORDS", "JARVIS_WAKE_PHRASES"),
+    "wake_require_wake_word": ("JARVIS_WAKE_REQUIRE_WAKE_WORD", "JARVIS_WAKE_REQUIRED"),
+    "wake_strip_wake_word": ("JARVIS_WAKE_STRIP_WAKE_WORD",),
+    "wake_empty_response": ("JARVIS_WAKE_EMPTY_RESPONSE",),
 }
 
 
@@ -296,12 +302,20 @@ class JarvisConfig:
     stt_vad_filter: bool = True
     stt_mock_text: str = "Hello sir, this is a mock transcription."
 
+    wake_word_enabled: bool = True
+    wake_word_provider: str = "phrase"
+    wake_words: str = "hey jarvis,jarvis"
+    wake_require_wake_word: bool = True
+    wake_strip_wake_word: bool = True
+    wake_empty_response: str = "Yes, sir?"
+
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
         root = Path(project_root) if project_root else Path.cwd()
         provider_config = _read_simple_provider_config(root / "config" / "providers.yaml")
         tts_config = _read_simple_provider_section_config(root / "config" / "providers.yaml", "tts")
         stt_config = _read_simple_provider_section_config(root / "config" / "providers.yaml", "stt")
+        wake_config = _read_simple_provider_section_config(root / "config" / "providers.yaml", "wake_word")
         env_file = _read_simple_env_file(root / ".env")
 
         return cls(
@@ -415,4 +429,10 @@ class JarvisConfig:
             stt_microphone_device=str(_setting(_ENV_ALIASES["stt_microphone_device"], env_file, stt_config.get("microphone_device", ""))),
             stt_vad_filter=_as_bool(_setting(_ENV_ALIASES["stt_vad_filter"], env_file, stt_config.get("vad_filter", "true")), default=True),
             stt_mock_text=str(_setting(_ENV_ALIASES["stt_mock_text"], env_file, stt_config.get("mock_text", "Hello sir, this is a mock transcription."))),
+            wake_word_enabled=_as_bool(_setting(_ENV_ALIASES["wake_word_enabled"], env_file, wake_config.get("enabled", "true")), default=True),
+            wake_word_provider=str(_setting(_ENV_ALIASES["wake_word_provider"], env_file, wake_config.get("default", "phrase"))).strip().lower(),
+            wake_words=str(_setting(_ENV_ALIASES["wake_words"], env_file, wake_config.get("wake_words", "hey jarvis,jarvis"))),
+            wake_require_wake_word=_as_bool(_setting(_ENV_ALIASES["wake_require_wake_word"], env_file, wake_config.get("require_wake_word", "true")), default=True),
+            wake_strip_wake_word=_as_bool(_setting(_ENV_ALIASES["wake_strip_wake_word"], env_file, wake_config.get("strip_wake_word", "true")), default=True),
+            wake_empty_response=str(_setting(_ENV_ALIASES["wake_empty_response"], env_file, wake_config.get("empty_response", "Yes, sir?"))),
         )
