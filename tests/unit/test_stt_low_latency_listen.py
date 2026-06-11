@@ -57,7 +57,10 @@ def _config(root: Path, *, listen_mode: str = "smart"):
         stt_silence_seconds=0.8,
         stt_min_record_seconds=0.35,
         stt_start_timeout_seconds=5.0,
-        stt_energy_threshold=0.012,
+        stt_energy_threshold=0.018,
+        stt_adaptive_energy=True,
+        stt_ambient_calibration_seconds=0.35,
+        stt_energy_multiplier=3.0,
         stt_pre_roll_seconds=0.25,
         stt_frame_ms=30,
         stt_sample_rate=16000,
@@ -78,6 +81,9 @@ class TestSTTLowLatencyListen(unittest.TestCase):
             self.assertEqual(result.text, "hello sir")
             self.assertEqual(len(recorder.smart_calls), 1)
             self.assertEqual(recorder.smart_calls[0]["silence_seconds"], 0.8)
+            self.assertTrue(recorder.smart_calls[0]["adaptive_energy"])
+            self.assertEqual(recorder.smart_calls[0]["ambient_calibration_seconds"], 0.35)
+            self.assertEqual(recorder.smart_calls[0]["energy_multiplier"], 3.0)
             self.assertEqual(recorder.fixed_calls, [])
             debug = manager.format_debug_last()
             self.assertIn("Listen mode: smart", debug)
@@ -105,6 +111,19 @@ class TestSTTLowLatencyListen(unittest.TestCase):
             self.assertEqual(recorder.smart_calls[0]["max_duration_seconds"], 5.0)
             self.assertEqual(recorder.smart_calls[0]["silence_seconds"], 0.6)
 
+
+    def test_manager_can_tune_energy_threshold_and_adaptive_energy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manager = STTManager(_config(root, listen_mode="smart"), recorder=FakeRecorder(root / "smart.wav"))
+            self.assertIn("0.0400", manager.set_energy_threshold(0.04))
+            self.assertEqual(manager.energy_threshold, 0.04)
+            self.assertIn("off", manager.set_adaptive_energy(False))
+            self.assertFalse(manager.adaptive_energy)
+            settings = manager.listen_settings_summary()
+            self.assertIn("adaptive energy: False", settings)
+            self.assertIn("energy threshold: 0.04", settings)
+
     def test_parse_low_latency_listen_commands(self):
         self.assertEqual(_parse_stt_listen_command("listen once"), {"mode": None, "duration_seconds": None, "silence_seconds": None})
         self.assertEqual(_parse_stt_listen_command("listen fixed 2"), {"mode": "fixed", "duration_seconds": 2.0, "silence_seconds": None})
@@ -118,12 +137,15 @@ class TestSTTLowLatencyListen(unittest.TestCase):
             duration_seconds=1.25,
             sample_rate=16000,
             channels=1,
-            data={"listen_mode": "smart", "stop_reason": "silence_detected", "silence_seconds": 0.9},
+            data={"listen_mode": "smart", "stop_reason": "silence_detected", "silence_seconds": 0.9, "effective_energy_threshold": 0.034, "peak_rms": 0.08, "adaptive_energy": True},
         )
         text = format_record_result(result)
         self.assertIn("Listen mode: smart", text)
         self.assertIn("Stop reason: silence_detected", text)
         self.assertIn("Silence stop: 0.90s", text)
+        self.assertIn("Effective energy threshold: 0.0340", text)
+        self.assertIn("Peak RMS: 0.0800", text)
+        self.assertIn("Adaptive energy: True", text)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,13 @@ WAKE_LISTEN_ONCE_COMMANDS = {"wake listen once", "wake word listen", "listen for
 WAKE_VOICE_ONCE_COMMANDS = {"wake voice once", "wake loop once", "wake respond once", "wake chat once", "hey jarvis once"}
 STT_GPU_STATUS_COMMANDS = {"stt gpu", "stt gpu status", "stt cuda", "stt cuda status", "mic gpu status"}
 STT_WARMUP_COMMANDS = {"stt warmup", "warm up stt", "stt load model", "load stt model", "mic warmup"}
+TTS_WARMUP_COMMANDS = {"tts warmup", "warm up tts", "tts load model", "load tts model", "voice output warmup"}
+WARMUP_STATUS_COMMANDS = {"warmup status", "warm up status", "voice warmup status", "readiness status"}
+WARMUP_ALL_COMMANDS = {"warmup", "warmup all", "warm up", "warm up all", "voice warmup", "warm up jarvis", "ready jarvis"}
+AUDIO_CLEANUP_COMMANDS = {"audio cleanup", "voice cleanup", "cleanup audio", "clean audio", "cleanup voice files"}
+TTS_CLEANUP_COMMANDS = {"tts cleanup", "cleanup tts", "voice output cleanup"}
+STT_CLEANUP_COMMANDS = {"stt cleanup", "mic cleanup", "microphone cleanup", "cleanup stt"}
+LISTEN_PRESET_COMMANDS = {"listen faster", "listen fast", "listen balanced", "listen normal", "listen safer", "listen safe"}
 TTS_STATUS_COMMANDS = {"tts status", "speech status"}
 VOICE_STATUS_COMMANDS = {"voice status", "spoken status", "auto voice status"}
 TTS_QUEUE_STATUS_COMMANDS = {"tts queue", "tts queue status", "voice queue", "voice queue status"}
@@ -60,7 +67,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, listen once, wake status, wake voice once, voice loop once, talk once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, warmup all, listen faster, stt energy 0.03, listen once, wake status, wake voice once, voice loop once, talk once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
@@ -113,6 +120,52 @@ def main() -> None:
         if normalized in STT_WARMUP_COMMANDS:
             print("Jarvis: Warming STT model...")
             print(f"Jarvis: {runtime.stt_warmup()}")
+            continue
+
+        if normalized in TTS_WARMUP_COMMANDS:
+            print("Jarvis: Warming TTS provider...")
+            print(f"Jarvis: {runtime.tts_warmup()}")
+            continue
+
+        if normalized in WARMUP_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.warmup_status()}")
+            continue
+
+        if normalized in WARMUP_ALL_COMMANDS:
+            print("Jarvis: Warming voice systems...")
+            print(f"Jarvis: {runtime.warmup_all()}")
+            continue
+
+        if normalized in AUDIO_CLEANUP_COMMANDS:
+            print(f"Jarvis: {runtime.audio_cleanup()}")
+            continue
+
+        if normalized in TTS_CLEANUP_COMMANDS:
+            print(f"Jarvis: {runtime.tts_cleanup()}")
+            continue
+
+        if normalized in STT_CLEANUP_COMMANDS:
+            print(f"Jarvis: {runtime.stt_cleanup()}")
+            continue
+
+        listen_preset = _parse_listen_preset_command(normalized)
+        if listen_preset is not None:
+            print(f"Jarvis: {runtime.stt_set_latency_preset(listen_preset)}")
+            continue
+
+        silence_override = _parse_stt_silence_set_command(command)
+        if silence_override is not None:
+            print(f"Jarvis: {runtime.stt_set_silence_seconds(silence_override)}")
+            continue
+
+        energy_override = _parse_stt_energy_set_command(command)
+        if energy_override is not None:
+            print(f"Jarvis: {runtime.stt_set_energy_threshold(energy_override)}")
+            continue
+
+        adaptive_override = _parse_stt_adaptive_energy_command(normalized)
+        if adaptive_override is not None:
+            print(f"Jarvis: {runtime.stt_set_adaptive_energy(adaptive_override)}")
             continue
 
         if normalized in STT_LISTEN_SETTINGS_COMMANDS:
@@ -361,6 +414,53 @@ def main() -> None:
         else:
             print(f"Jarvis: {result.message}")
 
+
+
+
+def _parse_listen_preset_command(normalized: str) -> str | None:
+    if normalized in {"listen faster", "listen fast"}:
+        return "faster"
+    if normalized in {"listen balanced", "listen normal"}:
+        return "balanced"
+    if normalized in {"listen safer", "listen safe"}:
+        return "safer"
+    return None
+
+
+def _parse_stt_silence_set_command(command: str) -> float | None:
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("stt silence ", "listen silence ", "silence stop ", "set silence ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            value = stripped[len(prefix):].strip().lower().replace("seconds", "").replace("second", "").strip()
+            try:
+                return float(value)
+            except ValueError:
+                return None
+    return None
+
+
+def _parse_stt_energy_set_command(command: str) -> float | None:
+    stripped = command.strip()
+    lowered = stripped.lower()
+    prefixes = ("stt energy ", "listen energy ", "mic energy ", "energy threshold ", "set energy ")
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            value = stripped[len(prefix):].strip().lower().replace("threshold", "").strip()
+            try:
+                return float(value)
+            except ValueError:
+                return None
+    return None
+
+
+def _parse_stt_adaptive_energy_command(normalized: str) -> bool | None:
+    if normalized in {"stt adaptive on", "stt adaptive energy on", "listen adaptive on", "adaptive energy on"}:
+        return True
+    if normalized in {"stt adaptive off", "stt adaptive energy off", "listen adaptive off", "adaptive energy off"}:
+        return False
+    return None
 
 
 

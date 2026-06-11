@@ -66,6 +66,10 @@ providers:
     # normally while sentence chunks are sent to TTS on a background queue.
     auto_speak_chunk_chars: 320
     queue_max_size: 12
+    # 0.1.2 audio retention cleanup. Keep only recent generated voice clips
+    # so an always-running Jarvis does not fill the drive.
+    max_output_files: 30
+    delete_after_playback: false
     # XTTS remains an experimental, personal/non-commercial provider only. It is
     # not in the default chain. Prefer Kokoro locally and a licensed provider
     # such as ElevenLabs later if SaaS quality/voice cloning is needed.
@@ -94,11 +98,14 @@ providers:
     # silence_seconds. fixed records exactly record_seconds.
     listen_mode: smart
     record_seconds: 2.0
-    max_listen_seconds: 8.0
-    silence_seconds: 1.0
-    min_record_seconds: 0.35
-    start_timeout_seconds: 5.0
-    energy_threshold: 0.012
+    max_listen_seconds: 6.0
+    silence_seconds: 0.65
+    min_record_seconds: 0.20
+    start_timeout_seconds: 3.0
+    energy_threshold: 0.018
+    adaptive_energy: true
+    ambient_calibration_seconds: 0.35
+    energy_multiplier: 3.0
     pre_roll_seconds: 0.25
     frame_ms: 30
     sample_rate: 16000
@@ -106,6 +113,7 @@ providers:
     microphone_device:
     vad_filter: true
     mock_text: Hello sir, this is a mock transcription.
+    max_audio_files: 30
 
   wake_word:
     # 0.1.1 wake-word foundation. This is dependency-free phrase detection over
@@ -116,6 +124,15 @@ providers:
     require_wake_word: true
     strip_wake_word: true
     empty_response: Yes, sir?
+
+  voice_runtime:
+    # 0.1.2 always-ready warmup settings. These are read from .env in this
+    # early rebuild; they are documented here so future config loading can
+    # promote them into the YAML reader when needed.
+    warmup_on_boot: false
+    warmup_stt: true
+    warmup_tts: true
+    warmup_llm: false
 
   avatar:
     default: mock_avatar

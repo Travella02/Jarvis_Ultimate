@@ -103,6 +103,9 @@ class MicrophoneRecorder:
         energy_threshold: float,
         pre_roll_seconds: float = 0.25,
         frame_ms: int = 30,
+        adaptive_energy: bool = True,
+        ambient_calibration_seconds: float = 0.35,
+        energy_multiplier: float = 3.0,
     ) -> AudioRecordResult:
         """Record until speech ends plus a configurable silence window.
 
@@ -124,6 +127,10 @@ class MicrophoneRecorder:
             return AudioRecordResult.fail("Smart listen start timeout must be greater than zero.")
         if energy_threshold <= 0:
             return AudioRecordResult.fail("Smart listen energy threshold must be greater than zero.")
+        if ambient_calibration_seconds < 0:
+            return AudioRecordResult.fail("Smart listen ambient calibration seconds cannot be negative.")
+        if energy_multiplier < 1.0:
+            return AudioRecordResult.fail("Smart listen energy multiplier must be at least 1.0.")
 
         try:
             import numpy as np
@@ -143,6 +150,10 @@ class MicrophoneRecorder:
             peak_rms = 0.0
             stop_reason = "max_duration"
             started = time.perf_counter()
+            ambient_rms_values: list[float] = []
+            effective_energy_threshold = float(energy_threshold)
+            calibration_seconds = float(ambient_calibration_seconds) if adaptive_energy else 0.0
+            calibration_finished = not adaptive_energy or calibration_seconds <= 0
 
             with sd.InputStream(samplerate=self.sample_rate, channels=self.channels, dtype="float32", device=self.device) as stream:
                 while True:
@@ -151,7 +162,23 @@ class MicrophoneRecorder:
                     elapsed = now - started
                     rms = float(np.sqrt(np.mean(np.square(data)))) if data.size else 0.0
                     peak_rms = max(peak_rms, rms)
-                    is_voice = rms >= float(energy_threshold)
+
+                    if not calibration_finished:
+                        ambient_rms_values.append(rms)
+                        pre_roll.append(data.copy())
+                        if elapsed >= calibration_seconds:
+                            ambient_array = np.array(ambient_rms_values, dtype="float32") if ambient_rms_values else np.array([0.0], dtype="float32")
+                            ambient_median = float(np.median(ambient_array))
+                            ambient_p90 = float(np.percentile(ambient_array, 90))
+                            adaptive_threshold = max(ambient_median * float(energy_multiplier), ambient_p90 * 1.5)
+                            effective_energy_threshold = max(float(energy_threshold), adaptive_threshold)
+                            calibration_finished = True
+                        if elapsed >= float(max_duration_seconds):
+                            stop_reason = "max_duration"
+                            break
+                        continue
+
+                    is_voice = rms >= effective_energy_threshold
 
                     if is_voice:
                         voice_chunks += 1
@@ -175,6 +202,9 @@ class MicrophoneRecorder:
                                     "elapsed_seconds": elapsed,
                                     "start_timeout_seconds": start_timeout_seconds,
                                     "energy_threshold": energy_threshold,
+                                    "effective_energy_threshold": effective_energy_threshold,
+                                    "adaptive_energy": adaptive_energy,
+                                    "ambient_calibration_seconds": ambient_calibration_seconds,
                                     "peak_rms": peak_rms,
                                     "device": self.device or "default",
                                 },
@@ -225,6 +255,12 @@ class MicrophoneRecorder:
                     "min_record_seconds": min_record_seconds,
                     "start_timeout_seconds": start_timeout_seconds,
                     "energy_threshold": energy_threshold,
+                    "effective_energy_threshold": effective_energy_threshold,
+                    "adaptive_energy": adaptive_energy,
+                    "ambient_calibration_seconds": ambient_calibration_seconds,
+                    "energy_multiplier": energy_multiplier,
+                    "ambient_rms_median": float(np.median(np.array(ambient_rms_values, dtype="float32"))) if ambient_rms_values else None,
+                    "ambient_rms_peak": max(ambient_rms_values) if ambient_rms_values else None,
                     "pre_roll_seconds": pre_roll_seconds,
                     "frame_ms": frame_ms,
                     "speech_started": True,
@@ -276,6 +312,14 @@ def format_record_result(result: AudioRecordResult) -> str:
     silence_seconds = result.data.get("silence_seconds")
     if silence_seconds is not None:
         lines.append(f"Silence stop: {float(silence_seconds):.2f}s")
+    effective_threshold = result.data.get("effective_energy_threshold")
+    if effective_threshold is not None:
+        lines.append(f"Effective energy threshold: {float(effective_threshold):.4f}")
+    peak_rms = result.data.get("peak_rms")
+    if peak_rms is not None:
+        lines.append(f"Peak RMS: {float(peak_rms):.4f}")
+    if result.data.get("adaptive_energy") is not None:
+        lines.append(f"Adaptive energy: {bool(result.data.get('adaptive_energy'))}")
     if result.error:
         lines.append(f"Error: {result.error}")
     return "\n".join(lines)

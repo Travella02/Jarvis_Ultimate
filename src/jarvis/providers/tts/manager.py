@@ -76,6 +76,9 @@ class TTSManager:
         self.language = str(getattr(config, "tts_language", "en"))
         self.kokoro_voice = str(getattr(config, "tts_kokoro_voice", "af_heart")).strip() or "af_heart"
         self.playback = bool(getattr(config, "tts_playback", False))
+        self.max_output_files = int(getattr(config, "tts_max_output_files", 30))
+        self.delete_after_playback = bool(getattr(config, "tts_delete_after_playback", False))
+        self.last_cleanup_removed = 0
         self.voice_profiles_dir = self._resolve_project_path(getattr(config, "tts_voice_profiles_dir", "data/tts/voices"))
         configured_speaker = self._resolve_speaker_wav(getattr(config, "tts_xtts_speaker_wav", "assets/voices/jarvis_reference.wav"))
         profile_speaker = self.profile_reference_path(self.voice_name)
@@ -98,6 +101,8 @@ class TTSManager:
             f"- output dir: {self.output_dir}",
             f"- playback: {self.playback}",
             f"- playback support: {self._playback_support_label()}",
+            f"- retention: keep last {self.max_output_files} generated WAV file(s)",
+            f"- delete after playback: {self.delete_after_playback}",
             "- SaaS note: Kokoro is the default local provider. XTTS is experimental/personal-only and disabled unless explicitly selected.",
         ]
         if "xtts" in provider_chain:
@@ -198,6 +203,14 @@ class TTSManager:
                 if should_play and result.output_path and result.output_path.suffix.lower() == ".wav":
                     played = self._play_wav(result.output_path)
                     result.played = played
+                    if played and self.delete_after_playback:
+                        try:
+                            result.output_path.unlink(missing_ok=True)
+                            result.data["deleted_after_playback"] = True
+                        except Exception as exc:
+                            result.data["delete_after_playback_error"] = f"{type(exc).__name__}: {exc}"
+                cleanup_removed = self.cleanup_outputs()
+                result.data.setdefault("cleanup_removed", cleanup_removed)
                 result.data.setdefault("attempts", attempts)
                 result.data.setdefault("voice_name", selected_voice)
                 result.data.setdefault("provider_chain", selected_chain)
@@ -218,6 +231,40 @@ class TTSManager:
         self.last_attempts = attempts
         self.events.emit("voice.tts_failed", source="tts.manager", message=message, data={"errors": errors, "attempts": attempts})
         return failed
+
+
+    def warmup(self) -> TTSResult:
+        """Load the selected TTS provider now so the first spoken reply is faster."""
+        if not self.enabled:
+            result = TTSResult.fail("TTS is disabled. Set JARVIS_TTS_ENABLED=true to enable voice output.", provider="tts_manager")
+            self.last_result = result
+            return result
+        phrase = "Ready, sir."
+        result = self.say(phrase, play_audio=False, allow_fallback=True)
+        if result.success:
+            deleted = False
+            if result.output_path and result.output_path.exists():
+                try:
+                    result.output_path.unlink()
+                    deleted = True
+                except Exception as exc:
+                    result.data["warmup_delete_error"] = f"{type(exc).__name__}: {exc}"
+            result.message = f"TTS warmed with {result.provider}."
+            result.data["warmup"] = True
+            result.data["warmup_output_deleted"] = deleted
+        return result
+
+    def cleanup_outputs(self) -> int:
+        """Delete old generated TTS WAV files beyond the retention limit."""
+        removed = _cleanup_old_files(self.output_dir, pattern="jarvis_tts_*.wav", keep_last=self.max_output_files)
+        self.last_cleanup_removed = removed
+        if removed:
+            self.events.emit("voice.tts_cleanup_finished", source="tts.manager", message="Old TTS output files cleaned up.", data={"removed": removed, "keep_last": self.max_output_files})
+        return removed
+
+    def cleanup_summary(self) -> str:
+        removed = self.cleanup_outputs()
+        return f"TTS cleanup complete. Removed {removed} old generated voice file(s). Keeping last {self.max_output_files}."
 
     def play_last(self) -> TTSResult:
         """Play the most recently generated WAV without regenerating speech."""
@@ -607,6 +654,27 @@ class TTSManager:
                 }
         except Exception:
             return {}
+
+
+def _cleanup_old_files(directory: Path, *, pattern: str, keep_last: int) -> int:
+    """Remove oldest matching files while keeping the newest N files."""
+    try:
+        keep = int(keep_last)
+    except Exception:
+        keep = 30
+    if keep < 0 or not directory.exists():
+        return 0
+    files = [path for path in directory.glob(pattern) if path.is_file()]
+    files.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    to_remove = files[keep:] if keep > 0 else files
+    removed = 0
+    for path in to_remove:
+        try:
+            path.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def _timestamp_slug() -> str:

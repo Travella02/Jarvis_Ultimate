@@ -26,6 +26,8 @@ class STTManager:
             self.fallback_providers.append("mock")
         self.project_root = Path(getattr(config, "project_root", Path.cwd()))
         self.output_dir = self._resolve_project_path(getattr(config, "stt_output_dir", "data/stt"))
+        self.max_audio_files = int(getattr(config, "stt_max_audio_files", 30))
+        self.last_cleanup_removed = 0
         self.language = str(getattr(config, "stt_language", "en") or "").strip() or None
         self.record_seconds = float(getattr(config, "stt_record_seconds", 2.0))
         self.listen_mode = _normalize_listen_mode(getattr(config, "stt_listen_mode", "smart"))
@@ -33,7 +35,10 @@ class STTManager:
         self.silence_seconds = float(getattr(config, "stt_silence_seconds", 1.0))
         self.min_record_seconds = float(getattr(config, "stt_min_record_seconds", 0.35))
         self.start_timeout_seconds = float(getattr(config, "stt_start_timeout_seconds", 5.0))
-        self.energy_threshold = float(getattr(config, "stt_energy_threshold", 0.012))
+        self.energy_threshold = float(getattr(config, "stt_energy_threshold", 0.018))
+        self.adaptive_energy = bool(getattr(config, "stt_adaptive_energy", True))
+        self.ambient_calibration_seconds = float(getattr(config, "stt_ambient_calibration_seconds", 0.35))
+        self.energy_multiplier = float(getattr(config, "stt_energy_multiplier", 3.0))
         self.pre_roll_seconds = float(getattr(config, "stt_pre_roll_seconds", 0.25))
         self.frame_ms = int(getattr(config, "stt_frame_ms", 30))
         self.sample_rate = int(getattr(config, "stt_sample_rate", 16000))
@@ -68,9 +73,13 @@ class STTManager:
             f"- silence stop seconds: {self.silence_seconds}",
             f"- start timeout seconds: {self.start_timeout_seconds}",
             f"- energy threshold: {self.energy_threshold}",
+            f"- adaptive energy: {self.adaptive_energy}",
+            f"- ambient calibration seconds: {self.ambient_calibration_seconds}",
+            f"- energy multiplier: {self.energy_multiplier}",
             f"- sample rate: {self.sample_rate}",
             f"- channels: {self.channels}",
             f"- output dir: {self.output_dir}",
+            f"- retention: keep last {self.max_audio_files} microphone WAV file(s)",
         ]
         mic = self.recorder.status()
         lines.append(f"- microphone: {'ready' if mic.get('ready') else 'unavailable'} - {mic.get('message', '')}")
@@ -141,6 +150,8 @@ class STTManager:
     def record_once(self, *, duration_seconds: float | None = None) -> str:
         result = self.recorder.record(duration_seconds=duration_seconds or self.record_seconds)
         self.last_recording = result
+        if result.success:
+            self.cleanup_recordings()
         return format_record_result(result)
 
     def listen_settings_summary(self) -> str:
@@ -154,9 +165,13 @@ class STTManager:
             f"- min record seconds: {self.min_record_seconds}",
             f"- start timeout seconds: {self.start_timeout_seconds}",
             f"- energy threshold: {self.energy_threshold}",
+            f"- adaptive energy: {self.adaptive_energy}",
+            f"- ambient calibration seconds: {self.ambient_calibration_seconds}",
+            f"- energy multiplier: {self.energy_multiplier}",
             f"- pre-roll seconds: {self.pre_roll_seconds}",
             f"- frame ms: {self.frame_ms}",
-            "Tip: lower silence stop seconds feels faster but can cut you off; raise it if Jarvis stops listening too early.",
+            "Presets: listen faster = 0.55s, listen balanced = 0.75s, listen safer = 1.05s",
+            "Tuning: use 'stt energy 0.03' if Jarvis keeps listening until max duration, or 'stt energy 0.015' if Jarvis misses quiet speech.",
         ])
 
     def listen_once(self, *, duration_seconds: float | None = None, mode: str | None = None, silence_seconds: float | None = None) -> STTResult:
@@ -174,6 +189,9 @@ class STTManager:
                 energy_threshold=self.energy_threshold,
                 pre_roll_seconds=self.pre_roll_seconds,
                 frame_ms=self.frame_ms,
+                adaptive_energy=self.adaptive_energy,
+                ambient_calibration_seconds=self.ambient_calibration_seconds,
+                energy_multiplier=self.energy_multiplier,
             )
         else:
             record_result = self.recorder.record(duration_seconds=duration_seconds or self.record_seconds)
@@ -187,7 +205,54 @@ class STTManager:
             )
             self.last_result = result
             return result
-        return self.transcribe_file(record_result.output_path)
+        result = self.transcribe_file(record_result.output_path)
+        self.cleanup_recordings()
+        return result
+
+    def set_silence_seconds(self, seconds: float) -> str:
+        value = float(seconds)
+        if value < 0.35:
+            value = 0.35
+        if value > 2.5:
+            value = 2.5
+        self.silence_seconds = value
+        setattr(self.config, "stt_silence_seconds", value)
+        return f"Smart listen silence stop is now {value:.2f}s for this runtime session."
+
+    def set_latency_preset(self, preset: str) -> str:
+        selected = str(preset or "balanced").strip().lower()
+        presets = {"faster": 0.55, "fast": 0.55, "balanced": 0.75, "normal": 0.75, "safer": 1.05, "safe": 1.05}
+        if selected not in presets:
+            return "Unknown listen preset. Use: listen faster, listen balanced, or listen safer."
+        return self.set_silence_seconds(presets[selected])
+
+
+    def set_energy_threshold(self, threshold: float) -> str:
+        value = float(threshold)
+        if value < 0.003:
+            value = 0.003
+        if value > 0.2:
+            value = 0.2
+        self.energy_threshold = value
+        setattr(self.config, "stt_energy_threshold", value)
+        return f"Smart listen base energy threshold is now {value:.4f} for this runtime session."
+
+    def set_adaptive_energy(self, enabled: bool) -> str:
+        self.adaptive_energy = bool(enabled)
+        setattr(self.config, "stt_adaptive_energy", self.adaptive_energy)
+        state = "on" if self.adaptive_energy else "off"
+        return f"Smart listen adaptive energy is now {state} for this runtime session."
+
+    def cleanup_recordings(self) -> int:
+        removed = _cleanup_old_files(self.output_dir, pattern="jarvis_mic_*.wav", keep_last=self.max_audio_files)
+        self.last_cleanup_removed = removed
+        if removed:
+            self.events.emit("voice.stt_cleanup_finished", source="stt.manager", message="Old microphone recordings cleaned up.", data={"removed": removed, "keep_last": self.max_audio_files})
+        return removed
+
+    def cleanup_summary(self) -> str:
+        removed = self.cleanup_recordings()
+        return f"STT cleanup complete. Removed {removed} old microphone recording file(s). Keeping last {self.max_audio_files}."
 
     def transcribe_file(self, path: str | Path) -> STTResult:
         if not self.enabled:
@@ -280,6 +345,26 @@ class STTManager:
         if path.is_absolute():
             return path
         return self.project_root / path
+
+
+def _cleanup_old_files(directory: Path, *, pattern: str, keep_last: int) -> int:
+    try:
+        keep = int(keep_last)
+    except Exception:
+        keep = 30
+    if keep < 0 or not directory.exists():
+        return 0
+    files = [path for path in directory.glob(pattern) if path.is_file()]
+    files.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    to_remove = files[keep:] if keep > 0 else files
+    removed = 0
+    for path in to_remove:
+        try:
+            path.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def format_stt_manager_result(result: STTResult) -> str:

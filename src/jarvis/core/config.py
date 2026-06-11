@@ -55,6 +55,8 @@ _ENV_ALIASES = {
     "tts_kokoro_lang_code": ("JARVIS_TTS_KOKORO_LANG_CODE",),
     "tts_auto_speak_chunk_chars": ("JARVIS_TTS_AUTO_SPEAK_CHUNK_CHARS", "JARVIS_VOICE_CHUNK_CHARS"),
     "tts_queue_max_size": ("JARVIS_TTS_QUEUE_MAX_SIZE", "JARVIS_VOICE_QUEUE_MAX_SIZE"),
+    "tts_max_output_files": ("JARVIS_TTS_MAX_OUTPUT_FILES", "JARVIS_VOICE_MAX_OUTPUT_FILES"),
+    "tts_delete_after_playback": ("JARVIS_TTS_DELETE_AFTER_PLAYBACK",),
     "stt_enabled": ("JARVIS_STT_ENABLED",),
     "stt_provider": ("JARVIS_STT_PROVIDER",),
     "stt_fallback_providers": ("JARVIS_STT_FALLBACK_PROVIDERS",),
@@ -73,6 +75,9 @@ _ENV_ALIASES = {
     "stt_min_record_seconds": ("JARVIS_STT_MIN_RECORD_SECONDS", "JARVIS_MIC_MIN_RECORD_SECONDS"),
     "stt_start_timeout_seconds": ("JARVIS_STT_START_TIMEOUT_SECONDS", "JARVIS_MIC_START_TIMEOUT_SECONDS"),
     "stt_energy_threshold": ("JARVIS_STT_ENERGY_THRESHOLD", "JARVIS_MIC_ENERGY_THRESHOLD"),
+    "stt_adaptive_energy": ("JARVIS_STT_ADAPTIVE_ENERGY", "JARVIS_MIC_ADAPTIVE_ENERGY"),
+    "stt_ambient_calibration_seconds": ("JARVIS_STT_AMBIENT_CALIBRATION_SECONDS", "JARVIS_MIC_AMBIENT_CALIBRATION_SECONDS"),
+    "stt_energy_multiplier": ("JARVIS_STT_ENERGY_MULTIPLIER", "JARVIS_MIC_ENERGY_MULTIPLIER"),
     "stt_pre_roll_seconds": ("JARVIS_STT_PRE_ROLL_SECONDS", "JARVIS_MIC_PRE_ROLL_SECONDS"),
     "stt_frame_ms": ("JARVIS_STT_FRAME_MS", "JARVIS_MIC_FRAME_MS"),
     "stt_sample_rate": ("JARVIS_STT_SAMPLE_RATE", "JARVIS_MIC_SAMPLE_RATE"),
@@ -80,12 +85,17 @@ _ENV_ALIASES = {
     "stt_microphone_device": ("JARVIS_STT_MICROPHONE_DEVICE", "JARVIS_MIC_DEVICE"),
     "stt_vad_filter": ("JARVIS_STT_VAD_FILTER",),
     "stt_mock_text": ("JARVIS_STT_MOCK_TEXT",),
+    "stt_max_audio_files": ("JARVIS_STT_MAX_AUDIO_FILES", "JARVIS_MIC_MAX_AUDIO_FILES"),
     "wake_word_enabled": ("JARVIS_WAKE_WORD_ENABLED", "JARVIS_WAKE_ENABLED"),
     "wake_word_provider": ("JARVIS_WAKE_WORD_PROVIDER", "JARVIS_WAKE_PROVIDER"),
     "wake_words": ("JARVIS_WAKE_WORDS", "JARVIS_WAKE_PHRASES"),
     "wake_require_wake_word": ("JARVIS_WAKE_REQUIRE_WAKE_WORD", "JARVIS_WAKE_REQUIRED"),
     "wake_strip_wake_word": ("JARVIS_WAKE_STRIP_WAKE_WORD",),
     "wake_empty_response": ("JARVIS_WAKE_EMPTY_RESPONSE",),
+    "voice_warmup_on_boot": ("JARVIS_VOICE_WARMUP_ON_BOOT", "JARVIS_WARMUP_ON_BOOT"),
+    "voice_warmup_stt": ("JARVIS_VOICE_WARMUP_STT", "JARVIS_WARMUP_STT"),
+    "voice_warmup_tts": ("JARVIS_VOICE_WARMUP_TTS", "JARVIS_WARMUP_TTS"),
+    "voice_warmup_llm": ("JARVIS_VOICE_WARMUP_LLM", "JARVIS_WARMUP_LLM"),
 }
 
 
@@ -275,6 +285,8 @@ class JarvisConfig:
     tts_kokoro_lang_code: str = "a"
     tts_auto_speak_chunk_chars: int = 320
     tts_queue_max_size: int = 12
+    tts_max_output_files: int = 30
+    tts_delete_after_playback: bool = False
 
     stt_enabled: bool = True
     stt_provider: str = "faster_whisper"
@@ -293,7 +305,10 @@ class JarvisConfig:
     stt_silence_seconds: float = 1.0
     stt_min_record_seconds: float = 0.35
     stt_start_timeout_seconds: float = 5.0
-    stt_energy_threshold: float = 0.012
+    stt_energy_threshold: float = 0.018
+    stt_adaptive_energy: bool = True
+    stt_ambient_calibration_seconds: float = 0.35
+    stt_energy_multiplier: float = 3.0
     stt_pre_roll_seconds: float = 0.25
     stt_frame_ms: int = 30
     stt_sample_rate: int = 16000
@@ -301,6 +316,7 @@ class JarvisConfig:
     stt_microphone_device: str = ""
     stt_vad_filter: bool = True
     stt_mock_text: str = "Hello sir, this is a mock transcription."
+    stt_max_audio_files: int = 30
 
     wake_word_enabled: bool = True
     wake_word_provider: str = "phrase"
@@ -308,6 +324,11 @@ class JarvisConfig:
     wake_require_wake_word: bool = True
     wake_strip_wake_word: bool = True
     wake_empty_response: str = "Yes, sir?"
+
+    voice_warmup_on_boot: bool = False
+    voice_warmup_stt: bool = True
+    voice_warmup_tts: bool = True
+    voice_warmup_llm: bool = False
 
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
@@ -404,6 +425,8 @@ class JarvisConfig:
             tts_kokoro_lang_code=str(_setting(_ENV_ALIASES["tts_kokoro_lang_code"], env_file, tts_config.get("kokoro_lang_code", "a"))),
             tts_auto_speak_chunk_chars=int(_setting(_ENV_ALIASES["tts_auto_speak_chunk_chars"], env_file, tts_config.get("auto_speak_chunk_chars", "320"))),
             tts_queue_max_size=int(_setting(_ENV_ALIASES["tts_queue_max_size"], env_file, tts_config.get("queue_max_size", "12"))),
+            tts_max_output_files=int(_setting(_ENV_ALIASES["tts_max_output_files"], env_file, tts_config.get("max_output_files", "30"))),
+            tts_delete_after_playback=_as_bool(_setting(_ENV_ALIASES["tts_delete_after_playback"], env_file, tts_config.get("delete_after_playback", "false")), default=False),
             stt_enabled=_as_bool(_setting(_ENV_ALIASES["stt_enabled"], env_file, stt_config.get("enabled", "true")), default=True),
             stt_provider=str(_setting(_ENV_ALIASES["stt_provider"], env_file, stt_config.get("default", "faster_whisper"))).strip().lower(),
             stt_fallback_providers=str(_setting(_ENV_ALIASES["stt_fallback_providers"], env_file, stt_config.get("fallback_providers", "mock"))),
@@ -421,7 +444,10 @@ class JarvisConfig:
             stt_silence_seconds=float(_setting(_ENV_ALIASES["stt_silence_seconds"], env_file, stt_config.get("silence_seconds", "1.0"))),
             stt_min_record_seconds=float(_setting(_ENV_ALIASES["stt_min_record_seconds"], env_file, stt_config.get("min_record_seconds", "0.35"))),
             stt_start_timeout_seconds=float(_setting(_ENV_ALIASES["stt_start_timeout_seconds"], env_file, stt_config.get("start_timeout_seconds", "5.0"))),
-            stt_energy_threshold=float(_setting(_ENV_ALIASES["stt_energy_threshold"], env_file, stt_config.get("energy_threshold", "0.012"))),
+            stt_energy_threshold=float(_setting(_ENV_ALIASES["stt_energy_threshold"], env_file, stt_config.get("energy_threshold", "0.018"))),
+            stt_adaptive_energy=_as_bool(_setting(_ENV_ALIASES["stt_adaptive_energy"], env_file, stt_config.get("adaptive_energy", "true")), default=True),
+            stt_ambient_calibration_seconds=float(_setting(_ENV_ALIASES["stt_ambient_calibration_seconds"], env_file, stt_config.get("ambient_calibration_seconds", "0.35"))),
+            stt_energy_multiplier=float(_setting(_ENV_ALIASES["stt_energy_multiplier"], env_file, stt_config.get("energy_multiplier", "3.0"))),
             stt_pre_roll_seconds=float(_setting(_ENV_ALIASES["stt_pre_roll_seconds"], env_file, stt_config.get("pre_roll_seconds", "0.25"))),
             stt_frame_ms=int(_setting(_ENV_ALIASES["stt_frame_ms"], env_file, stt_config.get("frame_ms", "30"))),
             stt_sample_rate=int(_setting(_ENV_ALIASES["stt_sample_rate"], env_file, stt_config.get("sample_rate", "16000"))),
@@ -429,10 +455,15 @@ class JarvisConfig:
             stt_microphone_device=str(_setting(_ENV_ALIASES["stt_microphone_device"], env_file, stt_config.get("microphone_device", ""))),
             stt_vad_filter=_as_bool(_setting(_ENV_ALIASES["stt_vad_filter"], env_file, stt_config.get("vad_filter", "true")), default=True),
             stt_mock_text=str(_setting(_ENV_ALIASES["stt_mock_text"], env_file, stt_config.get("mock_text", "Hello sir, this is a mock transcription."))),
+            stt_max_audio_files=int(_setting(_ENV_ALIASES["stt_max_audio_files"], env_file, stt_config.get("max_audio_files", "30"))),
             wake_word_enabled=_as_bool(_setting(_ENV_ALIASES["wake_word_enabled"], env_file, wake_config.get("enabled", "true")), default=True),
             wake_word_provider=str(_setting(_ENV_ALIASES["wake_word_provider"], env_file, wake_config.get("default", "phrase"))).strip().lower(),
             wake_words=str(_setting(_ENV_ALIASES["wake_words"], env_file, wake_config.get("wake_words", "hey jarvis,jarvis"))),
             wake_require_wake_word=_as_bool(_setting(_ENV_ALIASES["wake_require_wake_word"], env_file, wake_config.get("require_wake_word", "true")), default=True),
             wake_strip_wake_word=_as_bool(_setting(_ENV_ALIASES["wake_strip_wake_word"], env_file, wake_config.get("strip_wake_word", "true")), default=True),
             wake_empty_response=str(_setting(_ENV_ALIASES["wake_empty_response"], env_file, wake_config.get("empty_response", "Yes, sir?"))),
+            voice_warmup_on_boot=_as_bool(_setting(_ENV_ALIASES["voice_warmup_on_boot"], env_file, "false"), default=False),
+            voice_warmup_stt=_as_bool(_setting(_ENV_ALIASES["voice_warmup_stt"], env_file, "true"), default=True),
+            voice_warmup_tts=_as_bool(_setting(_ENV_ALIASES["voice_warmup_tts"], env_file, "true"), default=True),
+            voice_warmup_llm=_as_bool(_setting(_ENV_ALIASES["voice_warmup_llm"], env_file, "false"), default=False),
         )

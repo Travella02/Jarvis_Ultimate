@@ -67,7 +67,10 @@ class JarvisRuntime:
         )
         self.started = True
         stt_warmup_result = None
-        if getattr(self.config, "stt_warmup_on_boot", False):
+        voice_warmup_summary = None
+        if getattr(self.config, "voice_warmup_on_boot", False):
+            voice_warmup_summary = self.warmup_all()
+        elif getattr(self.config, "stt_warmup_on_boot", False):
             stt_warmup_result = self.stt_manager.warmup()
         agent_names = self.registry.names(enabled_only=True)
         result = JarvisResult.ok(
@@ -96,6 +99,10 @@ class JarvisRuntime:
                     "warmup_on_boot": getattr(self.config, "stt_warmup_on_boot", False),
                     "warmup_success": getattr(stt_warmup_result, "success", None),
                 },
+                "voice_warmup": {
+                    "warmup_on_boot": getattr(self.config, "voice_warmup_on_boot", False),
+                    "summary": voice_warmup_summary,
+                },
                 "wake_word": {
                     "enabled": self.wake_word_manager.enabled,
                     "provider": self.wake_word_manager.provider_name,
@@ -122,6 +129,64 @@ class JarvisRuntime:
         self.last_timing = timing
         self.logger.log_result(result)
         return result
+
+    def warmup_status(self) -> str:
+        """Return always-ready warmup configuration."""
+        return "\n".join([
+            "Always-ready warmup status:",
+            f"- warmup on boot: {getattr(self.config, 'voice_warmup_on_boot', False)}",
+            f"- warm STT: {getattr(self.config, 'voice_warmup_stt', True)}",
+            f"- warm TTS: {getattr(self.config, 'voice_warmup_tts', True)}",
+            f"- warm LLM: {getattr(self.config, 'voice_warmup_llm', False)}",
+            f"- STT provider: {self.stt_manager.provider_name}",
+            f"- TTS provider: {self.tts_manager.provider_name}",
+            "Commands: warmup all, stt warmup, tts warmup",
+        ])
+
+    def warmup_all(self) -> str:
+        """Warm selected voice subsystems so Jarvis feels ready before use."""
+        lines = ["Always-ready warmup:"]
+        if getattr(self.config, "voice_warmup_stt", True):
+            stt_result = self.stt_manager.warmup()
+            lines.append("STT: " + stt_result.message)
+        else:
+            lines.append("STT: skipped")
+        if getattr(self.config, "voice_warmup_tts", True):
+            tts_result = self.tts_manager.warmup()
+            lines.append("TTS: " + tts_result.message)
+        else:
+            lines.append("TTS: skipped")
+        if getattr(self.config, "voice_warmup_llm", False):
+            lines.append("LLM: skipped in 0.1.2; keep LM Studio warm by sending a short manual prompt after boot if needed.")
+        else:
+            lines.append("LLM: skipped")
+        return "\n".join(lines)
+
+    def tts_warmup(self) -> str:
+        return format_tts_result(self.tts_manager.warmup())
+
+    def audio_cleanup(self) -> str:
+        tts_removed = self.tts_manager.cleanup_outputs()
+        stt_removed = self.stt_manager.cleanup_recordings()
+        return f"Audio cleanup complete. Removed {tts_removed} TTS file(s) and {stt_removed} STT recording file(s)."
+
+    def tts_cleanup(self) -> str:
+        return self.tts_manager.cleanup_summary()
+
+    def stt_cleanup(self) -> str:
+        return self.stt_manager.cleanup_summary()
+
+    def stt_set_silence_seconds(self, seconds: float) -> str:
+        return self.stt_manager.set_silence_seconds(seconds)
+
+    def stt_set_energy_threshold(self, threshold: float) -> str:
+        return self.stt_manager.set_energy_threshold(threshold)
+
+    def stt_set_adaptive_energy(self, enabled: bool) -> str:
+        return self.stt_manager.set_adaptive_energy(enabled)
+
+    def stt_set_latency_preset(self, preset: str) -> str:
+        return self.stt_manager.set_latency_preset(preset)
 
     def timing_last(self) -> str:
         """Return a readable summary for the most recent command turn."""
@@ -293,6 +358,9 @@ class JarvisRuntime:
             f"- TTS enabled: {self.tts_manager.enabled}",
             f"- TTS provider: {self.tts_manager.provider_name}",
             f"- playback available: {getattr(self.tts_manager, 'playback_supported', True)}",
+            f"- warmup on boot: {getattr(self.config, 'voice_warmup_on_boot', False)}",
+            f"- TTS retention: keep last {getattr(self.tts_manager, 'max_output_files', 30)} file(s)",
+            f"- STT retention: keep last {getattr(self.stt_manager, 'max_audio_files', 30)} recording(s)",
             f"- wake word: {'enabled' if self.wake_word_manager.enabled else 'disabled'} ({', '.join(self.wake_word_manager.wake_words)})",
             "- continuous wake listening: not implemented yet; this version supports wake-check one-turn commands",
             "Commands: voice loop once, wake voice once, wake listen once, wake test hey jarvis status",
