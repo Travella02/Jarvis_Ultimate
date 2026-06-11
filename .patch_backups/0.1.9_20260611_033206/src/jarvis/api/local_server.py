@@ -1,7 +1,7 @@
 """Dependency-free local HTTP API for Jarvis's native app shell.
 
 This standard-library server is the live bridge between the Electron
-HTML/CSS/JS interface and the Python Jarvis runtime.  0.1.9 polishes the native app shell into the main Jarvis interface and keeps diagnostics out of the way so the orb stays in the speaking
+HTML/CSS/JS interface and the Python Jarvis runtime.  0.1.8a tightens the voice/UI bridge so the orb stays in the speaking
 state for real playback, the controls remain visible, and the app shell warms
 voice systems before accepting a conversation.
 """
@@ -611,7 +611,7 @@ def _json_bytes(payload: dict[str, Any] | list[Any]) -> bytes:
 
 def make_handler(api: LocalJarvisAPI) -> type[BaseHTTPRequestHandler]:
     class JarvisLocalAPIHandler(BaseHTTPRequestHandler):
-        server_version = "JarvisLocalAPI/0.1.9"
+        server_version = "JarvisLocalAPI/0.1.8a"
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
             return

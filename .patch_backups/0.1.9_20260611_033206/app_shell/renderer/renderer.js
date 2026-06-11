@@ -8,16 +8,11 @@ const DEFAULT_STATE = {
 
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
-let diagnosticsOpen = false;
 
 const els = {
   bridgeStatus: document.getElementById('bridgeStatus'),
-  warmupPill: document.getElementById('warmupPill'),
   stateLabel: document.getElementById('stateLabel'),
   stateMessage: document.getElementById('stateMessage'),
-  stripBridge: document.getElementById('stripBridge'),
-  stripVoice: document.getElementById('stripVoice'),
-  stripWarmup: document.getElementById('stripWarmup'),
   llmStatus: document.getElementById('llmStatus'),
   sttStatus: document.getElementById('sttStatus'),
   ttsStatus: document.getElementById('ttsStatus'),
@@ -28,7 +23,6 @@ const els = {
   commandForm: document.getElementById('commandForm'),
   commandInput: document.getElementById('commandInput'),
   refreshButton: document.getElementById('refreshButton'),
-  diagnosticsToggle: document.getElementById('diagnosticsToggle'),
   voiceOnceButton: document.getElementById('voiceOnceButton'),
   sleepWakeButton: document.getElementById('sleepWakeButton'),
   stopVoiceButton: document.getElementById('stopVoiceButton'),
@@ -55,15 +49,10 @@ function readable(value) {
   return String(value || 'idle').replaceAll('_', ' ');
 }
 
-function titleCase(value) {
-  return readable(value).replace(/\b\w/g, character => character.toUpperCase());
-}
-
 function setVisualState(state, message, label) {
   const next = normalizeState(state);
-  const diagnosticsClass = diagnosticsOpen ? 'diagnostics-open' : 'diagnostics-collapsed';
-  document.body.className = `state-${next} ${diagnosticsClass}`;
-  els.stateLabel.textContent = label || titleCase(next);
+  document.body.className = `state-${next}`;
+  els.stateLabel.textContent = label || readable(next);
   els.stateMessage.textContent = message || 'Ready, sir.';
 }
 
@@ -71,26 +60,13 @@ function renderVoice(voice) {
   const session = voice || DEFAULT_STATE.voice;
   const running = Boolean(session.running || session.thread_alive);
   const warmed = session.warmup_complete !== false;
-  const modeText = running ? `${titleCase(session.mode)} Running` : titleCase(session.mode || 'idle');
-  const warmupText = warmed ? 'ready' : (session.warmup_status || 'warming');
-  const statusText = session.last_error || session.last_status || (warmed ? 'Ready.' : 'Warming voice systems...');
-  els.voiceMode.textContent = modeText;
+  els.voiceMode.textContent = running ? `${readable(session.mode)} running` : readable(session.mode || 'idle');
   els.voiceTranscript.textContent = session.last_transcript || 'none yet';
-  els.voiceStatus.textContent = statusText;
-  els.voiceWarmup.textContent = warmupText;
-  els.warmupPill.textContent = `Voice Warmup: ${warmed ? 'Ready' : 'Warming'}`;
-  els.stripVoice.textContent = `voice: ${running ? readable(session.mode) : 'idle'}`;
-  els.stripWarmup.textContent = `warmup: ${warmed ? 'ready' : 'warming'}`;
+  els.voiceStatus.textContent = session.last_error || session.last_status || (warmed ? 'Ready.' : 'Warming voice systems...');
+  els.voiceWarmup.textContent = warmed ? 'ready' : (session.warmup_status || 'warming');
   els.voiceOnceButton.disabled = !warmed || running;
   els.sleepWakeButton.disabled = !warmed || running;
   els.stopVoiceButton.disabled = !running;
-}
-
-function chatRoleClass(role) {
-  const normalized = normalizeState(role || 'jarvis');
-  if (normalized === 'user') return 'user';
-  if (normalized === 'heard') return 'heard';
-  return 'jarvis';
 }
 
 function renderState(snapshot) {
@@ -107,7 +83,6 @@ function renderState(snapshot) {
   const online = app.bridge_status === 'online';
   els.bridgeStatus.textContent = online ? 'Bridge Online' : 'Bridge Offline';
   els.bridgeStatus.title = app.api_url || apiUrl;
-  els.stripBridge.textContent = `bridge: ${online ? 'online' : 'offline'}`;
   els.llmStatus.textContent = `${runtime.llm_provider || 'unknown'} / ${runtime.llm_model || 'unknown'}`;
   els.sttStatus.textContent = runtime.stt_provider || 'unknown';
   els.ttsStatus.textContent = runtime.tts_provider || 'unknown';
@@ -120,17 +95,13 @@ function renderState(snapshot) {
 
   const chats = workspace.chat_messages || [];
   els.chatLog.innerHTML = chats.length
-    ? chats.map(msg => {
-        const role = msg.role || 'jarvis';
-        const className = chatRoleClass(role);
-        return `<div class="chat-message ${className}"><span class="role">${escapeHtml(role)}</span>${escapeHtml(msg.text || '')}</div>`;
-      }).join('')
-    : '<div class="chat-message jarvis"><span class="role">jarvis</span>App shell ready. Waiting for the local bridge.</div>';
+    ? chats.map(msg => `<div class="chat-message"><strong>${escapeHtml(msg.role || 'jarvis')}:</strong> ${escapeHtml(msg.text || '')}</div>`).join('')
+    : '<div class="chat-message"><strong>jarvis:</strong> App shell ready. Waiting for the local bridge.</div>';
   els.chatLog.scrollTop = els.chatLog.scrollHeight;
 
   const events = workspace.events || [];
   els.eventsLog.innerHTML = events.length
-    ? events.slice(-30).map(event => `${escapeHtml(event.timestamp || '')} | ${escapeHtml(event.event_type || '')} | ${escapeHtml(event.message || '')}`).join('<br>')
+    ? events.slice(-24).map(event => `${escapeHtml(event.timestamp || '')} | ${escapeHtml(event.event_type || '')} | ${escapeHtml(event.message || '')}`).join('<br>')
     : 'No events yet.';
   els.eventsLog.scrollTop = els.eventsLog.scrollHeight;
 }
@@ -211,21 +182,20 @@ async function stopVoice() {
   setTimeout(refreshState, 350);
 }
 
-function toggleDiagnostics() {
-  diagnosticsOpen = !diagnosticsOpen;
-  els.diagnosticsToggle.textContent = diagnosticsOpen ? 'Hide Diagnostics' : 'Show Diagnostics';
-  const avatar = lastState.avatar || DEFAULT_STATE.avatar;
-  setVisualState(avatar.state, avatar.message, avatar.label || avatar.profile?.label);
-}
-
 async function boot() {
   if (window.jarvisNative?.getConfig) {
     const config = await window.jarvisNative.getConfig();
     apiUrl = config.apiUrl || apiUrl;
   }
 
+  document.querySelectorAll('[data-state]').forEach(button => {
+    button.addEventListener('click', () => {
+      const demoState = button.getAttribute('data-state');
+      setVisualState(demoState, `Demo preview: ${demoState}`, demoState.replaceAll('_', ' '));
+    });
+  });
+
   els.refreshButton.addEventListener('click', refreshState);
-  els.diagnosticsToggle.addEventListener('click', toggleDiagnostics);
   els.voiceOnceButton.addEventListener('click', startVoiceOnce);
   els.sleepWakeButton.addEventListener('click', startSleepWake);
   els.stopVoiceButton.addEventListener('click', stopVoice);
@@ -237,10 +207,7 @@ async function boot() {
     sendCommand(command);
   });
 
-  renderState({
-    ...DEFAULT_STATE,
-    avatar: { state: 'working', label: 'Initializing Jarvis', message: 'Connecting to the local bridge and warming interface systems...' }
-  });
+  renderState(DEFAULT_STATE);
   refreshState();
   setInterval(refreshState, 900);
 }
