@@ -176,6 +176,96 @@ class JarvisRuntime:
         """Return detailed provider-attempt diagnostics for the last STT request."""
         return self.stt_manager.format_debug_last()
 
+    def voice_loop_status(self) -> str:
+        """Return user-facing status for one-turn spoken conversation."""
+        lines = [
+            "Real voice loop status:",
+            "- mode: one-turn listen -> transcribe -> think -> speak",
+            f"- STT enabled: {self.stt_manager.enabled}",
+            f"- STT provider: {self.stt_manager.provider_name}",
+            f"- listen mode: {self.stt_manager.listen_mode}",
+            f"- silence stop seconds: {self.stt_manager.silence_seconds}",
+            f"- TTS enabled: {self.tts_manager.enabled}",
+            f"- TTS provider: {self.tts_manager.provider_name}",
+            f"- playback available: {getattr(self.tts_manager, 'playback_supported', True)}",
+            "- wake word: not implemented yet; this version is push-to-talk/command-triggered voice turns",
+            "Commands: voice loop once, talk once, listen and respond, voice loop smart max 8 silence 0.8",
+        ]
+        return "\n".join(lines)
+
+    def voice_loop_once(
+        self,
+        *,
+        duration_seconds: float | None = None,
+        mode: str | None = None,
+        silence_seconds: float | None = None,
+        stream_callback: LLMStreamCallback | None = None,
+        transcript_callback: Any | None = None,
+        speak: bool = True,
+    ) -> JarvisResult:
+        """Run one complete spoken turn: listen, transcribe, route, stream, and speak.
+
+        This is intentionally a one-turn loop for 0.1.0. It proves the full
+        voice pipeline without keeping an always-on microphone open yet. Wake
+        word and continuous conversation should build on this path later.
+        """
+        if not self.started:
+            self.boot()
+
+        self.events.emit("voice.loop_started", source="lifecycle", message="Voice loop turn started.")
+        stt_result = self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
+        transcript = (stt_result.text or "").strip()
+        if not stt_result.success:
+            message = f"I could not understand the microphone input, sir. {stt_result.error or stt_result.message}"
+            result = JarvisResult.fail(
+                message,
+                agent_name="voice_agent",
+                action="voice_loop_once",
+                data={"stage": "stt", "stt": stt_result.__dict__ if hasattr(stt_result, "__dict__") else str(stt_result)},
+            )
+            self.events.emit("voice.loop_failed", source="lifecycle", message=message, data={"stage": "stt"})
+            return result
+
+        if not transcript:
+            message = "I did not catch any speech, sir."
+            result = JarvisResult.fail(message, agent_name="voice_agent", action="voice_loop_once", data={"stage": "empty_transcript"})
+            self.events.emit("voice.loop_failed", source="lifecycle", message=message, data={"stage": "empty_transcript"})
+            return result
+
+        if callable(transcript_callback):
+            transcript_callback(transcript)
+        self.events.emit("voice.loop_transcript_ready", source="lifecycle", message="Voice loop transcript ready.", data={"text": transcript})
+
+        spoken_stream = None
+        callback = stream_callback
+        if speak and self.tts_manager.enabled:
+            spoken_stream = self.spoken_pipeline.create_stream_adapter(stream_callback, enabled=True)
+            callback = spoken_stream
+
+        chat_result = self.handle_command(transcript, stream_callback=callback)
+        spoken_chunks = 0
+        if spoken_stream is not None:
+            spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
+
+        data = dict(chat_result.data)
+        data.update(
+            {
+                "transcript": transcript,
+                "stt_provider": stt_result.provider,
+                "stt_audio_path": str(stt_result.audio_path) if stt_result.audio_path else "",
+                "spoken_chunks": spoken_chunks,
+                "voice_loop": True,
+            }
+        )
+        if chat_result.success:
+            result = JarvisResult.ok(chat_result.message, agent_name="voice_agent", action="voice_loop_once", data=data)
+            self.events.emit("voice.loop_finished", source="lifecycle", message="Voice loop turn finished.", data={"transcript": transcript, "spoken_chunks": spoken_chunks})
+            return result
+
+        result = JarvisResult.fail(chat_result.message, agent_name="voice_agent", action="voice_loop_once", errors=chat_result.errors, data=data)
+        self.events.emit("voice.loop_failed", source="lifecycle", message=chat_result.message, data={"stage": "llm"})
+        return result
+
     def tts_status(self) -> str:
         """Return user-facing TTS status and provider diagnostics."""
         return self.tts_manager.status()

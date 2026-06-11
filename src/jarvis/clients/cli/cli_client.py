@@ -17,6 +17,8 @@ STT_RECORD_COMMANDS = {"stt record", "mic record", "record mic", "record microph
 STT_LISTEN_ONCE_COMMANDS = {"listen once", "stt listen", "mic listen", "microphone listen", "stt test mic", "test microphone", "listen until done"}
 STT_LISTEN_SETTINGS_COMMANDS = {"stt listen settings", "listen settings", "mic listen settings", "endpointing settings", "stt endpointing"}
 STT_DEBUG_LAST_COMMANDS = {"stt debug last", "stt debug", "mic debug last", "speech input debug"}
+VOICE_LOOP_STATUS_COMMANDS = {"voice loop status", "conversation loop status", "voice chat status", "talk status"}
+VOICE_LOOP_ONCE_COMMANDS = {"voice loop once", "talk once", "voice chat once", "conversation once", "listen and respond", "listen respond", "respond once"}
 STT_GPU_STATUS_COMMANDS = {"stt gpu", "stt gpu status", "stt cuda", "stt cuda status", "mic gpu status"}
 STT_WARMUP_COMMANDS = {"stt warmup", "warm up stt", "stt load model", "load stt model", "mic warmup"}
 TTS_STATUS_COMMANDS = {"tts status", "speech status"}
@@ -55,7 +57,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, listen once, listen fixed 2, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, listen once, voice loop once, talk once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
@@ -133,6 +135,41 @@ def main() -> None:
 
         if normalized in STT_DEBUG_LAST_COMMANDS:
             print(f"Jarvis: {runtime.stt_debug_last()}")
+            continue
+
+        if normalized in VOICE_LOOP_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.voice_loop_status()}")
+            continue
+
+        voice_loop_options = _parse_voice_loop_command(command)
+        if voice_loop_options is not None:
+            mode_label = voice_loop_options.get("mode") or "configured"
+            print(f"Jarvis: Listening for one voice turn ({mode_label})...")
+            state = {"started": False}
+
+            def print_voice_stream_chunk(chunk: str) -> None:
+                if not state["started"]:
+                    print("Jarvis: ", end="", flush=True)
+                    state["started"] = True
+                print(chunk, end="", flush=True)
+
+            def print_transcript(transcript: str) -> None:
+                print(f"Heard: {transcript}")
+
+            result = runtime.voice_loop_once(
+                duration_seconds=voice_loop_options.get("duration_seconds"),
+                mode=voice_loop_options.get("mode"),
+                silence_seconds=voice_loop_options.get("silence_seconds"),
+                stream_callback=print_voice_stream_chunk,
+                transcript_callback=print_transcript,
+                speak=True,
+            )
+            if state["started"]:
+                print()
+                if not result.success:
+                    print(f"Jarvis: {result.message}")
+            else:
+                print(f"Jarvis: {result.message}")
             continue
 
         stt_file_path = _parse_stt_transcribe_command(command)
@@ -376,6 +413,37 @@ def _parse_tts_reference_command(command: str) -> dict[str, object] | None:
             return {"path": stripped[len(prefix):].strip().strip('"'), "import_to_default": False}
     return None
 
+
+
+def _parse_voice_loop_command(command: str) -> dict[str, float | str | None] | None:
+    """Parse commands for one full spoken turn.
+
+    Supported examples:
+    - voice loop once
+    - talk once
+    - listen and respond
+    - voice loop smart max 8 silence 0.8
+    - voice loop fixed 2
+    """
+    stripped = command.strip()
+    lowered = stripped.lower()
+    if lowered in VOICE_LOOP_ONCE_COMMANDS:
+        return {"mode": None, "duration_seconds": None, "silence_seconds": None}
+
+    prefixes = ("voice loop ", "voice chat ", "conversation ", "talk ")
+    selected_prefix = None
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            selected_prefix = prefix
+            break
+    if selected_prefix is None:
+        return None
+
+    listen_like = "listen " + stripped[len(selected_prefix):].strip()
+    parsed = _parse_stt_listen_command(listen_like)
+    if parsed is None and stripped[len(selected_prefix):].strip().lower() in {"once", "now"}:
+        return {"mode": None, "duration_seconds": None, "silence_seconds": None}
+    return parsed
 
 
 def _parse_stt_listen_command(command: str) -> dict[str, float | str | None] | None:
