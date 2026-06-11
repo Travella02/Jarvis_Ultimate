@@ -347,10 +347,11 @@ class JarvisRuntime:
         return JarvisResult.fail(chat_result.message, agent_name="voice_agent", action="wake_voice_once", errors=chat_result.errors, data=data)
 
     def voice_loop_status(self) -> str:
-        """Return user-facing status for one-turn spoken conversation."""
+        """Return user-facing status for spoken conversation."""
         lines = [
             "Real voice loop status:",
-            "- mode: one-turn listen -> transcribe -> think -> speak",
+            "- one-turn mode: listen -> transcribe -> think -> speak",
+            "- continuous mode: listen repeatedly until spoken stop phrase or max turns",
             f"- STT enabled: {self.stt_manager.enabled}",
             f"- STT provider: {self.stt_manager.provider_name}",
             f"- listen mode: {self.stt_manager.listen_mode}",
@@ -362,8 +363,25 @@ class JarvisRuntime:
             f"- TTS retention: keep last {getattr(self.tts_manager, 'max_output_files', 30)} file(s)",
             f"- STT retention: keep last {getattr(self.stt_manager, 'max_audio_files', 30)} recording(s)",
             f"- wake word: {'enabled' if self.wake_word_manager.enabled else 'disabled'} ({', '.join(self.wake_word_manager.wake_words)})",
-            "- continuous wake listening: not implemented yet; this version supports wake-check one-turn commands",
-            "Commands: voice loop once, wake voice once, wake listen once, wake test hey jarvis status",
+            f"- continuous max turns: {getattr(self.config, 'voice_continuous_max_turns', 25)}",
+            f"- continuous requires wake word: {getattr(self.config, 'voice_continuous_require_wake_word', True)}",
+            f"- continuous stop phrases: {getattr(self.config, 'voice_continuous_stop_phrases', '')}",
+            "Commands: voice loop once, wake voice once, handsfree start, wake loop start max 5, conversation start max 3",
+        ]
+        return "\n".join(lines)
+
+    def continuous_voice_loop_status(self) -> str:
+        """Return focused continuous hands-free loop status."""
+        lines = [
+            "Continuous hands-free loop status:",
+            f"- enabled foundation: True",
+            f"- default requires wake word: {getattr(self.config, 'voice_continuous_require_wake_word', True)}",
+            f"- max turns: {getattr(self.config, 'voice_continuous_max_turns', 25)}",
+            f"- listen mode: {self.stt_manager.listen_mode}",
+            f"- silence stop seconds: {self.stt_manager.silence_seconds}",
+            f"- stop phrases: {getattr(self.config, 'voice_continuous_stop_phrases', '')}",
+            "- interrupt/barge-in: not implemented yet",
+            "Commands: handsfree start, wake loop start, conversation start, voice loop continuous max 5",
         ]
         return "\n".join(lines)
 
@@ -439,6 +457,160 @@ class JarvisRuntime:
         result = JarvisResult.fail(chat_result.message, agent_name="voice_agent", action="voice_loop_once", errors=chat_result.errors, data=data)
         self.events.emit("voice.loop_failed", source="lifecycle", message=chat_result.message, data={"stage": "llm"})
         return result
+
+    def voice_loop_continuous(
+        self,
+        *,
+        max_turns: int | None = None,
+        require_wake_word: bool | None = None,
+        duration_seconds: float | None = None,
+        mode: str | None = None,
+        silence_seconds: float | None = None,
+        stream_callback: LLMStreamCallback | None = None,
+        transcript_callback: Any | None = None,
+        status_callback: Any | None = None,
+        speak: bool = True,
+    ) -> JarvisResult:
+        """Run a blocking continuous spoken loop.
+
+        This is the first hands-free loop foundation. It intentionally remains
+        CLI-command controlled and blocking for 0.1.3. Use Ctrl+C or a spoken
+        stop phrase such as "stop listening" to leave the loop.
+        """
+        if not self.started:
+            self.boot()
+
+        if max_turns is None:
+            max_turns = int(getattr(self.config, "voice_continuous_max_turns", 25) or 25)
+        max_turns = max(1, int(max_turns))
+        if require_wake_word is None:
+            require_wake_word = bool(getattr(self.config, "voice_continuous_require_wake_word", True))
+        stop_phrases = self._voice_loop_stop_phrases()
+        turns_heard = 0
+        turns_handled = 0
+        turns_ignored = 0
+        failures = 0
+        stopped_by = "max_turns"
+        last_transcript = ""
+        last_command = ""
+
+        self.events.emit(
+            "voice.continuous_loop_started",
+            source="lifecycle",
+            message="Continuous voice loop started.",
+            data={"max_turns": max_turns, "require_wake_word": require_wake_word},
+        )
+
+        for turn_index in range(1, max_turns + 1):
+            if callable(status_callback):
+                status_callback(f"Listening turn {turn_index}/{max_turns}...")
+            stt_result = self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
+            transcript = (stt_result.text or "").strip()
+            last_transcript = transcript
+            if transcript and callable(transcript_callback):
+                transcript_callback(transcript)
+            if not stt_result.success:
+                failures += 1
+                if callable(status_callback):
+                    status_callback(f"STT failed: {stt_result.error or stt_result.message}")
+                continue
+            if not transcript:
+                turns_ignored += 1
+                if callable(status_callback):
+                    status_callback("No speech detected.")
+                continue
+            turns_heard += 1
+
+            if self._voice_loop_is_stop_phrase(transcript, stop_phrases):
+                stopped_by = "spoken_stop_phrase"
+                break
+
+            command = transcript
+            wake_detected = False
+            wake_word = ""
+            if require_wake_word:
+                match = self.wake_word_manager.detect(transcript)
+                wake_detected = match.detected
+                wake_word = match.wake_word
+                if not match.detected:
+                    turns_ignored += 1
+                    if callable(status_callback):
+                        status_callback("Wake word not detected; continuing.")
+                    continue
+                command = (match.command or "").strip()
+                if self._voice_loop_is_stop_phrase(command, stop_phrases):
+                    stopped_by = "spoken_stop_phrase"
+                    break
+                if not command:
+                    prompt = self.wake_word_manager.empty_response
+                    if callable(status_callback):
+                        status_callback(prompt)
+                    if speak and self.tts_manager.enabled:
+                        self.tts_manager.say(prompt, play_audio=True)
+                    turns_handled += 1
+                    last_command = ""
+                    continue
+
+            last_command = command
+            if callable(status_callback) and require_wake_word:
+                status_callback(f"Wake detected: {wake_word}. Command: {command}")
+
+            spoken_stream = None
+            callback = stream_callback
+            if speak and self.tts_manager.enabled:
+                spoken_stream = self.spoken_pipeline.create_stream_adapter(stream_callback, enabled=True)
+                callback = spoken_stream
+            chat_result = self.handle_command(command, stream_callback=callback)
+            spoken_chunks = 0
+            if spoken_stream is not None:
+                spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
+                # Avoid immediately recording Jarvis's own speech on the next turn.
+                self.spoken_pipeline.wait_until_idle(timeout=30.0)
+            if chat_result.success:
+                turns_handled += 1
+                self.events.emit(
+                    "voice.continuous_turn_finished",
+                    source="lifecycle",
+                    message="Continuous voice loop turn finished.",
+                    data={"turn": turn_index, "transcript": transcript, "command": command, "wake_detected": wake_detected, "spoken_chunks": spoken_chunks},
+                )
+            else:
+                failures += 1
+                if callable(status_callback):
+                    status_callback(f"Command failed: {chat_result.message}")
+
+        if stopped_by == "max_turns" and turns_heard < max_turns:
+            stopped_by = "completed"
+        message = (
+            f"Continuous voice loop stopped, sir. "
+            f"Heard {turns_heard} turn(s), handled {turns_handled}, ignored {turns_ignored}, failures {failures}. "
+            f"Stop reason: {stopped_by}."
+        )
+        data = {
+            "turns_heard": turns_heard,
+            "turns_handled": turns_handled,
+            "turns_ignored": turns_ignored,
+            "failures": failures,
+            "stopped_by": stopped_by,
+            "max_turns": max_turns,
+            "require_wake_word": require_wake_word,
+            "last_transcript": last_transcript,
+            "last_command": last_command,
+        }
+        self.events.emit("voice.continuous_loop_stopped", source="lifecycle", message=message, data=data)
+        return JarvisResult.ok(message, agent_name="voice_agent", action="voice_loop_continuous", data=data)
+
+    def _voice_loop_stop_phrases(self) -> list[str]:
+        raw = str(getattr(self.config, "voice_continuous_stop_phrases", "") or "")
+        phrases = [part.strip().lower() for part in raw.split(",") if part.strip()]
+        return phrases or ["stop listening", "stop conversation", "go to sleep"]
+
+    @staticmethod
+    def _voice_loop_is_stop_phrase(text: str, stop_phrases: list[str]) -> bool:
+        normalized = " ".join(str(text or "").lower().replace(",", " ").replace(".", " ").split())
+        if not normalized:
+            return False
+        return any(normalized == phrase or normalized.startswith(phrase + " ") for phrase in stop_phrases)
 
     def tts_status(self) -> str:
         """Return user-facing TTS status and provider diagnostics."""

@@ -134,5 +134,11 @@ providers:
     warmup_tts: true
     warmup_llm: false
 
+    # 0.1.3 continuous hands-free loop defaults. These are currently read
+    # from .env, but are documented here for the future YAML config loader.
+    continuous_max_turns: 25
+    continuous_require_wake_word: true
+    continuous_stop_phrases: stop listening,stop conversation,stop voice loop,stop handsfree,go to sleep,goodbye jarvis,exit voice mode
+
   avatar:
     default: mock_avatar

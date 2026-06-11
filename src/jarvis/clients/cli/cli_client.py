@@ -17,8 +17,10 @@ STT_RECORD_COMMANDS = {"stt record", "mic record", "record mic", "record microph
 STT_LISTEN_ONCE_COMMANDS = {"listen once", "stt listen", "mic listen", "microphone listen", "stt test mic", "test microphone", "listen until done"}
 STT_LISTEN_SETTINGS_COMMANDS = {"stt listen settings", "listen settings", "mic listen settings", "endpointing settings", "stt endpointing"}
 STT_DEBUG_LAST_COMMANDS = {"stt debug last", "stt debug", "mic debug last", "speech input debug"}
-VOICE_LOOP_STATUS_COMMANDS = {"voice loop status", "conversation loop status", "voice chat status", "talk status"}
+VOICE_LOOP_STATUS_COMMANDS = {"voice loop status", "conversation loop status", "voice chat status", "talk status", "handsfree status", "continuous voice status"}
 VOICE_LOOP_ONCE_COMMANDS = {"voice loop once", "talk once", "voice chat once", "conversation once", "listen and respond", "listen respond", "respond once"}
+VOICE_LOOP_CONTINUOUS_STATUS_COMMANDS = {"continuous status", "continuous voice status", "handsfree status", "wake loop status"}
+VOICE_LOOP_CONTINUOUS_COMMANDS = {"handsfree start", "hands free start", "continuous start", "continuous voice start", "voice loop continuous", "voice loop start", "conversation start", "talk continuously", "wake loop start", "wake start", "start handsfree", "start hands free"}
 WAKE_STATUS_COMMANDS = {"wake status", "wake word status", "wakeword status", "hey jarvis status"}
 WAKE_LISTEN_ONCE_COMMANDS = {"wake listen once", "wake word listen", "listen for wake word", "wake test mic"}
 WAKE_VOICE_ONCE_COMMANDS = {"wake voice once", "wake loop once", "wake respond once", "wake chat once", "hey jarvis once"}
@@ -67,7 +69,7 @@ def main() -> None:
     print(boot_result.message)
     print(
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
-        "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, warmup all, listen faster, stt energy 0.03, listen once, wake status, wake voice once, voice loop once, talk once, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
+        "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, warmup all, listen faster, stt energy 0.03, listen once, wake status, wake voice once, voice loop once, handsfree start max 5, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
 
     while True:
@@ -242,6 +244,42 @@ def main() -> None:
 
         if normalized in VOICE_LOOP_STATUS_COMMANDS:
             print(f"Jarvis: {runtime.voice_loop_status()}")
+            continue
+
+        if normalized in VOICE_LOOP_CONTINUOUS_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.continuous_voice_loop_status()}")
+            continue
+
+        continuous_options = _parse_voice_loop_continuous_command(command)
+        if continuous_options is not None:
+            print("Jarvis: Starting continuous hands-free loop. Say 'stop listening' or press Ctrl+C to stop.")
+
+            def print_continuous_status(message: str) -> None:
+                print(f"Jarvis: {message}")
+
+            def print_continuous_transcript(transcript: str) -> None:
+                print(f"Heard: {transcript}")
+
+            def print_continuous_stream_chunk(chunk: str) -> None:
+                print(chunk, end="", flush=True)
+
+            try:
+                result = runtime.voice_loop_continuous(
+                    max_turns=continuous_options.get("max_turns"),
+                    require_wake_word=continuous_options.get("require_wake_word"),
+                    duration_seconds=continuous_options.get("duration_seconds"),
+                    mode=continuous_options.get("mode"),
+                    silence_seconds=continuous_options.get("silence_seconds"),
+                    stream_callback=print_continuous_stream_chunk,
+                    transcript_callback=print_continuous_transcript,
+                    status_callback=print_continuous_status,
+                    speak=True,
+                )
+                print()
+                print(f"Jarvis: {result.message}")
+            except KeyboardInterrupt:
+                runtime.tts_stop()
+                print("\nJarvis: Continuous voice loop stopped, sir.")
             continue
 
         voice_loop_options = _parse_voice_loop_command(command)
@@ -611,6 +649,93 @@ def _parse_wake_voice_command(command: str) -> dict[str, float | str | None] | N
             if parsed is not None:
                 return parsed
     return None
+
+
+def _parse_voice_loop_continuous_command(command: str) -> dict[str, float | str | int | bool | None] | None:
+    """Parse blocking continuous voice loop commands.
+
+    Supported examples:
+    - handsfree start
+    - wake loop start max 5
+    - conversation start max 3 no wake
+    - voice loop continuous max 10 silence 0.7
+    """
+    stripped = command.strip()
+    lowered = stripped.lower()
+    starts = (
+        "handsfree start",
+        "hands free start",
+        "start handsfree",
+        "start hands free",
+        "continuous start",
+        "continuous voice start",
+        "voice loop continuous",
+        "voice loop start",
+        "conversation start",
+        "talk continuously",
+        "wake loop start",
+        "wake start",
+    )
+    selected = None
+    for prefix in starts:
+        if lowered == prefix or lowered.startswith(prefix + " "):
+            selected = prefix
+            break
+    if selected is None:
+        return None
+
+    rest = lowered[len(selected):].strip()
+    words = rest.split()
+    require_wake_word: bool | None = True
+    if selected in {"conversation start", "talk continuously"}:
+        require_wake_word = False
+    max_turns: int | None = None
+    mode: str | None = None
+    duration_seconds: float | None = None
+    silence_seconds: float | None = None
+
+    index = 0
+    while index < len(words):
+        token = words[index]
+        if token in {"max", "turns", "limit"} and index + 1 < len(words):
+            parsed = _parse_positive_float(words[index + 1])
+            if parsed is not None:
+                max_turns = max(1, int(parsed))
+            index += 2
+            continue
+        if token in {"wake", "wakeword"}:
+            require_wake_word = True
+            index += 1
+            continue
+        if token == "no" and index + 1 < len(words) and words[index + 1] in {"wake", "wakeword"}:
+            require_wake_word = False
+            index += 2
+            continue
+        if token in {"smart", "fixed"}:
+            mode = token
+            index += 1
+            continue
+        if token in {"silence", "pause", "quiet"} and index + 1 < len(words):
+            silence_seconds = _parse_positive_float(words[index + 1])
+            index += 2
+            continue
+        if token in {"duration", "record", "listen"} and index + 1 < len(words):
+            duration_seconds = _parse_positive_float(words[index + 1])
+            index += 2
+            continue
+        parsed = _parse_positive_float(token)
+        if parsed is not None and max_turns is None:
+            # Bare number after a continuous command means max turns, not record seconds.
+            max_turns = max(1, int(parsed))
+        index += 1
+
+    return {
+        "max_turns": max_turns,
+        "require_wake_word": require_wake_word,
+        "mode": mode,
+        "duration_seconds": duration_seconds,
+        "silence_seconds": silence_seconds,
+    }
 
 
 def _parse_voice_loop_command(command: str) -> dict[str, float | str | None] | None:
