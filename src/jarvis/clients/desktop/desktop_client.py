@@ -1,1 +1,5 @@
-"""Placeholder for desktop_client."""
+"""Desktop client exports."""
+
+from jarvis.clients.desktop.app import JarvisDesktopApp
+
+__all__ = ["JarvisDesktopApp"]
