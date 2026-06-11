@@ -82,6 +82,15 @@ class TestSleepWakeVoiceLoop(unittest.TestCase):
             self.assertIn("go to sleep", config.voice_sleep_phrases)
             self.assertEqual(config.voice_exit_phrases, "exit voice mode")
 
+
+    def test_sleep_phrase_tolerates_misheard_jarvis_name(self):
+        phrases = ["that s all jarvis", "thats all jarvis", "go to sleep"]
+        self.assertTrue(JarvisRuntime._voice_loop_sleep_phrase_matches("That's all Dervis.", phrases))
+        self.assertTrue(JarvisRuntime._voice_loop_sleep_phrase_matches("That is all service", phrases))
+        self.assertTrue(JarvisRuntime._voice_loop_sleep_phrase_matches("Thank you Jervis", phrases))
+        self.assertTrue(JarvisRuntime._voice_loop_sleep_phrase_matches("go back to sleep", phrases))
+        self.assertFalse(JarvisRuntime._voice_loop_sleep_phrase_matches("thanks for that", phrases))
+
     def test_sleep_wake_loop_wakes_then_accepts_followup_without_wake_then_sleeps(self):
         with tempfile.TemporaryDirectory() as tmp:
             stt = SequenceSTTManager([
@@ -116,6 +125,25 @@ class TestSleepWakeVoiceLoop(unittest.TestCase):
             self.assertIn("Wake phrase not detected; staying asleep.", status)
             self.assertIn("Sleep phrase detected; returning to sleep mode.", status)
             self.assertIn("Online, sir.", "".join(printed))
+            runtime.spoken_pipeline.shutdown()
+
+
+    def test_sleep_wake_loop_sleeps_when_jarvis_name_is_misheard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stt = SequenceSTTManager([
+                "Hey Jarvis, give me one sentence",
+                "That's all Dervis",
+                "exit voice mode",
+            ])
+            runtime = JarvisRuntime(project_root=tmp, llm_provider=MockLLMProvider(canned_response="Online, sir."), stt_manager=stt, tts_manager=FakeTTSManager())
+            runtime.boot()
+            status = []
+            result = runtime.voice_sleep_wake_loop(max_turns=3, active_timeout_seconds=30, status_callback=status.append, speak=False)
+            self.assertTrue(result.success)
+            self.assertEqual(result.data["wake_activations"], 1)
+            self.assertEqual(result.data["sleep_transitions"], 1)
+            self.assertEqual(result.data["final_state"], "asleep")
+            self.assertIn("Sleep phrase detected; returning to sleep mode.", status)
             runtime.spoken_pipeline.shutdown()
 
     def test_sleep_wake_loop_returns_to_sleep_after_inactivity(self):

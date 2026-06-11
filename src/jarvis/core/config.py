@@ -96,6 +96,9 @@ _ENV_ALIASES = {
     "voice_warmup_stt": ("JARVIS_VOICE_WARMUP_STT", "JARVIS_WARMUP_STT"),
     "voice_warmup_tts": ("JARVIS_VOICE_WARMUP_TTS", "JARVIS_WARMUP_TTS"),
     "voice_warmup_llm": ("JARVIS_VOICE_WARMUP_LLM", "JARVIS_WARMUP_LLM"),
+    "voice_always_listening_on_startup": ("JARVIS_VOICE_ALWAYS_LISTENING_ON_STARTUP", "JARVIS_ALWAYS_LISTENING_ON_STARTUP", "JARVIS_START_ALWAYS_LISTENING"),
+    "voice_always_listening_max_turns": ("JARVIS_VOICE_ALWAYS_LISTENING_MAX_TURNS", "JARVIS_ALWAYS_LISTENING_MAX_TURNS"),
+    "voice_always_listening_start_mode": ("JARVIS_VOICE_ALWAYS_LISTENING_START_MODE", "JARVIS_VOICE_START_MODE"),
     "voice_continuous_max_turns": ("JARVIS_VOICE_CONTINUOUS_MAX_TURNS", "JARVIS_HANDSFREE_MAX_TURNS"),
     "voice_continuous_require_wake_word": ("JARVIS_VOICE_CONTINUOUS_REQUIRE_WAKE_WORD", "JARVIS_HANDSFREE_REQUIRE_WAKE_WORD"),
     "voice_continuous_wait_for_speech": ("JARVIS_VOICE_CONTINUOUS_WAIT_FOR_SPEECH", "JARVIS_HANDSFREE_WAIT_FOR_SPEECH"),
@@ -338,6 +341,10 @@ class JarvisConfig:
     voice_warmup_tts: bool = True
     voice_warmup_llm: bool = False
 
+    voice_always_listening_on_startup: bool = False
+    voice_always_listening_max_turns: int = 0
+    voice_always_listening_start_mode: str = "sleep_wake"
+
     voice_continuous_max_turns: int = 25
     voice_continuous_require_wake_word: bool = True
     voice_continuous_wait_for_speech: bool = True
@@ -482,6 +489,9 @@ class JarvisConfig:
             voice_warmup_stt=_as_bool(_setting(_ENV_ALIASES["voice_warmup_stt"], env_file, "true"), default=True),
             voice_warmup_tts=_as_bool(_setting(_ENV_ALIASES["voice_warmup_tts"], env_file, "true"), default=True),
             voice_warmup_llm=_as_bool(_setting(_ENV_ALIASES["voice_warmup_llm"], env_file, "false"), default=False),
+            voice_always_listening_on_startup=_as_bool(_setting(_ENV_ALIASES["voice_always_listening_on_startup"], env_file, "false"), default=False),
+            voice_always_listening_max_turns=int(_setting(_ENV_ALIASES["voice_always_listening_max_turns"], env_file, "0")),
+            voice_always_listening_start_mode=str(_setting(_ENV_ALIASES["voice_always_listening_start_mode"], env_file, "sleep_wake")).strip().lower(),
             voice_continuous_max_turns=int(_setting(_ENV_ALIASES["voice_continuous_max_turns"], env_file, "25")),
             voice_continuous_require_wake_word=_as_bool(_setting(_ENV_ALIASES["voice_continuous_require_wake_word"], env_file, "true"), default=True),
             voice_continuous_wait_for_speech=_as_bool(_setting(_ENV_ALIASES["voice_continuous_wait_for_speech"], env_file, "true"), default=True),

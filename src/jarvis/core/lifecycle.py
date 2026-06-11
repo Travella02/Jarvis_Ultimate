@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import itertools
 
 from jarvis.agents.conversation_agent.prompts import get_prompt_stats, get_system_prompt, normalize_prompt_mode
 from jarvis.brain.router import JarvisRouter
@@ -103,6 +104,11 @@ class JarvisRuntime:
                     "warmup_on_boot": getattr(self.config, "voice_warmup_on_boot", False),
                     "summary": voice_warmup_summary,
                 },
+                "voice_always_listening": {
+                    "startup_enabled": getattr(self.config, "voice_always_listening_on_startup", False),
+                    "startup_mode": getattr(self.config, "voice_always_listening_start_mode", "sleep_wake"),
+                    "startup_max_turns": getattr(self.config, "voice_always_listening_max_turns", 0),
+                },
                 "wake_word": {
                     "enabled": self.wake_word_manager.enabled,
                     "provider": self.wake_word_manager.provider_name,
@@ -140,6 +146,8 @@ class JarvisRuntime:
             f"- warm LLM: {getattr(self.config, 'voice_warmup_llm', False)}",
             f"- STT provider: {self.stt_manager.provider_name}",
             f"- TTS provider: {self.tts_manager.provider_name}",
+            f"- always-listening on startup: {getattr(self.config, 'voice_always_listening_on_startup', False)}",
+            f"- always-listening max turns: {self._format_turn_limit(getattr(self.config, 'voice_always_listening_max_turns', 0))}",
             "Commands: warmup all, stt warmup, tts warmup",
         ])
 
@@ -364,7 +372,9 @@ class JarvisRuntime:
             f"- TTS retention: keep last {getattr(self.tts_manager, 'max_output_files', 30)} file(s)",
             f"- STT retention: keep last {getattr(self.stt_manager, 'max_audio_files', 30)} recording(s)",
             f"- wake word: {'enabled' if self.wake_word_manager.enabled else 'disabled'} ({', '.join(self.wake_word_manager.wake_words)})",
-            f"- continuous max turns: {getattr(self.config, 'voice_continuous_max_turns', 25)}",
+            f"- continuous max turns: {self._format_turn_limit(getattr(self.config, 'voice_continuous_max_turns', 25))}",
+            f"- always-listening on startup: {getattr(self.config, 'voice_always_listening_on_startup', False)}",
+            f"- startup always-listening max turns: {self._format_turn_limit(getattr(self.config, 'voice_always_listening_max_turns', 0))}",
             f"- continuous requires wake word: {getattr(self.config, 'voice_continuous_require_wake_word', True)}",
             f"- continuous stop phrases: {getattr(self.config, 'voice_continuous_stop_phrases', '')}",
             f"- sleep timeout: {getattr(self.config, 'voice_sleep_timeout_seconds', 45.0)}s",
@@ -379,7 +389,9 @@ class JarvisRuntime:
             "Continuous hands-free loop status:",
             f"- enabled foundation: True",
             f"- default requires wake word: {getattr(self.config, 'voice_continuous_require_wake_word', True)}",
-            f"- max turns: {getattr(self.config, 'voice_continuous_max_turns', 25)}",
+            f"- max turns: {self._format_turn_limit(getattr(self.config, 'voice_continuous_max_turns', 25))}",
+            f"- always-listening on startup: {getattr(self.config, 'voice_always_listening_on_startup', False)}",
+            f"- startup max turns: {self._format_turn_limit(getattr(self.config, 'voice_always_listening_max_turns', 0))}",
             f"- listen mode: {self.stt_manager.listen_mode}",
             f"- silence stop seconds: {self.stt_manager.silence_seconds}",
             f"- stop phrases: {getattr(self.config, 'voice_continuous_stop_phrases', '')}",
@@ -488,7 +500,10 @@ class JarvisRuntime:
 
         if max_turns is None:
             max_turns = int(getattr(self.config, "voice_continuous_max_turns", 25) or 25)
-        max_turns = max(1, int(max_turns))
+        max_turns = int(max_turns)
+        infinite = max_turns <= 0
+        if not infinite:
+            max_turns = max(1, max_turns)
         if require_wake_word is None:
             require_wake_word = bool(getattr(self.config, "voice_continuous_require_wake_word", True))
         stop_phrases = self._voice_loop_stop_phrases()
@@ -631,7 +646,10 @@ class JarvisRuntime:
 
         if max_turns is None:
             max_turns = int(getattr(self.config, "voice_continuous_max_turns", 25) or 25)
-        max_turns = max(1, int(max_turns))
+        max_turns = int(max_turns)
+        infinite = max_turns <= 0
+        if not infinite:
+            max_turns = max(1, max_turns)
         if active_timeout_seconds is None:
             active_timeout_seconds = float(getattr(self.config, "voice_sleep_timeout_seconds", 45.0) or 45.0)
         active_timeout_seconds = max(1.0, float(active_timeout_seconds))
@@ -654,13 +672,15 @@ class JarvisRuntime:
             "voice.sleep_wake_loop_started",
             source="lifecycle",
             message="Sleep/wake voice loop started.",
-            data={"max_turns": max_turns, "active_timeout_seconds": active_timeout_seconds},
+            data={"max_turns": max_turns, "infinite": infinite, "active_timeout_seconds": active_timeout_seconds},
         )
 
-        for turn_index in range(1, max_turns + 1):
+        turn_iter = itertools.count(1) if infinite else range(1, max_turns + 1)
+        for turn_index in turn_iter:
             if callable(status_callback):
                 label = "sleeping" if state == "asleep" else "awake"
-                status_callback(f"Listening turn {turn_index}/{max_turns} ({label})...")
+                limit_label = "∞" if infinite else str(max_turns)
+                status_callback(f"Listening turn {turn_index}/{limit_label} ({label})...")
 
             stt_result = self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
             transcript = (stt_result.text or "").strip()
@@ -716,7 +736,7 @@ class JarvisRuntime:
                         self.tts_manager.say(prompt, play_audio=True)
                     continue
             else:
-                if self._voice_loop_phrase_matches(normalized_transcript, sleep_phrases):
+                if self._voice_loop_sleep_phrase_matches(normalized_transcript, sleep_phrases):
                     state = "asleep"
                     sleep_transitions += 1
                     if callable(status_callback):
@@ -731,7 +751,7 @@ class JarvisRuntime:
                     command = transcript
 
             command_normalized = self._voice_loop_normalize_phrase(command)
-            if self._voice_loop_phrase_matches(command_normalized, sleep_phrases):
+            if self._voice_loop_sleep_phrase_matches(command_normalized, sleep_phrases):
                 state = "asleep"
                 sleep_transitions += 1
                 if callable(status_callback):
@@ -783,12 +803,36 @@ class JarvisRuntime:
             "stopped_by": stopped_by,
             "final_state": state,
             "max_turns": max_turns,
+            "infinite": infinite,
             "active_timeout_seconds": active_timeout_seconds,
             "last_transcript": last_transcript,
             "last_command": last_command,
         }
         self.events.emit("voice.sleep_wake_loop_stopped", source="lifecycle", message=message, data=data)
         return JarvisResult.ok(message, agent_name="voice_agent", action="voice_sleep_wake_loop", data=data)
+
+
+    @staticmethod
+    def _format_turn_limit(value: int | str | None) -> str:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return str(value)
+        return "infinite" if number <= 0 else str(number)
+
+    def startup_always_listening_status(self) -> str:
+        """Return startup always-listening configuration for the CLI."""
+        return "\n".join([
+            "Startup always-listening status:",
+            f"- enabled: {getattr(self.config, 'voice_always_listening_on_startup', False)}",
+            f"- mode: {getattr(self.config, 'voice_always_listening_start_mode', 'sleep_wake')}",
+            f"- max turns: {self._format_turn_limit(getattr(self.config, 'voice_always_listening_max_turns', 0))}",
+            f"- warmup on boot: {getattr(self.config, 'voice_warmup_on_boot', False)}",
+            f"- sleep timeout: {getattr(self.config, 'voice_sleep_timeout_seconds', 45.0)}s",
+            f"- wake words: {', '.join(self.wake_word_manager.wake_words)}",
+            f"- sleep phrases: {getattr(self.config, 'voice_sleep_phrases', '')}",
+            "Run `python scripts/run_cli.py` with startup enabled, or use `python scripts/run_jarvis_voice.py` for dedicated always-listening mode.",
+        ])
 
     def _voice_loop_stop_phrases(self) -> list[str]:
         raw = str(getattr(self.config, "voice_continuous_stop_phrases", "") or "")
@@ -816,6 +860,93 @@ class JarvisRuntime:
             return False
         normalized_phrases = [cls._voice_loop_normalize_phrase(phrase) for phrase in phrases]
         return any(normalized == phrase or normalized.startswith(phrase + " ") for phrase in normalized_phrases if phrase)
+
+
+    @classmethod
+    def _voice_loop_sleep_phrase_matches(cls, text: str, phrases: list[str]) -> bool:
+        """Return True when a transcript is asking Jarvis to go back to sleep.
+
+        STT frequently mishears the assistant name in phrases like
+        "that's all Jarvis" as "Dervis", "service", "Jervis", etc.
+        Sleep mode should be forgiving because staying awake is more disruptive
+        than requiring the exact assistant name.
+        """
+        normalized = cls._voice_loop_normalize_phrase(text)
+        if not normalized:
+            return False
+        if cls._voice_loop_phrase_matches(normalized, phrases):
+            return True
+
+        tokens = normalized.split()
+        if not tokens:
+            return False
+
+        assistant_aliases = {
+            "jarvis",
+            "jervis",
+            "dervis",
+            "darvis",
+            "drivers",
+            "travis",
+            "service",
+            "servis",
+            "nervous",
+            "jarves",
+            "jarvice",
+        }
+        polite_tail = {"please", "sir"}
+
+        stripped = list(tokens)
+        had_assistant_tail = False
+        while stripped and stripped[-1] in polite_tail:
+            stripped.pop()
+        while stripped and stripped[-1] in assistant_aliases:
+            had_assistant_tail = True
+            stripped.pop()
+        while stripped and stripped[-1] in polite_tail:
+            stripped.pop()
+
+        stripped_normalized = " ".join(stripped)
+        if not stripped_normalized:
+            return False
+
+        high_confidence_roots = [
+            "that s all",
+            "thats all",
+            "that is all",
+            "that will be all",
+            "that ll be all",
+            "that would be all",
+            "that should be all",
+            "that is everything",
+            "thats everything",
+            "go to sleep",
+            "go back to sleep",
+            "sleep mode",
+            "standby",
+            "stand by",
+            "return to standby",
+            "stop listening",
+        ]
+        if any(stripped_normalized == root or stripped_normalized.startswith(root + " ") for root in high_confidence_roots):
+            return True
+
+        assistant_required_roots = [
+            "thanks",
+            "thank you",
+            "thanks a lot",
+            "thank you very much",
+            "we re done",
+            "were done",
+            "i m done",
+            "im done",
+            "all done",
+            "done",
+        ]
+        if had_assistant_tail and any(stripped_normalized == root or stripped_normalized.startswith(root + " ") for root in assistant_required_roots):
+            return True
+
+        return False
 
     @staticmethod
     def _voice_loop_is_stop_phrase(text: str, stop_phrases: list[str]) -> bool:

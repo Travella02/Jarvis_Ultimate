@@ -22,6 +22,7 @@ VOICE_LOOP_ONCE_COMMANDS = {"voice loop once", "talk once", "voice chat once", "
 VOICE_LOOP_CONTINUOUS_STATUS_COMMANDS = {"continuous status", "continuous voice status", "handsfree status", "hands free status", "wake loop status"}
 VOICE_LOOP_CONTINUOUS_COMMANDS = {"handsfree start", "hands free start", "continuous start", "continuous voice start", "voice loop continuous", "voice loop start", "conversation start", "talk continuously", "wake loop start", "wake start", "start handsfree", "start hands free"}
 SLEEP_WAKE_STATUS_COMMANDS = {"sleep wake status", "sleep/wake status", "always listening status", "sleep mode status", "wake sleep status"}
+STARTUP_VOICE_STATUS_COMMANDS = {"startup voice status", "startup listen status", "always listening startup status", "boot voice status"}
 SLEEP_WAKE_COMMANDS = {"sleep wake start", "sleep/wake start", "always listening start", "always listen start", "sleep mode start", "jarvis always listen", "start always listening", "start sleep wake", "start sleep/wake"}
 WAKE_STATUS_COMMANDS = {"wake status", "wake word status", "wakeword status", "hey jarvis status"}
 WAKE_LISTEN_ONCE_COMMANDS = {"wake listen once", "wake word listen", "listen for wake word", "wake test mic"}
@@ -73,6 +74,10 @@ def main() -> None:
         "Type 'exit' to stop Jarvis. Try: hello, status, list agents, screen check, "
         "timing last, prompt stats, memory status, memory last, stt status, stt listen settings, stt warmup, warmup all, listen faster, stt energy 0.03, listen once, wake status, wake voice once, voice loop once, handsfree start max 5, sleep wake start, voice on, voice stop, tts status, tts test play, tts voice list, tts voice use af_heart, benchmark llm"
     )
+
+    if getattr(runtime.config, "voice_always_listening_on_startup", False):
+        _run_startup_sleep_wake_loop(runtime)
+        return
 
     while True:
         try:
@@ -256,36 +261,13 @@ def main() -> None:
             print(f"Jarvis: {runtime.continuous_voice_loop_status()}")
             continue
 
+        if normalized in STARTUP_VOICE_STATUS_COMMANDS:
+            print(f"Jarvis: {runtime.startup_always_listening_status()}")
+            continue
+
         sleep_wake_options = _parse_sleep_wake_command(command)
         if sleep_wake_options is not None:
-            print("Jarvis: Starting sleep/wake always-listening loop. Say a wake phrase to activate, a sleep phrase to sleep, or press Ctrl+C to stop.")
-
-            def print_sleep_wake_status(message: str) -> None:
-                print(f"Jarvis: {message}")
-
-            def print_sleep_wake_transcript(transcript: str) -> None:
-                print(f"Heard: {transcript}")
-
-            def print_sleep_wake_stream_chunk(chunk: str) -> None:
-                print(chunk, end="", flush=True)
-
-            try:
-                result = runtime.voice_sleep_wake_loop(
-                    max_turns=sleep_wake_options.get("max_turns"),
-                    active_timeout_seconds=sleep_wake_options.get("active_timeout_seconds"),
-                    duration_seconds=sleep_wake_options.get("duration_seconds"),
-                    mode=sleep_wake_options.get("mode"),
-                    silence_seconds=sleep_wake_options.get("silence_seconds"),
-                    stream_callback=print_sleep_wake_stream_chunk,
-                    transcript_callback=print_sleep_wake_transcript,
-                    status_callback=print_sleep_wake_status,
-                    speak=True,
-                )
-                print()
-                print(f"Jarvis: {result.message}")
-            except KeyboardInterrupt:
-                runtime.tts_stop()
-                print("\nJarvis: Sleep/wake voice loop stopped, sir.")
+            _run_sleep_wake_loop(runtime, sleep_wake_options, startup=False)
             continue
 
         continuous_options = _parse_voice_loop_continuous_command(command)
@@ -490,6 +472,56 @@ def main() -> None:
         else:
             print(f"Jarvis: {result.message}")
 
+
+
+def _run_startup_sleep_wake_loop(runtime: JarvisRuntime) -> None:
+    max_turns = int(getattr(runtime.config, "voice_always_listening_max_turns", 0) or 0)
+    options = {
+        "max_turns": max_turns,
+        "active_timeout_seconds": float(getattr(runtime.config, "voice_sleep_timeout_seconds", 45.0) or 45.0),
+        "duration_seconds": None,
+        "mode": getattr(runtime.config, "stt_listen_mode", "smart"),
+        "silence_seconds": float(getattr(runtime.config, "stt_silence_seconds", 0.65) or 0.65),
+    }
+    print("Jarvis: Startup always-listening is enabled. Jarvis is now in sleep mode, waiting for a wake phrase.")
+    print("Jarvis: Say 'Hey Jarvis', 'Jarvis', or 'Yo Jarvis' to activate. Say 'that's all Jarvis' to sleep, or 'exit voice mode' to stop.")
+    _run_sleep_wake_loop(runtime, options, startup=True)
+
+
+def _run_sleep_wake_loop(runtime: JarvisRuntime, sleep_wake_options: dict[str, object], *, startup: bool = False) -> None:
+    limit = sleep_wake_options.get("max_turns")
+    limit_label = "forever" if isinstance(limit, int) and limit <= 0 else (limit if limit is not None else "configured")
+    if startup:
+        print(f"Jarvis: Starting normal sleep/wake always-listening mode ({limit_label}).")
+    else:
+        print("Jarvis: Starting sleep/wake always-listening loop. Say a wake phrase to activate, a sleep phrase to sleep, or press Ctrl+C to stop.")
+
+    def print_sleep_wake_status(message: str) -> None:
+        print(f"Jarvis: {message}")
+
+    def print_sleep_wake_transcript(transcript: str) -> None:
+        print(f"Heard: {transcript}")
+
+    def print_sleep_wake_stream_chunk(chunk: str) -> None:
+        print(chunk, end="", flush=True)
+
+    try:
+        result = runtime.voice_sleep_wake_loop(
+            max_turns=sleep_wake_options.get("max_turns"),
+            active_timeout_seconds=sleep_wake_options.get("active_timeout_seconds"),
+            duration_seconds=sleep_wake_options.get("duration_seconds"),
+            mode=sleep_wake_options.get("mode"),
+            silence_seconds=sleep_wake_options.get("silence_seconds"),
+            stream_callback=print_sleep_wake_stream_chunk,
+            transcript_callback=print_sleep_wake_transcript,
+            status_callback=print_sleep_wake_status,
+            speak=True,
+        )
+        print()
+        print(f"Jarvis: {result.message}")
+    except KeyboardInterrupt:
+        runtime.tts_stop()
+        print("\nJarvis: Sleep/wake voice loop stopped, sir.")
 
 
 
@@ -731,9 +763,13 @@ def _parse_sleep_wake_command(command: str) -> dict[str, float | str | int | Non
     while index < len(words):
         token = words[index]
         if token in {"max", "turns", "limit"} and index + 1 < len(words):
-            parsed = _parse_positive_float(words[index + 1])
-            if parsed is not None:
-                max_turns = max(1, int(parsed))
+            next_token = words[index + 1]
+            if next_token in {"0", "forever", "infinite", "unlimited", "none"}:
+                max_turns = 0
+            else:
+                parsed = _parse_positive_float(next_token)
+                if parsed is not None:
+                    max_turns = max(1, int(parsed))
             index += 2
             continue
         if token in {"timeout", "idle", "sleep"} and index + 1 < len(words):
@@ -751,6 +787,10 @@ def _parse_sleep_wake_command(command: str) -> dict[str, float | str | int | Non
         if token in {"duration", "record", "listen"} and index + 1 < len(words):
             duration_seconds = _parse_positive_float(words[index + 1])
             index += 2
+            continue
+        if token in {"forever", "infinite", "unlimited"}:
+            max_turns = 0
+            index += 1
             continue
         parsed = _parse_positive_float(token)
         if parsed is not None and max_turns is None:
@@ -813,9 +853,13 @@ def _parse_voice_loop_continuous_command(command: str) -> dict[str, float | str 
     while index < len(words):
         token = words[index]
         if token in {"max", "turns", "limit"} and index + 1 < len(words):
-            parsed = _parse_positive_float(words[index + 1])
-            if parsed is not None:
-                max_turns = max(1, int(parsed))
+            next_token = words[index + 1]
+            if next_token in {"0", "forever", "infinite", "unlimited", "none"}:
+                max_turns = 0
+            else:
+                parsed = _parse_positive_float(next_token)
+                if parsed is not None:
+                    max_turns = max(1, int(parsed))
             index += 2
             continue
         if token in {"wake", "wakeword"}:
