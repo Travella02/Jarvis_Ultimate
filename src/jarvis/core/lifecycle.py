@@ -352,6 +352,7 @@ class JarvisRuntime:
             "Real voice loop status:",
             "- one-turn mode: listen -> transcribe -> think -> speak",
             "- continuous mode: listen repeatedly until spoken stop phrase or max turns",
+            "- sleep/wake mode: sleep until wake phrase, then continue conversation until sleep phrase or inactivity",
             f"- STT enabled: {self.stt_manager.enabled}",
             f"- STT provider: {self.stt_manager.provider_name}",
             f"- listen mode: {self.stt_manager.listen_mode}",
@@ -366,7 +367,9 @@ class JarvisRuntime:
             f"- continuous max turns: {getattr(self.config, 'voice_continuous_max_turns', 25)}",
             f"- continuous requires wake word: {getattr(self.config, 'voice_continuous_require_wake_word', True)}",
             f"- continuous stop phrases: {getattr(self.config, 'voice_continuous_stop_phrases', '')}",
-            "Commands: voice loop once, wake voice once, handsfree start, wake loop start max 5, conversation start max 3",
+            f"- sleep timeout: {getattr(self.config, 'voice_sleep_timeout_seconds', 45.0)}s",
+            f"- sleep phrases: {getattr(self.config, 'voice_sleep_phrases', '')}",
+            "Commands: voice loop once, wake voice once, handsfree start, sleep wake start, always listening start",
         ]
         return "\n".join(lines)
 
@@ -380,8 +383,11 @@ class JarvisRuntime:
             f"- listen mode: {self.stt_manager.listen_mode}",
             f"- silence stop seconds: {self.stt_manager.silence_seconds}",
             f"- stop phrases: {getattr(self.config, 'voice_continuous_stop_phrases', '')}",
+            f"- sleep/wake timeout: {getattr(self.config, 'voice_sleep_timeout_seconds', 45.0)}s",
+            f"- sleep phrases: {getattr(self.config, 'voice_sleep_phrases', '')}",
+            f"- exit phrases: {getattr(self.config, 'voice_exit_phrases', '')}",
             "- interrupt/barge-in: not implemented yet",
-            "Commands: handsfree start, wake loop start, conversation start, voice loop continuous max 5",
+            "Commands: handsfree start, sleep wake start, always listening start max 25 timeout 45",
         ]
         return "\n".join(lines)
 
@@ -600,10 +606,216 @@ class JarvisRuntime:
         self.events.emit("voice.continuous_loop_stopped", source="lifecycle", message=message, data=data)
         return JarvisResult.ok(message, agent_name="voice_agent", action="voice_loop_continuous", data=data)
 
+    def voice_sleep_wake_loop(
+        self,
+        *,
+        max_turns: int | None = None,
+        active_timeout_seconds: float | None = None,
+        duration_seconds: float | None = None,
+        mode: str | None = None,
+        silence_seconds: float | None = None,
+        stream_callback: LLMStreamCallback | None = None,
+        transcript_callback: Any | None = None,
+        status_callback: Any | None = None,
+        speak: bool = True,
+    ) -> JarvisResult:
+        """Run a blocking sleep/wake hands-free loop.
+
+        Sleep mode listens only for wake phrases. After a wake phrase is heard,
+        Jarvis stays awake for normal back-and-forth conversation until a sleep
+        phrase is spoken or an inactivity timeout expires. This is still a
+        CLI/blocking foundation, not yet a background service.
+        """
+        if not self.started:
+            self.boot()
+
+        if max_turns is None:
+            max_turns = int(getattr(self.config, "voice_continuous_max_turns", 25) or 25)
+        max_turns = max(1, int(max_turns))
+        if active_timeout_seconds is None:
+            active_timeout_seconds = float(getattr(self.config, "voice_sleep_timeout_seconds", 45.0) or 45.0)
+        active_timeout_seconds = max(1.0, float(active_timeout_seconds))
+
+        sleep_phrases = self._voice_loop_sleep_phrases()
+        exit_phrases = self._voice_loop_exit_phrases()
+        state = "asleep"
+        idle_seconds = 0.0
+        turns_heard = 0
+        turns_handled = 0
+        turns_ignored = 0
+        wake_activations = 0
+        sleep_transitions = 0
+        failures = 0
+        stopped_by = "max_turns"
+        last_transcript = ""
+        last_command = ""
+
+        self.events.emit(
+            "voice.sleep_wake_loop_started",
+            source="lifecycle",
+            message="Sleep/wake voice loop started.",
+            data={"max_turns": max_turns, "active_timeout_seconds": active_timeout_seconds},
+        )
+
+        for turn_index in range(1, max_turns + 1):
+            if callable(status_callback):
+                label = "sleeping" if state == "asleep" else "awake"
+                status_callback(f"Listening turn {turn_index}/{max_turns} ({label})...")
+
+            stt_result = self.stt_manager.listen_once(duration_seconds=duration_seconds, mode=mode, silence_seconds=silence_seconds)
+            transcript = (stt_result.text or "").strip()
+            last_transcript = transcript
+            if transcript and callable(transcript_callback):
+                transcript_callback(transcript)
+
+            if not stt_result.success:
+                failures += 1
+                if callable(status_callback):
+                    status_callback(f"STT failed: {stt_result.error or stt_result.message}")
+                continue
+
+            if not transcript:
+                turns_ignored += 1
+                if state == "awake":
+                    idle_seconds += float(stt_result.duration_seconds or getattr(self.stt_manager, "start_timeout_seconds", 3.0) or 3.0)
+                    if idle_seconds >= active_timeout_seconds:
+                        state = "asleep"
+                        idle_seconds = 0.0
+                        sleep_transitions += 1
+                        if callable(status_callback):
+                            status_callback(f"No response for {active_timeout_seconds:.0f}s; returning to sleep mode.")
+                elif callable(status_callback):
+                    status_callback("No wake phrase heard; staying asleep.")
+                continue
+
+            turns_heard += 1
+            idle_seconds = 0.0
+            normalized_transcript = self._voice_loop_normalize_phrase(transcript)
+
+            if self._voice_loop_phrase_matches(normalized_transcript, exit_phrases):
+                stopped_by = "spoken_exit_phrase"
+                break
+
+            if state == "asleep":
+                match = self.wake_word_manager.detect(transcript)
+                if not match.detected:
+                    turns_ignored += 1
+                    if callable(status_callback):
+                        status_callback("Wake phrase not detected; staying asleep.")
+                    continue
+                state = "awake"
+                wake_activations += 1
+                command = (match.command or "").strip()
+                if callable(status_callback):
+                    status_callback(f"Wake detected: {match.wake_word}. Jarvis is awake.")
+                if not command:
+                    prompt = self.wake_word_manager.empty_response
+                    if callable(status_callback):
+                        status_callback(prompt)
+                    if speak and self.tts_manager.enabled:
+                        self.tts_manager.say(prompt, play_audio=True)
+                    continue
+            else:
+                if self._voice_loop_phrase_matches(normalized_transcript, sleep_phrases):
+                    state = "asleep"
+                    sleep_transitions += 1
+                    if callable(status_callback):
+                        status_callback("Sleep phrase detected; returning to sleep mode.")
+                    if speak and self.tts_manager.enabled:
+                        self.tts_manager.say("Going back to sleep, sir.", play_audio=True)
+                    continue
+
+                match = self.wake_word_manager.detect(transcript)
+                command = (match.command or "").strip() if match.detected else transcript
+                if not command:
+                    command = transcript
+
+            command_normalized = self._voice_loop_normalize_phrase(command)
+            if self._voice_loop_phrase_matches(command_normalized, sleep_phrases):
+                state = "asleep"
+                sleep_transitions += 1
+                if callable(status_callback):
+                    status_callback("Sleep phrase detected; returning to sleep mode.")
+                if speak and self.tts_manager.enabled:
+                    self.tts_manager.say("Going back to sleep, sir.", play_audio=True)
+                continue
+            if self._voice_loop_phrase_matches(command_normalized, exit_phrases):
+                stopped_by = "spoken_exit_phrase"
+                break
+
+            last_command = command
+            spoken_stream = None
+            callback = stream_callback
+            if speak and self.tts_manager.enabled:
+                spoken_stream = self.spoken_pipeline.create_stream_adapter(stream_callback, enabled=True)
+                callback = spoken_stream
+            chat_result = self.handle_command(command, stream_callback=callback)
+            spoken_chunks = 0
+            if spoken_stream is not None:
+                spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
+                self.spoken_pipeline.wait_until_idle(timeout=30.0)
+
+            if chat_result.success:
+                turns_handled += 1
+                self.events.emit(
+                    "voice.sleep_wake_turn_finished",
+                    source="lifecycle",
+                    message="Sleep/wake voice loop turn finished.",
+                    data={"turn": turn_index, "transcript": transcript, "command": command, "spoken_chunks": spoken_chunks},
+                )
+            else:
+                failures += 1
+                if callable(status_callback):
+                    status_callback(f"Command failed: {chat_result.message}")
+
+        message = (
+            f"Sleep/wake voice loop stopped, sir. Heard {turns_heard} turn(s), handled {turns_handled}, "
+            f"ignored {turns_ignored}, wake activations {wake_activations}, sleep transitions {sleep_transitions}, "
+            f"failures {failures}. Stop reason: {stopped_by}. Final state: {state}."
+        )
+        data = {
+            "turns_heard": turns_heard,
+            "turns_handled": turns_handled,
+            "turns_ignored": turns_ignored,
+            "wake_activations": wake_activations,
+            "sleep_transitions": sleep_transitions,
+            "failures": failures,
+            "stopped_by": stopped_by,
+            "final_state": state,
+            "max_turns": max_turns,
+            "active_timeout_seconds": active_timeout_seconds,
+            "last_transcript": last_transcript,
+            "last_command": last_command,
+        }
+        self.events.emit("voice.sleep_wake_loop_stopped", source="lifecycle", message=message, data=data)
+        return JarvisResult.ok(message, agent_name="voice_agent", action="voice_sleep_wake_loop", data=data)
+
     def _voice_loop_stop_phrases(self) -> list[str]:
         raw = str(getattr(self.config, "voice_continuous_stop_phrases", "") or "")
         phrases = [part.strip().lower() for part in raw.split(",") if part.strip()]
         return phrases or ["stop listening", "stop conversation", "go to sleep"]
+
+    def _voice_loop_sleep_phrases(self) -> list[str]:
+        raw = str(getattr(self.config, "voice_sleep_phrases", "") or "")
+        phrases = [self._voice_loop_normalize_phrase(part) for part in raw.split(",") if part.strip()]
+        return phrases or ["that s all jarvis", "thats all jarvis", "go to sleep"]
+
+    def _voice_loop_exit_phrases(self) -> list[str]:
+        raw = str(getattr(self.config, "voice_exit_phrases", "") or "")
+        phrases = [self._voice_loop_normalize_phrase(part) for part in raw.split(",") if part.strip()]
+        return phrases or ["exit voice mode", "stop handsfree"]
+
+    @staticmethod
+    def _voice_loop_normalize_phrase(text: str) -> str:
+        return " ".join(str(text or "").lower().replace(",", " ").replace(".", " ").replace("?", " ").replace("!", " ").replace("'", " ").split())
+
+    @classmethod
+    def _voice_loop_phrase_matches(cls, text: str, phrases: list[str]) -> bool:
+        normalized = cls._voice_loop_normalize_phrase(text)
+        if not normalized:
+            return False
+        normalized_phrases = [cls._voice_loop_normalize_phrase(phrase) for phrase in phrases]
+        return any(normalized == phrase or normalized.startswith(phrase + " ") for phrase in normalized_phrases if phrase)
 
     @staticmethod
     def _voice_loop_is_stop_phrase(text: str, stop_phrases: list[str]) -> bool:

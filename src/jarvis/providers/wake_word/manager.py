@@ -63,7 +63,7 @@ class WakeWordManager:
             f"- strip wake word before routing: {self.strip_wake_word}",
             f"- empty wake response: {self.empty_response}",
             "- mode: phrase detection over STT transcript",
-            "- continuous wake listening: not implemented yet; use 'wake listen once' or 'wake voice once' for now",
+            "- continuous sleep/wake loop: available through 'sleep wake start' or 'always listening start'",
         ]
         if self.last_match is not None:
             lines.extend(

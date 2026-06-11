@@ -120,7 +120,7 @@ providers:
     # STT transcripts, not a continuous always-on wake engine yet.
     default: phrase
     enabled: true
-    wake_words: hey jarvis,jarvis
+    wake_words: hey jarvis,jarvis,yo jarvis,okay jarvis,ok jarvis
     require_wake_word: true
     strip_wake_word: true
     empty_response: Yes, sir?
@@ -139,6 +139,9 @@ providers:
     continuous_max_turns: 25
     continuous_require_wake_word: true
     continuous_stop_phrases: stop listening,stop conversation,stop voice loop,stop handsfree,go to sleep,goodbye jarvis,exit voice mode
+    sleep_timeout_seconds: 45
+    sleep_phrases: that's all jarvis,thats all jarvis,that is all jarvis,that will be all jarvis,that'll be all jarvis,go to sleep,sleep mode,stop listening
+    exit_phrases: exit voice mode,stop handsfree,stop voice loop,goodbye jarvis,shut down voice loop
 
   avatar:
     default: mock_avatar

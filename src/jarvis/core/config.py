@@ -100,6 +100,9 @@ _ENV_ALIASES = {
     "voice_continuous_require_wake_word": ("JARVIS_VOICE_CONTINUOUS_REQUIRE_WAKE_WORD", "JARVIS_HANDSFREE_REQUIRE_WAKE_WORD"),
     "voice_continuous_wait_for_speech": ("JARVIS_VOICE_CONTINUOUS_WAIT_FOR_SPEECH", "JARVIS_HANDSFREE_WAIT_FOR_SPEECH"),
     "voice_continuous_stop_phrases": ("JARVIS_VOICE_CONTINUOUS_STOP_PHRASES", "JARVIS_HANDSFREE_STOP_PHRASES"),
+    "voice_sleep_timeout_seconds": ("JARVIS_VOICE_SLEEP_TIMEOUT_SECONDS", "JARVIS_HANDSFREE_SLEEP_TIMEOUT_SECONDS", "JARVIS_VOICE_IDLE_TIMEOUT_SECONDS"),
+    "voice_sleep_phrases": ("JARVIS_VOICE_SLEEP_PHRASES", "JARVIS_HANDSFREE_SLEEP_PHRASES"),
+    "voice_exit_phrases": ("JARVIS_VOICE_EXIT_PHRASES", "JARVIS_HANDSFREE_EXIT_PHRASES"),
 }
 
 
@@ -325,7 +328,7 @@ class JarvisConfig:
 
     wake_word_enabled: bool = True
     wake_word_provider: str = "phrase"
-    wake_words: str = "hey jarvis,jarvis"
+    wake_words: str = "hey jarvis,jarvis,yo jarvis,okay jarvis,ok jarvis"
     wake_require_wake_word: bool = True
     wake_strip_wake_word: bool = True
     wake_empty_response: str = "Yes, sir?"
@@ -339,6 +342,9 @@ class JarvisConfig:
     voice_continuous_require_wake_word: bool = True
     voice_continuous_wait_for_speech: bool = True
     voice_continuous_stop_phrases: str = "stop listening,stop conversation,stop voice loop,stop handsfree,go to sleep,goodbye jarvis,exit voice mode"
+    voice_sleep_timeout_seconds: float = 45.0
+    voice_sleep_phrases: str = "that's all jarvis,thats all jarvis,that is all jarvis,that will be all jarvis,that'll be all jarvis,go to sleep,sleep mode,stop listening"
+    voice_exit_phrases: str = "exit voice mode,stop handsfree,stop voice loop,goodbye jarvis,shut down voice loop"
 
     @classmethod
     def from_project_root(cls, project_root: str | Path | None = None) -> "JarvisConfig":
@@ -468,7 +474,7 @@ class JarvisConfig:
             stt_max_audio_files=int(_setting(_ENV_ALIASES["stt_max_audio_files"], env_file, stt_config.get("max_audio_files", "30"))),
             wake_word_enabled=_as_bool(_setting(_ENV_ALIASES["wake_word_enabled"], env_file, wake_config.get("enabled", "true")), default=True),
             wake_word_provider=str(_setting(_ENV_ALIASES["wake_word_provider"], env_file, wake_config.get("default", "phrase"))).strip().lower(),
-            wake_words=str(_setting(_ENV_ALIASES["wake_words"], env_file, wake_config.get("wake_words", "hey jarvis,jarvis"))),
+            wake_words=str(_setting(_ENV_ALIASES["wake_words"], env_file, wake_config.get("wake_words", "hey jarvis,jarvis,yo jarvis,okay jarvis,ok jarvis"))),
             wake_require_wake_word=_as_bool(_setting(_ENV_ALIASES["wake_require_wake_word"], env_file, wake_config.get("require_wake_word", "true")), default=True),
             wake_strip_wake_word=_as_bool(_setting(_ENV_ALIASES["wake_strip_wake_word"], env_file, wake_config.get("strip_wake_word", "true")), default=True),
             wake_empty_response=str(_setting(_ENV_ALIASES["wake_empty_response"], env_file, wake_config.get("empty_response", "Yes, sir?"))),
@@ -480,4 +486,7 @@ class JarvisConfig:
             voice_continuous_require_wake_word=_as_bool(_setting(_ENV_ALIASES["voice_continuous_require_wake_word"], env_file, "true"), default=True),
             voice_continuous_wait_for_speech=_as_bool(_setting(_ENV_ALIASES["voice_continuous_wait_for_speech"], env_file, "true"), default=True),
             voice_continuous_stop_phrases=str(_setting(_ENV_ALIASES["voice_continuous_stop_phrases"], env_file, "stop listening,stop conversation,stop voice loop,stop handsfree,go to sleep,goodbye jarvis,exit voice mode")),
+            voice_sleep_timeout_seconds=float(_setting(_ENV_ALIASES["voice_sleep_timeout_seconds"], env_file, "45.0")),
+            voice_sleep_phrases=str(_setting(_ENV_ALIASES["voice_sleep_phrases"], env_file, "that's all jarvis,thats all jarvis,that is all jarvis,that will be all jarvis,that'll be all jarvis,go to sleep,sleep mode,stop listening")),
+            voice_exit_phrases=str(_setting(_ENV_ALIASES["voice_exit_phrases"], env_file, "exit voice mode,stop handsfree,stop voice loop,goodbye jarvis,shut down voice loop")),
         )
