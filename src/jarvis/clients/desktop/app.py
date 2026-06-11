@@ -1,13 +1,14 @@
 """Desktop UI shell for Jarvis Ultimate.
 
-0.1.6b turns the first Tkinter shell into a more polished Jarvis workspace:
-modern dark theme tokens, state-reactive avatar/orb rendering, modular panel
-summaries, and cleaner runtime/status surfaces.  It still uses the same
-JarvisRuntime and stays dependency-free so the core can remain headless.
+0.1.6c moves Jarvis toward the intended "AI body" design: the orb becomes the
+centerpiece of the interface, surrounding panels orbit the core, and a shared
+visual-state engine controls the avatar's animation language.  The UI remains a
+client/body attached to JarvisRuntime, so the core can still run headless.
 """
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 import threading
 from typing import Any
@@ -16,6 +17,7 @@ from jarvis.core.lifecycle import JarvisRuntime
 from jarvis.core.result import JarvisEvent
 from jarvis.ui.components import format_workspace_card, panel_header, summarize_payload
 from jarvis.ui.themes import get_theme, state_color, status_color
+from jarvis.ui.visual_state import classify_voice_status, orb_profile_for_state
 from jarvis.ui.workspace import UIWorkspaceState
 
 
@@ -27,6 +29,8 @@ class JarvisDesktopApp:
     avatar state from events, and show future drop-in panels through the
     UIWorkspaceState panel registry.
     """
+
+    layout_mode = "central_orb_workspace"
 
     def __init__(self, *, runtime: JarvisRuntime | None = None, project_root: str | Path | None = None, theme_name: str | None = None) -> None:
         self.runtime = runtime or JarvisRuntime(project_root=project_root)
@@ -42,8 +46,19 @@ class JarvisDesktopApp:
         self._voice_state_message = "Voice runtime is stopped."
         self._voice_response_active = False
         self._orb_tick = 0
+        self._avatar_canvas_size = (500, 360)
 
         self.runtime.events.subscribe("*", self._on_runtime_event)
+
+    def desktop_layout_mode(self) -> str:
+        """Return the desktop layout mode for tests and future UI launchers."""
+
+        return self.layout_mode
+
+    def avatar_canvas_size(self) -> tuple[int, int]:
+        """Return the central avatar canvas size."""
+
+        return self._avatar_canvas_size
 
     def _resolve_theme_name(self) -> str:
         """Resolve the UI theme from the project .env or config/ui.yaml if present."""
@@ -87,8 +102,8 @@ class JarvisDesktopApp:
         root = tk.Tk()
         self._root = root
         root.title("Jarvis Ultimate")
-        root.geometry("1240x800")
-        root.minsize(1060, 680)
+        root.geometry("1440x900")
+        root.minsize(1180, 740)
         root.configure(bg=self.theme["background"])
         root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -107,6 +122,7 @@ class JarvisDesktopApp:
         style.configure("Panel.TLabel", background=self.theme["panel"], foreground=self.theme["text"], font=(font, 10))
         style.configure("Muted.TLabel", background=self.theme["panel"], foreground=self.theme["muted"], font=(font, 9))
         style.configure("Accent.TLabel", background=self.theme["panel"], foreground=self.theme["accent"], font=(font, 12, "bold"))
+        style.configure("Core.TLabel", background=self.theme["panel"], foreground=self.theme["accent"], font=(font, 14, "bold"))
         style.configure("Header.TLabel", background=self.theme["background"], foreground=self.theme["accent"], font=(font, 18, "bold"))
         style.configure("Jarvis.TButton", background=self.theme["surface_raised"], foreground=self.theme["text"], borderwidth=1, focusthickness=0)
         style.configure("Jarvis.TEntry", fieldbackground=self.theme["panel_alt"], foreground=self.theme["text"], insertcolor=self.theme["accent"])
@@ -114,14 +130,21 @@ class JarvisDesktopApp:
         self._build_layout(root, ttk, mono)
         self.boot()
         self.refresh()
-        root.after(360, self._periodic_refresh)
+        root.after(160, self._periodic_refresh)
         root.mainloop()
 
     def _build_layout(self, root: Any, ttk: Any, mono_font: str) -> None:
+        """Build the central-orb workspace layout.
+
+        The orb is now the visual core.  Runtime, workspace, chat, and events are
+        arranged around it so future panels can feel like they are opening around
+        Jarvis rather than replacing him.
+        """
+
         root.grid_columnconfigure(0, weight=1)
         root.grid_rowconfigure(1, weight=1)
 
-        header = ttk.Frame(root, style="Jarvis.TFrame", padding=(16, 10, 16, 4))
+        header = ttk.Frame(root, style="Jarvis.TFrame", padding=(18, 12, 18, 4))
         header.grid(row=0, column=0, sticky="ew")
         ttk.Label(header, text="JARVIS ULTIMATE", style="Header.TLabel").pack(side="left")
         self._widgets["top_badge"] = ttk.Label(header, text="SYSTEM ONLINE", style="Jarvis.TLabel")
@@ -130,7 +153,7 @@ class JarvisDesktopApp:
         shell = ttk.Frame(root, style="Jarvis.TFrame", padding=(12, 8, 12, 12))
         shell.grid(row=1, column=0, sticky="nsew")
         shell.grid_columnconfigure(0, weight=3)
-        shell.grid_columnconfigure(1, weight=4)
+        shell.grid_columnconfigure(1, weight=5)
         shell.grid_columnconfigure(2, weight=3)
         shell.grid_rowconfigure(0, weight=1)
 
@@ -141,11 +164,11 @@ class JarvisDesktopApp:
         center.grid(row=0, column=1, sticky="nsew", padx=4)
         right.grid(row=0, column=2, sticky="nsew", padx=(8, 0))
 
-        self._build_avatar_panel(left, ttk)
         self._build_status_panel(left, ttk, mono_font)
+        self._build_events_panel(left, ttk, mono_font)
+        self._build_avatar_panel(center, ttk)
         self._build_chat_panel(center, ttk, mono_font)
         self._build_workspace_panel(right, ttk, mono_font)
-        self._build_events_panel(right, ttk, mono_font)
 
     def _panel(self, parent: Any, ttk: Any, title: str, *, icon: str = "", fill: str = "both", expand: bool = True, pady: tuple[int, int] = (0, 10)) -> Any:
         outer = ttk.Frame(parent, style="Panel.TFrame", padding=2)
@@ -158,33 +181,34 @@ class JarvisDesktopApp:
         return body
 
     def _build_avatar_panel(self, parent: Any, ttk: Any) -> None:
-        frame = self._panel(parent, ttk, "Avatar Core", icon="◉", fill="x", expand=False, pady=(0, 10))
-        canvas = self._tk.Canvas(frame, width=280, height=260, bg=self.theme["panel"], highlightthickness=0)
-        canvas.pack(pady=(0, 8), fill="x")
-        state_label = ttk.Label(frame, text="State: sleeping", style="Panel.TLabel")
-        state_label.pack(anchor="w")
-        message_label = ttk.Label(frame, text="Waiting for wake phrase.", style="Muted.TLabel", wraplength=310)
-        message_label.pack(anchor="w", pady=(4, 0))
+        frame = self._panel(parent, ttk, "Jarvis Core", icon="◎", pady=(0, 10), expand=False)
+        width, height = self._avatar_canvas_size
+        canvas = self._tk.Canvas(frame, width=width, height=height, bg=self.theme["panel"], highlightthickness=0)
+        canvas.pack(pady=(0, 8), fill="both", expand=True)
+        state_label = ttk.Label(frame, text="State: sleeping", style="Core.TLabel")
+        state_label.pack(anchor="center")
+        message_label = ttk.Label(frame, text="Waiting for wake phrase.", style="Muted.TLabel", wraplength=470)
+        message_label.pack(anchor="center", pady=(4, 0))
 
         controls = ttk.Frame(frame, style="Panel.TFrame")
-        controls.pack(fill="x", pady=(12, 0))
+        controls.pack(anchor="center", pady=(12, 0))
         ttk.Button(controls, text="Start Voice", command=self.start_voice_runtime, style="Jarvis.TButton").pack(side="left")
-        ttk.Button(controls, text="Stop Voice", command=self.stop_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(6, 0))
-        ttk.Button(controls, text="Warm Up", command=self.warmup_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(6, 0))
+        ttk.Button(controls, text="Stop Voice", command=self.stop_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(controls, text="Warm Up", command=self.warmup_voice_runtime, style="Jarvis.TButton").pack(side="left", padx=(8, 0))
 
         self._widgets["avatar_canvas"] = canvas
         self._widgets["avatar_state"] = state_label
         self._widgets["avatar_message"] = message_label
 
     def _build_status_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
-        frame = self._panel(parent, ttk, "Runtime Status", icon="◆", pady=(0, 0))
-        text = self._make_text(frame, height=20, font_family=mono_font)
+        frame = self._panel(parent, ttk, "Runtime Status", icon="◆", pady=(0, 10))
+        text = self._make_text(frame, height=22, font_family=mono_font)
         text.pack(fill="both", expand=True)
         self._widgets["status_text"] = text
 
     def _build_chat_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
         frame = self._panel(parent, ttk, "Conversation", icon="▰", pady=(0, 0))
-        chat = self._make_text(frame, height=33, font_family=mono_font)
+        chat = self._make_text(frame, height=15, font_family=mono_font)
         chat.pack(fill="both", expand=True, pady=(0, 10))
 
         input_frame = ttk.Frame(frame, style="Panel.TFrame")
@@ -199,13 +223,13 @@ class JarvisDesktopApp:
 
     def _build_workspace_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
         frame = self._panel(parent, ttk, "Workspace", icon="▣", pady=(0, 10))
-        text = self._make_text(frame, height=18, font_family=mono_font)
+        text = self._make_text(frame, height=27, font_family=mono_font)
         text.pack(fill="both", expand=True)
         self._widgets["workspace_text"] = text
 
     def _build_events_panel(self, parent: Any, ttk: Any, mono_font: str) -> None:
         frame = self._panel(parent, ttk, "Event Stream", icon="☰", pady=(0, 0))
-        text = self._make_text(frame, height=15, font_family=mono_font)
+        text = self._make_text(frame, height=16, font_family=mono_font)
         text.pack(fill="both", expand=True)
         self._widgets["events_text"] = text
 
@@ -302,18 +326,10 @@ class JarvisDesktopApp:
 
         def status_callback(message: str) -> None:
             self._voice_state_message = message
-            lowered = message.lower()
-            if "sleep" in lowered or "wake phrase" in lowered:
-                self.workspace.avatar.set_state("wake_listening", expression="calm", message=message)
-            elif "wake detected" in lowered or "awake" in lowered:
-                self.workspace.avatar.set_state("listening", expression="active", message=message)
-            elif "returning to sleep" in lowered:
-                self.workspace.avatar.set_state("sleeping", expression="calm", message=message)
-            elif "stt failed" in lowered or "failed" in lowered:
-                self.workspace.avatar.set_state("error", expression="alert", message=message)
-            else:
-                self.workspace.avatar.set_state("listening", expression="focused", message=message)
-            self.runtime.events.emit("ui.voice_status", source="desktop", message=message, data={"running": True})
+            visual_state = classify_voice_status(message)
+            expression = "alert" if visual_state == "error" else ("calm" if visual_state in {"sleeping", "wake_listening"} else "focused")
+            self.workspace.avatar.set_state(visual_state, expression=expression, message=message)
+            self.runtime.events.emit("ui.voice_status", source="desktop", message=message, data={"running": True, "state": visual_state})
             self._schedule_refresh()
 
         def transcript_callback(transcript: str) -> None:
@@ -421,7 +437,7 @@ class JarvisDesktopApp:
     def _periodic_refresh(self) -> None:
         self.refresh()
         if self._root is not None:
-            self._root.after(360, self._periodic_refresh)
+            self._root.after(160, self._periodic_refresh)
 
     def _schedule_refresh(self) -> None:
         if self._root is not None:
@@ -430,7 +446,7 @@ class JarvisDesktopApp:
     def refresh(self) -> None:
         if self._root is None:
             return
-        self._orb_tick = (self._orb_tick + 1) % 60
+        self._orb_tick = (self._orb_tick + 1) % 360
         self._render_avatar()
         self._render_chat()
         self._render_status()
@@ -447,26 +463,75 @@ class JarvisDesktopApp:
             return
         canvas.delete("all")
         state = self.workspace.avatar.state
-        color = state_color(state, self.theme)
-        pulse = (self._orb_tick % 20) / 20
-        center_x, center_y = 140, 126
-        base_radius = 52
-        outer_radius = 82 + int(pulse * 10)
+        profile = orb_profile_for_state(state)
+        color = state_color(profile.state, self.theme)
+        width, height = self._avatar_canvas_size
+        center_x, center_y = width // 2, int(height * 0.48)
+        tick = self._orb_tick
+        phase = (tick / 360.0) * math.tau
+        pulse = (math.sin(phase * max(profile.pulse_speed, 0.1)) + 1.0) / 2.0
+        breathing = 1.0 + (0.055 * math.sin(phase * 0.7) if profile.breathing else 0.0)
+        core_scale = profile.core_scale * breathing
+        glow = int(10 + 18 * profile.glow_strength + pulse * 10)
+        outer_radius = int((118 + pulse * 12) * core_scale)
+        mid_radius = int((84 + pulse * 5) * core_scale)
+        inner_radius = int((32 + pulse * 6) * core_scale)
 
-        # Subtle grid/scan lines.
-        for y in range(22, 238, 24):
-            canvas.create_line(24, y, 256, y, fill=self.theme["panel_glow"], width=1)
-        for x in range(34, 256, 44):
-            canvas.create_line(x, 30, x, 228, fill=self.theme["panel_glow"], width=1)
+        # Holographic grid behind the core.
+        for y in range(40, height - 55, 28):
+            canvas.create_line(40, y, width - 40, y, fill=self.theme["panel_glow"], width=1)
+        for x in range(60, width - 48, 46):
+            canvas.create_line(x, 48, x, height - 68, fill=self.theme["panel_glow"], width=1)
 
+        # Soft pseudo-3D glow shells.
+        for layer in range(5, 0, -1):
+            radius = outer_radius + layer * glow
+            outline = self.theme["accent_soft"] if layer > 2 else color
+            canvas.create_oval(center_x - radius, center_y - radius, center_x + radius, center_y + radius, outline=outline, width=1)
+
+        # Rotating orbital arcs. Tk arcs make the 2D fallback feel like a 3D renderer.
+        ring_specs = [
+            (outer_radius + 16, 84, 220, 3),
+            (outer_radius - 4, 265, 170, 2),
+            (mid_radius + 12, 35, 130, 2),
+            (mid_radius - 8, 195, 110, 1),
+        ]
+        speed = max(profile.ring_speed, 0.1)
+        for index, (radius, base_start, extent, ring_width) in enumerate(ring_specs):
+            start = (base_start + tick * speed * (1.4 + index * 0.28)) % 360
+            canvas.create_arc(
+                center_x - radius,
+                center_y - int(radius * (0.72 + index * 0.03)),
+                center_x + radius,
+                center_y + int(radius * (0.72 + index * 0.03)),
+                start=start,
+                extent=extent,
+                outline=color if index % 2 == 0 else self.theme["accent_soft"],
+                width=ring_width,
+                style="arc",
+            )
+
+        # Glass sphere/body.
         canvas.create_oval(center_x - outer_radius, center_y - outer_radius, center_x + outer_radius, center_y + outer_radius, outline=color, width=3)
-        canvas.create_oval(center_x - 68, center_y - 68, center_x + 68, center_y + 68, outline=self.theme["accent_soft"], width=2)
-        canvas.create_oval(center_x - base_radius, center_y - base_radius, center_x + base_radius, center_y + base_radius, outline=self.theme["accent"], width=1)
-        canvas.create_oval(center_x - 20, center_y - 20, center_x + 20, center_y + 20, outline=color, width=4)
-        canvas.create_text(center_x, center_y, text="◉", fill=color, font=(self.theme["font_family"], 34, "bold"))
-        canvas.create_text(center_x, 232, text=self.workspace.avatar.label.upper(), fill=color, font=(self.theme["font_family"], 10, "bold"))
+        canvas.create_oval(center_x - mid_radius, center_y - mid_radius, center_x + mid_radius, center_y + mid_radius, outline=self.theme["accent_soft"], width=2)
+        canvas.create_oval(center_x - inner_radius, center_y - inner_radius, center_x + inner_radius, center_y + inner_radius, outline=color, width=4)
+        canvas.create_oval(center_x - 15, center_y - 15, center_x + 15, center_y + 15, fill=self.theme["panel"], outline=color, width=3)
 
-        self._widgets["avatar_state"].configure(text=f"State: {self.workspace.avatar.label}")
+        # Orbiting particle sparks.
+        particle_count = min(profile.particle_count, 28)
+        for index in range(particle_count):
+            angle = phase * speed + (math.tau * index / max(particle_count, 1))
+            radius = outer_radius + 26 + (index % 4) * 8
+            px = center_x + math.cos(angle) * radius
+            py = center_y + math.sin(angle) * radius * 0.62
+            size = 1 + (index % 3)
+            canvas.create_oval(px - size, py - size, px + size, py + size, fill=color, outline="")
+
+        # State text and future-renderer notice.
+        canvas.create_text(center_x, height - 52, text=profile.label.upper(), fill=color, font=(self.theme["font_family"], 12, "bold"))
+        canvas.create_text(center_x, height - 28, text="CENTRAL ORB RENDERER · 3D AVATAR READY", fill=self.theme["muted"], font=(self.theme["font_family"], 8))
+
+        self._widgets["avatar_state"].configure(text=f"State: {profile.label}")
         self._widgets["avatar_message"].configure(text=self.workspace.avatar.message or "Ready, sir.")
 
     def _render_chat(self) -> None:
@@ -478,8 +543,10 @@ class JarvisDesktopApp:
 
     def _render_status(self) -> None:
         voice = "running" if self.voice_runtime_running() else "stopped"
+        visual_profile = orb_profile_for_state(self.workspace.avatar.state)
         lines = [
-            f"Avatar: {self.workspace.avatar.label}",
+            f"Layout: {self.layout_mode}",
+            f"Orb state: {visual_profile.label}",
             f"Desktop voice runtime: {voice}",
             f"Voice status: {self._voice_state_message}",
             f"Auto-start voice: {getattr(self.runtime.config, 'desktop_auto_start_voice', True)}",
@@ -489,9 +556,14 @@ class JarvisDesktopApp:
             f"Wake words: {', '.join(self.runtime.wake_word_manager.wake_words)}",
             f"Short-term memory turns: {self.runtime.short_term_memory.status().get('turns', 0)}",
             "",
+            "Orb animation profile:",
+            f"- ring speed: {visual_profile.ring_speed}",
+            f"- pulse speed: {visual_profile.pulse_speed}",
+            f"- glow: {visual_profile.glow_strength}",
+            "",
             "Status colors:",
             f"- voice: {status_color(voice, self.theme)}",
-            f"- avatar: {state_color(self.workspace.avatar.state, self.theme)}",
+            f"- avatar: {state_color(visual_profile.state, self.theme)}",
             "",
             "Agents:",
         ]
@@ -506,20 +578,25 @@ class JarvisDesktopApp:
 
     def _render_workspace(self) -> None:
         lines = [
-            "Drop-in panel registry:",
+            "Drop-in workspace panels:",
         ]
         for panel in self.workspace.panel_summaries():
             marker = "OPEN" if panel["is_open"] else "READY"
             lines.append(f"- {panel['title']} ({panel['panel_id']}) [{marker}] type={panel['panel_type']}")
 
         lines.append("")
-        lines.append("Future Jarvis tools can open panels with ui.open_panel events:")
+        lines.append("Future Jarvis tools can open panels around the central core with ui.open_panel events:")
         lines.append("- reminders")
         lines.append("- web results")
         lines.append("- generated images")
         lines.append("- file results")
         lines.append("- screen/OCR context")
         lines.append("- agent dashboards")
+        lines.append("")
+        lines.append("Design direction:")
+        lines.append("- the orb stays central")
+        lines.append("- tools open around Jarvis")
+        lines.append("- panels remain drop-in/modular")
 
         if self.workspace.workspace_cards:
             lines.append("")
@@ -539,7 +616,7 @@ class JarvisDesktopApp:
 
     def _render_events(self) -> None:
         lines = []
-        for event in list(self.workspace.events)[-36:]:
+        for event in list(self.workspace.events)[-30:]:
             lines.append(f"{event.timestamp} | {event.event_type} | {event.source} | {event.message}")
         self._set_text("events_text", "\n".join(lines))
 
