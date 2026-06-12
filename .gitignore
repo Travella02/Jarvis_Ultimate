@@ -23,5 +23,4 @@ Thumbs.db
 .idea/
 
 app_shell/node_modules/
-
-app_shell/node_modules/
+app_shell\node_modules\semver

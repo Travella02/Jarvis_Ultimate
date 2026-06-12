@@ -7,8 +7,8 @@ const DEFAULT_STATE = {
 };
 
 const PANEL_KEYS = ['runtime', 'voice', 'workspace', 'conversation', 'diagnostics'];
-const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v020';
-const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v020';
+const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v019b2';
+const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v019b2';
 
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
@@ -21,22 +21,12 @@ let manualVoiceStopRequested = false;
 let panelVisibility = loadPanelVisibility();
 let stateFadeTimer = null;
 let activeVisualState = normalizeState(DEFAULT_STATE.avatar.state);
-let orbCaptionTarget = '';
-let orbCaptionDisplayed = '';
-let orbCaptionTimer = null;
-let lastCaptionSignature = '';
-let motionLastFrame = 0;
-const motionAngles = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 };
-const motionSpeeds = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 };
-let motionTargets = motionProfileForState(DEFAULT_STATE.avatar.state);
 
 const els = {
   bridgeStatus: document.getElementById('bridgeStatus'),
   warmupPill: document.getElementById('warmupPill'),
   stateLabel: document.getElementById('stateLabel'),
   stateMessage: document.getElementById('stateMessage'),
-  orbSpeechCaption: document.getElementById('orbSpeechCaption'),
-  orbCaptionText: document.getElementById('orbCaptionText'),
   stripBridge: document.getElementById('stripBridge'),
   stripVoice: document.getElementById('stripVoice'),
   stripWarmup: document.getElementById('stripWarmup'),
@@ -83,99 +73,6 @@ function readable(value) {
 
 function titleCase(value) {
   return readable(value).replace(/\b\w/g, character => character.toUpperCase());
-}
-
-function motionProfileForState(state) {
-  const normalized = normalizeState(state);
-  if (normalized === 'sleeping' || normalized === 'wake_listening') {
-    return { ringA: 4.2, ringB: -3.1, ringC: 3.6, particleA: 5.2, particleB: -3.8 };
-  }
-  if (normalized === 'listening' || normalized === 'transcribing') {
-    return { ringA: 13.5, ringB: -9.8, ringC: 12.0, particleA: 15.0, particleB: -11.2 };
-  }
-  if (normalized === 'speaking') {
-    return { ringA: 10.8, ringB: -7.6, ringC: 9.4, particleA: 11.6, particleB: -9.0 };
-  }
-  if (normalized === 'thinking') {
-    return { ringA: 17.0, ringB: -14.0, ringC: 16.0, particleA: 18.0, particleB: -15.0 };
-  }
-  if (normalized === 'error') {
-    return { ringA: 21.0, ringB: -16.0, ringC: 18.5, particleA: 22.0, particleB: -17.0 };
-  }
-  return { ringA: 8.2, ringB: -6.0, ringC: 7.4, particleA: 9.0, particleB: -7.0 };
-}
-
-function setMotionTarget(state) {
-  motionTargets = motionProfileForState(state);
-}
-
-function animateOrbMotion(timestamp = 0) {
-  if (!motionLastFrame) motionLastFrame = timestamp;
-  const dt = Math.min(0.08, Math.max(0.001, (timestamp - motionLastFrame) / 1000));
-  motionLastFrame = timestamp;
-  const blend = Math.min(1, dt * 0.85);
-  for (const key of Object.keys(motionSpeeds)) {
-    motionSpeeds[key] += (motionTargets[key] - motionSpeeds[key]) * blend;
-    motionAngles[key] = (motionAngles[key] + motionSpeeds[key] * dt) % 360;
-  }
-  const style = document.documentElement.style;
-  style.setProperty('--ring-a-rot', `${motionAngles.ringA.toFixed(3)}deg`);
-  style.setProperty('--ring-b-rot', `${motionAngles.ringB.toFixed(3)}deg`);
-  style.setProperty('--ring-c-rot', `${motionAngles.ringC.toFixed(3)}deg`);
-  style.setProperty('--particle-a-rot', `${motionAngles.particleA.toFixed(3)}deg`);
-  style.setProperty('--particle-b-rot', `${motionAngles.particleB.toFixed(3)}deg`);
-  window.requestAnimationFrame(animateOrbMotion);
-}
-
-function findLatestJarvisMessage(workspace) {
-  const messages = workspace?.chat_messages || [];
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index] || {};
-    if (normalizeState(message.role || '') === 'jarvis' && String(message.text || '').trim()) {
-      return String(message.text).trim();
-    }
-  }
-  return '';
-}
-
-function resolveOrbCaptionText(workspace, voice, avatar) {
-  const liveText = String(voice?.live_response_text || '').trim();
-  if (liveText) return liveText;
-  const lastResponse = String(voice?.last_response || '').trim();
-  if (lastResponse) return lastResponse;
-  const latestJarvis = findLatestJarvisMessage(workspace);
-  if (latestJarvis) return latestJarvis;
-  const avatarState = normalizeState(avatar?.state || '');
-  if (avatarState === 'speaking') return String(avatar?.message || '').trim();
-  return 'Awaiting voice output.';
-}
-
-function stepOrbCaption() {
-  if (orbCaptionDisplayed.length < orbCaptionTarget.length) {
-    const remaining = orbCaptionTarget.length - orbCaptionDisplayed.length;
-    const step = remaining > 90 ? 4 : remaining > 42 ? 3 : remaining > 16 ? 2 : 1;
-    orbCaptionDisplayed = orbCaptionTarget.slice(0, orbCaptionDisplayed.length + step);
-    if (els.orbCaptionText) els.orbCaptionText.textContent = orbCaptionDisplayed;
-    orbCaptionTimer = window.setTimeout(stepOrbCaption, 24);
-    return;
-  }
-  if (els.orbCaptionText) els.orbCaptionText.textContent = orbCaptionTarget;
-  orbCaptionTimer = null;
-}
-
-function setOrbCaptionText(text, signature) {
-  const nextText = String(text || '').trim() || 'Awaiting voice output.';
-  const nextSignature = signature || nextText;
-  if (nextText === orbCaptionTarget && nextSignature === lastCaptionSignature) return;
-
-  const isIncrementalContinuation = nextText.startsWith(orbCaptionTarget) && nextSignature === lastCaptionSignature;
-  const isSameConversationGrowing = nextText.startsWith(orbCaptionDisplayed) && nextSignature === lastCaptionSignature;
-  orbCaptionTarget = nextText;
-  if (!isIncrementalContinuation && !isSameConversationGrowing) {
-    orbCaptionDisplayed = '';
-  }
-  lastCaptionSignature = nextSignature;
-  if (orbCaptionTimer === null) stepOrbCaption();
 }
 
 function loadPanelVisibility() {
@@ -245,10 +142,9 @@ function setVisualState(state, message, label) {
   if (next !== activeVisualState) {
     document.body.classList.add('state-fading');
     window.clearTimeout(stateFadeTimer);
-    stateFadeTimer = window.setTimeout(() => document.body.classList.remove('state-fading'), 3100);
+    stateFadeTimer = window.setTimeout(() => document.body.classList.remove('state-fading'), 2350);
     activeVisualState = next;
   }
-  setMotionTarget(next);
   renderBodyClasses(next);
   if (next !== activeVisualState) activeVisualState = next;
   els.stateLabel.textContent = label || titleCase(next);
@@ -322,10 +218,6 @@ function renderState(snapshot) {
     ? events.slice(-30).map(event => `${escapeHtml(event.timestamp || '')} | ${escapeHtml(event.event_type || '')} | ${escapeHtml(event.message || '')}`).join('<br>')
     : 'No events yet.';
   els.eventsLog.scrollTop = els.eventsLog.scrollHeight;
-
-  const captionText = resolveOrbCaptionText(workspace, voice, avatar);
-  const captionSignature = String(voice.live_response_text ? voice.started_at || 'live' : voice.last_response ? voice.stopped_at || voice.last_command || captionText : captionText);
-  setOrbCaptionText(captionText, captionSignature);
 
   maybeAutoStartSleepWake(lastState);
 }
@@ -473,9 +365,6 @@ async function boot() {
   els.stopVoiceButton.addEventListener('click', stopVoice);
   if (els.autoWakeToggle) els.autoWakeToggle.addEventListener('click', toggleAutoSleepWake);
   if (els.orbFocusButton) els.orbFocusButton.addEventListener('click', toggleOrbFocus);
-  window.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && orbFocus) toggleOrbFocus();
-  });
   for (const button of els.panelToggleButtons) {
     button.addEventListener('click', () => togglePanel(button.dataset.panelToggle));
   }
@@ -491,7 +380,6 @@ async function boot() {
   });
 
   updatePanelControls();
-  window.requestAnimationFrame(animateOrbMotion);
   renderState({
     ...DEFAULT_STATE,
     avatar: { state: 'working', label: 'Initializing Jarvis', message: 'Connecting to the local bridge, warming voice systems, then entering sleep/wake mode...' }

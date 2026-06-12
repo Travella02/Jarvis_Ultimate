@@ -1,7 +1,7 @@
 """Dependency-free local HTTP API for Jarvis's native app shell.
 
 This standard-library server is the live bridge between the Electron
-HTML/CSS/JS interface and the Python Jarvis runtime.  0.2.0 refines continuous orb motion, true orb-only focus, live speech captions, and edge-only holographic panels while keeping diagnostics out of the way so the orb stays in the speaking
+HTML/CSS/JS interface and the Python Jarvis runtime.  0.1.9a refines panel controls, state colors, and automatic sleep/wake startup and keeps diagnostics out of the way so the orb stays in the speaking
 state for real playback, the controls remain visible, and the app shell warms
 voice systems before accepting a conversation.
 """
@@ -313,8 +313,6 @@ class LocalJarvisAPI:
             "last_transcript": "",
             "last_command": "",
             "last_response": "",
-            "live_response_text": "",
-            "live_response_started_at": "",
             "last_status": "Ready.",
             "last_error": "",
             "final_state": "idle",
@@ -365,16 +363,9 @@ class LocalJarvisAPI:
 
         def on_chunk(chunk: str) -> None:
             chunks.append(chunk)
-            live_text = "".join(chunks).strip()
-            self._update_voice_session(
-                live_response_text=live_text,
-                last_response=live_text,
-                live_response_started_at=self._voice_session.get("live_response_started_at") or _utc_now_iso(),
-            )
             self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
 
         try:
-            self._update_voice_session(live_response_text="", live_response_started_at="")
             self._set_voice_visual("Listening through the microphone...", state="listening", expression="focused")
             result = self.runtime.voice_loop_once(
                 duration_seconds=options.get("duration_seconds"),
@@ -487,10 +478,9 @@ class LocalJarvisAPI:
                     if not command:
                         prompt = self.runtime.wake_word_manager.empty_response
                         if speak and self.runtime.tts_manager.enabled:
-                            self._update_voice_session(live_response_text=prompt, last_response=prompt, live_response_started_at=_utc_now_iso())
                             self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
                             self.runtime.tts_manager.say(prompt, play_audio=True)
-                        self._update_voice_session(last_command="", last_response=prompt, live_response_text=prompt)
+                        self._update_voice_session(last_command="", last_response=prompt)
                         with self._lock:
                             self.workspace.add_chat_message("jarvis", prompt)
                         continue
@@ -499,10 +489,8 @@ class LocalJarvisAPI:
                         state = "asleep"
                         message = "Sleep phrase detected; returning to sleep mode."
                         if speak and self.runtime.tts_manager.enabled:
-                            sleep_reply = "Going back to sleep, sir."
-                            self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
                             self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
-                            self.runtime.tts_manager.say(sleep_reply, play_audio=True)
+                            self.runtime.tts_manager.say("Going back to sleep, sir.", play_audio=True)
                         self._set_voice_visual(message, state="sleeping")
                         continue
                     match = self.runtime.wake_word_manager.detect(transcript)
@@ -514,10 +502,8 @@ class LocalJarvisAPI:
                 if self.runtime._voice_loop_sleep_phrase_matches(command_normalized, self.runtime._voice_loop_sleep_phrases()):
                     state = "asleep"
                     if speak and self.runtime.tts_manager.enabled:
-                        sleep_reply = "Going back to sleep, sir."
-                        self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
                         self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
-                        self.runtime.tts_manager.say(sleep_reply, play_audio=True)
+                        self.runtime.tts_manager.say("Going back to sleep, sir.", play_audio=True)
                     self._set_voice_visual("Sleep phrase detected; returning to sleep mode.", state="sleeping")
                     continue
                 if self.runtime._voice_loop_phrase_matches(command_normalized, self.runtime._voice_loop_exit_phrases()):
@@ -525,7 +511,7 @@ class LocalJarvisAPI:
                     break
 
                 last_command = command
-                self._update_voice_session(last_command=command, live_response_text="", live_response_started_at="")
+                self._update_voice_session(last_command=command)
                 with self._lock:
                     self.workspace.add_chat_message("user", command)
                     self.workspace.avatar.set_state("thinking", expression="focused", message=f"Thinking about: {command}")
@@ -533,12 +519,6 @@ class LocalJarvisAPI:
 
                 def on_chunk(chunk: str) -> None:
                     chunks.append(chunk)
-                    live_text = "".join(chunks).strip()
-                    self._update_voice_session(
-                        live_response_text=live_text,
-                        last_response=live_text,
-                        live_response_started_at=self._voice_session.get("live_response_started_at") or _utc_now_iso(),
-                    )
                     self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
 
                 spoken_stream = None
@@ -631,7 +611,7 @@ def _json_bytes(payload: dict[str, Any] | list[Any]) -> bytes:
 
 def make_handler(api: LocalJarvisAPI) -> type[BaseHTTPRequestHandler]:
     class JarvisLocalAPIHandler(BaseHTTPRequestHandler):
-        server_version = "JarvisLocalAPI/0.2.0"
+        server_version = "JarvisLocalAPI/0.1.9a"
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
             return
