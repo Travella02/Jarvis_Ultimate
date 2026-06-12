@@ -12,7 +12,7 @@ class TestAppShellHolographicMotion019b2(unittest.TestCase):
         self.assertIn("body.state-sleeping .orb-ring", self.styles_css)
         self.assertIn("--ring-a-rot", self.styles_css)
         self.assertIn("motionProfileForState", self.renderer_js)
-        self.assertIn("ringA: 4.2", self.renderer_js)
+        self.assertIn("ringA: 5.8", self.renderer_js)
         self.assertIn("sleepOrbBreathe 10.8s", self.styles_css)
         self.assertIn("scale(1.038)", self.styles_css)
 
@@ -25,7 +25,7 @@ class TestAppShellHolographicMotion019b2(unittest.TestCase):
     def test_ui_is_nearly_black_with_holographic_glass(self):
         self.assertIn("linear-gradient(135deg, #000000 0%, #000000 72%, #000000 100%)", self.styles_css)
         self.assertIn("rgba(35, 171, 255, 0.018)", self.styles_css)
-        self.assertIn("rgba(0, 2, 7, 0.035)", self.styles_css)
+        self.assertIn("edge-only holographic panels", self.styles_css)
         self.assertIn("rgba(0, 4, 11, .075)", self.styles_css)
 
     def test_state_blend_window_is_longer(self):

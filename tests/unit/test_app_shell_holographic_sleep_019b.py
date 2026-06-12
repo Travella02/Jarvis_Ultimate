@@ -11,7 +11,7 @@ class TestAppShellHolographicSleep019b(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_version_and_capabilities_include_019b_refinements(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.2.0")
+        self.assertEqual(APP_SHELL_VERSION, "0.2.1")
         capabilities = app_shell_capabilities()
         self.assertIn("constant_grey_sleep_mode", capabilities)
         self.assertIn("holographic_transparent_panels", capabilities)
@@ -50,7 +50,7 @@ class TestAppShellHolographicSleep019b(unittest.TestCase):
         self.assertIn("stateFadeTimer", self.renderer_js)
         self.assertIn("state-fading", self.renderer_js)
         self.assertIn("activeVisualState", self.renderer_js)
-        self.assertIn("v020", self.renderer_js)
+        self.assertIn("v021", self.renderer_js)
         self.assertIn("3100", self.renderer_js)
 
 

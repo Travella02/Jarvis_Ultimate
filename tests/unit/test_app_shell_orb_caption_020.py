@@ -15,7 +15,7 @@ class AppShellOrbCaption020Tests(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_version_and_capabilities_include_orb_caption_controls(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.2.0")
+        self.assertEqual(APP_SHELL_VERSION, "0.2.1")
         capabilities = app_shell_capabilities()
         self.assertIn("continuous_js_orb_motion", capabilities)
         self.assertIn("orb_speech_caption_typewriter", capabilities)
@@ -25,7 +25,7 @@ class AppShellOrbCaption020Tests(unittest.TestCase):
     def test_index_has_under_orb_speech_caption(self) -> None:
         self.assertIn('id="orbSpeechCaption"', self.index_html)
         self.assertIn('id="orbCaptionText"', self.index_html)
-        self.assertIn('Jarvis Output', self.index_html)
+        self.assertNotIn('Jarvis Output', self.index_html)
 
     def test_renderer_uses_continuous_js_motion_and_typewriter(self) -> None:
         self.assertIn("requestAnimationFrame(animateOrbMotion)", self.renderer_js)
@@ -42,7 +42,7 @@ class AppShellOrbCaption020Tests(unittest.TestCase):
         self.assertIn("body.orb-focus .state-readout", self.styles_css)
         self.assertIn("display: none", self.styles_css)
         self.assertIn("orb-speech-caption", self.styles_css)
-        self.assertIn("rgba(0, 2, 7, 0.035)", self.styles_css)
+        self.assertIn("edge-only holographic panels", self.styles_css)
 
     def test_voice_session_snapshot_exposes_live_response_text(self) -> None:
         api = LocalJarvisAPI(project_root=self.root)

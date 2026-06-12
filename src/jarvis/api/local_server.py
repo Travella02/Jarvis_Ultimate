@@ -1,7 +1,7 @@
 """Dependency-free local HTTP API for Jarvis's native app shell.
 
 This standard-library server is the live bridge between the Electron
-HTML/CSS/JS interface and the Python Jarvis runtime.  0.2.0 refines continuous orb motion, true orb-only focus, live speech captions, and edge-only holographic panels while keeping diagnostics out of the way so the orb stays in the speaking
+HTML/CSS/JS interface and the Python Jarvis runtime.  0.2.1 refines the realistic orb core, stable ring motion, caption timing, and natural sleep acknowledgements while keeping diagnostics out of the way so the orb stays in the speaking
 state for real playback, the controls remain visible, and the app shell warms
 voice systems before accepting a conversation.
 """
@@ -57,6 +57,54 @@ def _safe_bool(value: Any, default: bool = False) -> bool:
     if text in {"0", "false", "no", "n", "off"}:
         return False
     return default
+
+
+def _clean_voice_phrase(value: str) -> str:
+    """Normalize a short spoken phrase for lightweight app-shell behavior checks."""
+
+    cleaned = "".join(character.lower() if character.isalnum() or character.isspace() else " " for character in str(value or ""))
+    return " ".join(cleaned.split())
+
+
+def _natural_sleep_reply_for_phrase(value: str) -> str:
+    """Return a short human-style acknowledgement for phrases that put Jarvis to sleep.
+
+    The app shell should not announce implementation details like "going back to
+    sleep".  It should acknowledge naturally, then return to sleep mode silently.
+    """
+
+    cleaned = _clean_voice_phrase(value)
+    if not cleaned:
+        return ""
+    gratitude_markers = (
+        "thank you",
+        "thanks",
+        "thank ya",
+        "appreciate you",
+        "i appreciate you",
+    )
+    if any(marker in cleaned for marker in gratitude_markers) and "jarvis" in cleaned:
+        return "Of course, sir."
+    closure_markers = (
+        "thats all",
+        "that s all",
+        "that is all",
+        "that will be all",
+        "that ll be all",
+        "thatll be all",
+        "sleep mode",
+        "go to sleep",
+        "stop listening",
+    )
+    if any(marker in cleaned for marker in closure_markers):
+        return "Okay, sir."
+    return ""
+
+
+def _is_natural_sleep_phrase(value: str) -> bool:
+    """Return True for built-in natural phrases that should sleep Jarvis quietly."""
+
+    return bool(_natural_sleep_reply_for_phrase(value))
 
 
 class LocalJarvisAPI:
@@ -495,15 +543,16 @@ class LocalJarvisAPI:
                             self.workspace.add_chat_message("jarvis", prompt)
                         continue
                 else:
-                    if self.runtime._voice_loop_sleep_phrase_matches(normalized_transcript, self.runtime._voice_loop_sleep_phrases()):
+                    if self.runtime._voice_loop_sleep_phrase_matches(normalized_transcript, self.runtime._voice_loop_sleep_phrases()) or _is_natural_sleep_phrase(normalized_transcript):
                         state = "asleep"
-                        message = "Sleep phrase detected; returning to sleep mode."
-                        if speak and self.runtime.tts_manager.enabled:
-                            sleep_reply = "Going back to sleep, sir."
+                        sleep_reply = _natural_sleep_reply_for_phrase(normalized_transcript)
+                        if sleep_reply and speak and self.runtime.tts_manager.enabled:
                             self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
                             self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
                             self.runtime.tts_manager.say(sleep_reply, play_audio=True)
-                        self._set_voice_visual(message, state="sleeping")
+                        elif sleep_reply:
+                            self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
+                        self._set_voice_visual("Sleep phrase acknowledged.", state="sleeping", expression="calm")
                         continue
                     match = self.runtime.wake_word_manager.detect(transcript)
                     command = (match.command or "").strip() if match.detected else transcript
@@ -511,21 +560,24 @@ class LocalJarvisAPI:
                         command = transcript
 
                 command_normalized = self.runtime._voice_loop_normalize_phrase(command)
-                if self.runtime._voice_loop_sleep_phrase_matches(command_normalized, self.runtime._voice_loop_sleep_phrases()):
+                natural_sleep_source = command_normalized if _is_natural_sleep_phrase(command_normalized) else normalized_transcript
+                if self.runtime._voice_loop_sleep_phrase_matches(command_normalized, self.runtime._voice_loop_sleep_phrases()) or _is_natural_sleep_phrase(natural_sleep_source):
                     state = "asleep"
-                    if speak and self.runtime.tts_manager.enabled:
-                        sleep_reply = "Going back to sleep, sir."
+                    sleep_reply = _natural_sleep_reply_for_phrase(natural_sleep_source)
+                    if sleep_reply and speak and self.runtime.tts_manager.enabled:
                         self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
                         self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
                         self.runtime.tts_manager.say(sleep_reply, play_audio=True)
-                    self._set_voice_visual("Sleep phrase detected; returning to sleep mode.", state="sleeping")
+                    elif sleep_reply:
+                        self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
+                    self._set_voice_visual("Sleep phrase acknowledged.", state="sleeping", expression="calm")
                     continue
                 if self.runtime._voice_loop_phrase_matches(command_normalized, self.runtime._voice_loop_exit_phrases()):
                     stopped_by = "spoken_exit_phrase"
                     break
 
                 last_command = command
-                self._update_voice_session(last_command=command, live_response_text="", live_response_started_at="")
+                self._update_voice_session(last_command=command, last_response="", live_response_text="", live_response_started_at="")
                 with self._lock:
                     self.workspace.add_chat_message("user", command)
                     self.workspace.avatar.set_state("thinking", expression="focused", message=f"Thinking about: {command}")

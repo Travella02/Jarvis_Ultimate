@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.2.0"
+APP_SHELL_VERSION = "0.2.1"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -56,6 +56,11 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "orb_speech_caption_typewriter",
         "true_orb_only_focus_mode",
         "edge_only_holographic_panels",
+        "realistic_3d_orb_core",
+        "soft_wake_sleep_brightness_ramp",
+        "caption_timing_lock",
+        "silent_natural_sleep_acknowledgement",
+        "stable_ring_particle_geometry",
     )
 
 

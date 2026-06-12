@@ -7,8 +7,8 @@ const DEFAULT_STATE = {
 };
 
 const PANEL_KEYS = ['runtime', 'voice', 'workspace', 'conversation', 'diagnostics'];
-const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v020';
-const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v020';
+const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v021';
+const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v021';
 
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
@@ -29,6 +29,20 @@ let motionLastFrame = 0;
 const motionAngles = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 };
 const motionSpeeds = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 };
 let motionTargets = motionProfileForState(DEFAULT_STATE.avatar.state);
+const visualColors = {
+  idle: { r: 47, g: 155, b: 255 },
+  sleeping: { r: 136, g: 148, b: 158 },
+  wake_listening: { r: 136, g: 148, b: 158 },
+  listening: { r: 37, g: 215, b: 255 },
+  transcribing: { r: 37, g: 215, b: 255 },
+  speaking: { r: 31, g: 117, b: 255 },
+  thinking: { r: 168, g: 85, b: 247 },
+  working: { r: 53, g: 191, b: 255 },
+  error: { r: 255, g: 77, b: 109 }
+};
+let colorLastFrame = 0;
+let colorCurrent = { ...visualColors.sleeping };
+let colorTarget = { ...visualColors.sleeping };
 
 const els = {
   bridgeStatus: document.getElementById('bridgeStatus'),
@@ -88,7 +102,7 @@ function titleCase(value) {
 function motionProfileForState(state) {
   const normalized = normalizeState(state);
   if (normalized === 'sleeping' || normalized === 'wake_listening') {
-    return { ringA: 4.2, ringB: -3.1, ringC: 3.6, particleA: 5.2, particleB: -3.8 };
+    return { ringA: 5.8, ringB: -4.3, ringC: 4.8, particleA: 6.2, particleB: -4.7 };
   }
   if (normalized === 'listening' || normalized === 'transcribing') {
     return { ringA: 13.5, ringB: -9.8, ringC: 12.0, particleA: 15.0, particleB: -11.2 };
@@ -105,19 +119,43 @@ function motionProfileForState(state) {
   return { ringA: 8.2, ringB: -6.0, ringC: 7.4, particleA: 9.0, particleB: -7.0 };
 }
 
+function visualColorForState(state) {
+  return visualColors[normalizeState(state)] || visualColors.idle;
+}
+
+function setColorTarget(state) {
+  colorTarget = { ...visualColorForState(state) };
+}
+
+function applyColorVariables() {
+  const style = document.body.style;
+  style.setProperty('--state-r', String(Math.round(colorCurrent.r)));
+  style.setProperty('--state-g', String(Math.round(colorCurrent.g)));
+  style.setProperty('--state-b', String(Math.round(colorCurrent.b)));
+}
+
+
 function setMotionTarget(state) {
   motionTargets = motionProfileForState(state);
 }
 
 function animateOrbMotion(timestamp = 0) {
   if (!motionLastFrame) motionLastFrame = timestamp;
+  if (!colorLastFrame) colorLastFrame = timestamp;
   const dt = Math.min(0.08, Math.max(0.001, (timestamp - motionLastFrame) / 1000));
+  const colorDt = Math.min(0.08, Math.max(0.001, (timestamp - colorLastFrame) / 1000));
   motionLastFrame = timestamp;
-  const blend = Math.min(1, dt * 0.85);
+  colorLastFrame = timestamp;
+  const blend = Math.min(1, dt * 0.62);
+  const colorBlend = Math.min(1, colorDt * 0.95);
   for (const key of Object.keys(motionSpeeds)) {
     motionSpeeds[key] += (motionTargets[key] - motionSpeeds[key]) * blend;
     motionAngles[key] = (motionAngles[key] + motionSpeeds[key] * dt) % 360;
   }
+  for (const key of Object.keys(colorCurrent)) {
+    colorCurrent[key] += (colorTarget[key] - colorCurrent[key]) * colorBlend;
+  }
+  applyColorVariables();
   const style = document.documentElement.style;
   style.setProperty('--ring-a-rot', `${motionAngles.ringA.toFixed(3)}deg`);
   style.setProperty('--ring-b-rot', `${motionAngles.ringB.toFixed(3)}deg`);
@@ -139,18 +177,41 @@ function findLatestJarvisMessage(workspace) {
 }
 
 function resolveOrbCaptionText(workspace, voice, avatar) {
+  const avatarState = normalizeState(avatar?.state || '');
   const liveText = String(voice?.live_response_text || '').trim();
   if (liveText) return liveText;
+
+  const lastCommand = String(voice?.last_command || '').trim();
   const lastResponse = String(voice?.last_response || '').trim();
+  const isNewTurnBeforeSpeech = lastCommand && !lastResponse && ['thinking', 'transcribing', 'listening'].includes(avatarState);
+  if (isNewTurnBeforeSpeech) return '';
+
+  if (avatarState === 'speaking' && lastResponse) return lastResponse;
   if (lastResponse) return lastResponse;
-  const latestJarvis = findLatestJarvisMessage(workspace);
-  if (latestJarvis) return latestJarvis;
+  return '';
+}
+
+function captionSignatureFor(workspace, voice, avatar, text) {
+  const liveStarted = String(voice?.live_response_started_at || '').trim();
+  const lastCommand = String(voice?.last_command || '').trim();
+  const lastTranscript = String(voice?.last_transcript || '').trim();
   const avatarState = normalizeState(avatar?.state || '');
-  if (avatarState === 'speaking') return String(avatar?.message || '').trim();
-  return 'Awaiting voice output.';
+  if (String(voice?.live_response_text || '').trim()) {
+    return `live|${liveStarted || lastCommand || lastTranscript || text}`;
+  }
+  if (String(voice?.last_response || '').trim()) {
+    return `held|${lastCommand || lastTranscript}|${String(voice?.last_response || '').trim()}`;
+  }
+  return `blank|${lastCommand || lastTranscript}|${avatarState}`;
 }
 
 function stepOrbCaption() {
+  if (!orbCaptionTarget) {
+    orbCaptionDisplayed = '';
+    if (els.orbCaptionText) els.orbCaptionText.textContent = '';
+    orbCaptionTimer = null;
+    return;
+  }
   if (orbCaptionDisplayed.length < orbCaptionTarget.length) {
     const remaining = orbCaptionTarget.length - orbCaptionDisplayed.length;
     const step = remaining > 90 ? 4 : remaining > 42 ? 3 : remaining > 16 ? 2 : 1;
@@ -164,19 +225,26 @@ function stepOrbCaption() {
 }
 
 function setOrbCaptionText(text, signature) {
-  const nextText = String(text || '').trim() || 'Awaiting voice output.';
-  const nextSignature = signature || nextText;
-  if (nextText === orbCaptionTarget && nextSignature === lastCaptionSignature) return;
+  const nextText = String(text || '').trim();
+  const nextSignature = signature || nextText || 'blank';
+  const sameSpeechTurn = nextSignature === lastCaptionSignature;
+  if (nextText === orbCaptionTarget && sameSpeechTurn) return;
 
-  const isIncrementalContinuation = nextText.startsWith(orbCaptionTarget) && nextSignature === lastCaptionSignature;
-  const isSameConversationGrowing = nextText.startsWith(orbCaptionDisplayed) && nextSignature === lastCaptionSignature;
-  orbCaptionTarget = nextText;
-  if (!isIncrementalContinuation && !isSameConversationGrowing) {
+  if (!sameSpeechTurn || nextText.length < orbCaptionDisplayed.length) {
+    if (orbCaptionTimer !== null) {
+      window.clearTimeout(orbCaptionTimer);
+      orbCaptionTimer = null;
+    }
     orbCaptionDisplayed = '';
+    if (els.orbCaptionText) els.orbCaptionText.textContent = '';
   }
+
+  orbCaptionTarget = nextText;
   lastCaptionSignature = nextSignature;
+  if (!nextText) return;
   if (orbCaptionTimer === null) stepOrbCaption();
 }
+
 
 function loadPanelVisibility() {
   const defaults = {
@@ -248,9 +316,9 @@ function setVisualState(state, message, label) {
     stateFadeTimer = window.setTimeout(() => document.body.classList.remove('state-fading'), 3100);
     activeVisualState = next;
   }
+  setColorTarget(next);
   setMotionTarget(next);
   renderBodyClasses(next);
-  if (next !== activeVisualState) activeVisualState = next;
   els.stateLabel.textContent = label || titleCase(next);
   els.stateMessage.textContent = message || 'Ready, sir.';
 }
@@ -324,7 +392,7 @@ function renderState(snapshot) {
   els.eventsLog.scrollTop = els.eventsLog.scrollHeight;
 
   const captionText = resolveOrbCaptionText(workspace, voice, avatar);
-  const captionSignature = String(voice.live_response_text ? voice.started_at || 'live' : voice.last_response ? voice.stopped_at || voice.last_command || captionText : captionText);
+  const captionSignature = captionSignatureFor(workspace, voice, avatar, captionText);
   setOrbCaptionText(captionText, captionSignature);
 
   maybeAutoStartSleepWake(lastState);
@@ -491,6 +559,8 @@ async function boot() {
   });
 
   updatePanelControls();
+  setColorTarget(DEFAULT_STATE.avatar.state);
+  applyColorVariables();
   window.requestAnimationFrame(animateOrbMotion);
   renderState({
     ...DEFAULT_STATE,
