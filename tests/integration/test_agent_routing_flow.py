@@ -7,6 +7,7 @@ if str(SRC) not in sys.path:
 
 
 import unittest
+from unittest.mock import patch
 from jarvis.core.lifecycle import JarvisRuntime
 
 
@@ -22,9 +23,11 @@ class TestAgentRoutingFlow(unittest.TestCase):
     def test_app_route_placeholder(self):
         runtime = JarvisRuntime()
         runtime.boot()
-        result = runtime.handle_command("open chrome")
+        with patch("jarvis.tools.shared.process_tools.subprocess.Popen"):
+            result = runtime.handle_command("open chrome")
         self.assertTrue(result.success)
         self.assertEqual(result.data["selected_agent"], "app_agent")
+        self.assertEqual(result.action, "open_target")
 
 
 if __name__ == "__main__":

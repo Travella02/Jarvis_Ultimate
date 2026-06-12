@@ -39,6 +39,7 @@ class JarvisRouter:
         llm_provider: Any | None = None,
         config: Any | None = None,
         short_term_memory: Any | None = None,
+        ability_registry: Any | None = None,
     ) -> None:
         self.registry = registry
         self.events = events or EventBus()
@@ -46,6 +47,7 @@ class JarvisRouter:
         self.llm_provider = llm_provider
         self.config = config
         self.short_term_memory = short_term_memory
+        self.ability_registry = ability_registry
 
     def handle(self, command: str, *, timing: Any | None = None, stream_callback: LLMStreamCallback | None = None) -> JarvisResult:
         self._mark(timing, "brain.router_received")
@@ -55,11 +57,14 @@ class JarvisRouter:
         self._mark(timing, "brain.classify_start")
         intent = self.classifier.classify(command)
         agent_name = INTENT_AGENT_MAP.get(intent.intent, "conversation_agent")
+        ability_selection = None
+        if self.ability_registry is not None and hasattr(self.ability_registry, "select_for_command"):
+            ability_selection = self.ability_registry.select_for_command(command, intent=intent.intent)
         self._mark(timing, "brain.classify_finished", intent=intent.intent, agent_name=agent_name)
         self.events.emit(
             "brain.intent_classified",
             source="brain.router",
-            data={"intent": intent.intent, "confidence": intent.confidence, "reason": intent.reason, "agent_name": agent_name},
+            data={"intent": intent.intent, "confidence": intent.confidence, "reason": intent.reason, "agent_name": agent_name, "ability_selection": ability_selection.to_dict() if ability_selection else None},
         )
 
         self._mark(timing, "brain.agent_lookup_start", agent_name=agent_name)
@@ -85,6 +90,8 @@ class JarvisRouter:
             "timing": timing,
             "stream_callback": stream_callback,
             "short_term_memory": self.short_term_memory,
+            "ability_registry": self.ability_registry,
+            "ability_selection": ability_selection,
         }
 
         try:
@@ -104,6 +111,10 @@ class JarvisRouter:
         result.data.setdefault("intent", intent.intent)
         result.data.setdefault("intent_confidence", intent.confidence)
         result.data.setdefault("selected_agent", agent_name)
+        if ability_selection is not None:
+            result.data.setdefault("ability_selection", ability_selection.to_dict())
+        for event in result.events:
+            self.events.emit(event.event_type, source=event.source, message=event.message, data=event.data)
         self.events.emit("agent.finished", source=agent_name, message=result.message, data=result.data)
         self.events.emit("jarvis.response_ready", source="brain.router", message=result.message, data={"success": result.success})
         self._mark(timing, "brain.response_ready", success=result.success)

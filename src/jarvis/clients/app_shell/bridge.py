@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.2.1"
+APP_SHELL_VERSION = "0.3.0"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -61,6 +61,10 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "caption_timing_lock",
         "silent_natural_sleep_acknowledgement",
         "stable_ring_particle_geometry",
+        "ability_registry_foundation",
+        "safe_app_launcher_ability",
+        "project_file_search_ability",
+        "ui_action_cards",
     )
 
 
@@ -96,6 +100,8 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
             "stt_provider": "unknown",
             "agent_count": 0,
             "agents": [],
+            "ability_count": 0,
+            "abilities": [],
         }
 
     registry = getattr(runtime, "registry", None)
@@ -105,6 +111,14 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
             names = list(registry.names(enabled_only=True))
         except Exception:  # pragma: no cover - defensive bridge boundary
             names = []
+
+    ability_registry = getattr(runtime, "ability_registry", None)
+    abilities: list[dict[str, Any]] = []
+    if ability_registry is not None and hasattr(ability_registry, "to_list"):
+        try:
+            abilities = list(ability_registry.to_list(enabled_only=True))
+        except Exception:  # pragma: no cover - defensive bridge boundary
+            abilities = []
 
     return {
         "started": bool(getattr(runtime, "started", False)),
@@ -116,6 +130,8 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
         "stt_enabled": bool(getattr(getattr(runtime, "stt_manager", None), "enabled", False)),
         "agent_count": len(names),
         "agents": names,
+        "ability_count": len(abilities),
+        "abilities": abilities,
     }
 
 

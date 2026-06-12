@@ -1,7 +1,7 @@
 const DEFAULT_STATE = {
   avatar: { state: 'sleeping', label: 'Sleep Mode', message: 'Waiting for wake phrase.' },
   runtime: { llm_provider: 'unknown', llm_model: 'unknown', tts_provider: 'unknown', stt_provider: 'unknown', agent_count: 0 },
-  workspace: { chat_messages: [], events: [], panels: {} },
+  workspace: { chat_messages: [], events: [], panels: {}, workspace_cards: [] },
   app: { bridge_status: 'offline', api_url: 'http://127.0.0.1:8765' },
   voice: { mode: 'idle', running: false, last_transcript: '', last_status: 'Ready.', warmup_complete: false, warmup_status: 'Voice warmup has not run yet.' }
 };
@@ -59,6 +59,7 @@ const els = {
   ttsStatus: document.getElementById('ttsStatus'),
   agentStatus: document.getElementById('agentStatus'),
   panelList: document.getElementById('panelList'),
+  actionCardList: document.getElementById('actionCardList'),
   chatLog: document.getElementById('chatLog'),
   eventsLog: document.getElementById('eventsLog'),
   commandForm: document.getElementById('commandForm'),
@@ -342,6 +343,26 @@ function renderVoice(voice) {
   els.stopVoiceButton.disabled = !running;
 }
 
+
+function renderActionCards(cards) {
+  if (!els.actionCardList) return;
+  const recentCards = (cards || []).slice(-5).reverse();
+  els.actionCardList.innerHTML = recentCards.length
+    ? recentCards.map(card => {
+        const payload = card.payload || {};
+        const status = payload.status || 'ready';
+        const target = payload.target || '';
+        const message = payload.message || '';
+        return `<article class="ability-action-card status-${escapeHtml(status)}">`
+          + `<span class="action-kicker">${escapeHtml(status)}</span>`
+          + `<strong>${escapeHtml(card.title || 'Jarvis Action')}</strong>`
+          + `${target ? `<em>${escapeHtml(target)}</em>` : ''}`
+          + `${message ? `<p>${escapeHtml(message)}</p>` : ''}`
+          + `</article>`;
+      }).join('')
+    : '<div class="empty-action-card">Ability action cards will appear here when Jarvis uses a tool.</div>';
+}
+
 function chatRoleClass(role) {
   const normalized = normalizeState(role || 'jarvis');
   if (normalized === 'user') return 'user';
@@ -374,6 +395,8 @@ function renderState(snapshot) {
   els.panelList.innerHTML = panels.length
     ? panels.map(panel => `<li><strong>${escapeHtml(panel.title)}</strong><br>${escapeHtml(panel.panel_id)} · ${panel.is_open ? 'open' : 'ready'}</li>`).join('')
     : '<li>No panels registered yet.</li>';
+
+  renderActionCards(workspace.workspace_cards || []);
 
   const chats = workspace.chat_messages || [];
   els.chatLog.innerHTML = chats.length

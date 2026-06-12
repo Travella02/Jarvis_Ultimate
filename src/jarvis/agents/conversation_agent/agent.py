@@ -31,15 +31,17 @@ class Agent:
 
         if intent_name == "status":
             agent_count = len(registry.enabled_records()) if registry else 0
+            ability_registry = context.get("ability_registry")
+            ability_count = ability_registry.count(enabled_only=True) if ability_registry is not None and hasattr(ability_registry, "count") else 0
             llm_provider = context.get("llm_provider")
             provider_name = getattr(llm_provider, "provider_name", "unknown") if llm_provider else "none"
             provider_model = getattr(llm_provider, "model", "unknown") if llm_provider else "none"
             streaming = getattr(llm_provider, "streaming_enabled", False) if llm_provider else False
             return JarvisResult.ok(
-                f"Jarvis 3 core is online. Agent registry is active with {agent_count} enabled agents. LLM provider: {provider_name} ({provider_model}). Streaming: {'enabled' if streaming else 'disabled'}.",
+                f"Jarvis 3 core is online. Agent registry is active with {agent_count} enabled agents and {ability_count} registered abilities. LLM provider: {provider_name} ({provider_model}). Streaming: {'enabled' if streaming else 'disabled'}.",
                 agent_name=self.name,
                 action="status",
-                data={"enabled_agent_count": agent_count, "llm_provider": provider_name, "llm_model": provider_model, "llm_streaming": streaming},
+                data={"enabled_agent_count": agent_count, "enabled_ability_count": ability_count, "llm_provider": provider_name, "llm_model": provider_model, "llm_streaming": streaming},
             )
 
         if intent_name == "list_agents":
@@ -47,11 +49,18 @@ class Agent:
                 return JarvisResult.fail("The agent registry is not available.", agent_name=self.name, action="list_agents")
             agents = registry.enabled_records()
             lines = [f"{record.display_name} ({record.name})" for record in agents]
+            ability_registry = context.get("ability_registry")
+            ability_lines = []
+            if ability_registry is not None and hasattr(ability_registry, "all"):
+                ability_lines = [f"{ability.display_name} [{ability.agent_name}]" for ability in ability_registry.all(enabled_only=True)]
+            message = "Available agents: " + "; ".join(lines)
+            if ability_lines:
+                message += ". Abilities: " + "; ".join(ability_lines)
             return JarvisResult.ok(
-                "Available agents: " + "; ".join(lines),
+                message,
                 agent_name=self.name,
                 action="list_agents",
-                data={"agents": [record.name for record in agents]},
+                data={"agents": [record.name for record in agents], "abilities": ability_lines},
             )
 
         return self._handle_general_chat(command, context=context)

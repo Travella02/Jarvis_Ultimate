@@ -8,6 +8,7 @@ import itertools
 
 from jarvis.agents.conversation_agent.prompts import get_prompt_stats, get_system_prompt, normalize_prompt_mode
 from jarvis.brain.router import JarvisRouter
+from jarvis.abilities.registry import AbilityRegistry
 from jarvis.core.config import JarvisConfig
 from jarvis.core.events import EventBus
 from jarvis.core.logging import JarvisLogger
@@ -31,6 +32,7 @@ class JarvisRuntime:
         self.events = EventBus()
         self.logger = JarvisLogger(self.config.logs_dir)
         self.registry = AgentRegistry()
+        self.ability_registry = AbilityRegistry()
         self.llm_provider = llm_provider or create_llm_provider(self.config)
         self.tts_manager = tts_manager or TTSManager(self.config, events=self.events)
         self.stt_manager = stt_manager or STTManager(self.config, events=self.events)
@@ -59,12 +61,14 @@ class JarvisRuntime:
     def boot(self) -> JarvisResult:
         self.events.emit("jarvis.boot_started", source="lifecycle", message="Jarvis boot started.")
         self.registry.load_builtin_agents()
+        self.ability_registry.load_from_agent_registry(self.registry)
         self.router = JarvisRouter(
             registry=self.registry,
             events=self.events,
             llm_provider=self.llm_provider,
             config=self.config,
             short_term_memory=self.short_term_memory,
+            ability_registry=self.ability_registry,
         )
         self.started = True
         stt_warmup_result = None
@@ -80,6 +84,8 @@ class JarvisRuntime:
             action="boot",
             data={
                 "agents": agent_names,
+                "abilities": self.ability_registry.names(enabled_only=True),
+                "ability_count": self.ability_registry.count(enabled_only=True),
                 "llm_provider": getattr(self.llm_provider, "provider_name", "unknown"),
                 "llm_model": getattr(self.llm_provider, "model", "unknown"),
                 "llm_streaming": getattr(self.llm_provider, "streaming_enabled", False),

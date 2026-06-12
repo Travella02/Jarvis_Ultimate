@@ -28,7 +28,7 @@ class IntentClassifier:
         if text in {"status", "system status", "jarvis status"} or "are you online" in text:
             return IntentResult("status", 0.95, "Status phrase detected.")
 
-        if any(text.startswith(prefix) for prefix in ["open ", "launch ", "start app ", "close ", "switch to "]):
+        if any(text.startswith(prefix) for prefix in ["open ", "launch ", "start app ", "open website ", "open site ", "close ", "switch to "]):
             return IntentResult("app_control", 0.85, "App control trigger detected.")
 
         if any(phrase in text for phrase in ["screen", "read this", "look at this", "what does this say", "what am i looking at"]):
@@ -43,7 +43,7 @@ class IntentClassifier:
         if any(phrase in text for phrase in ["remember", "save this", "store this", "memory"]):
             return IntentResult("memory_write", 0.75, "Memory phrase detected.")
 
-        if any(phrase in text for phrase in ["file", "folder", "storage", "delete", "move this"]):
+        if any(phrase in text for phrase in ["search project files", "find file", "project status", "jarvis project status", "file", "folder", "storage", "delete", "move this"]):
             return IntentResult("file_task", 0.7, "File/storage phrase detected.")
 
         if any(phrase in text for phrase in ["record", "clip that", "start recording", "stop recording"]):
