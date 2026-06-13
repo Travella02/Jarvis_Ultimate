@@ -65,6 +65,9 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "safe_app_launcher_ability",
         "project_file_search_ability",
         "ui_action_cards",
+        "test_safe_app_agent_dry_run",
+        "registry_app_path_discovery",
+        "app_shell_tool_response_tts_fallback",
     )
 
 

@@ -1,0 +1,70 @@
+{
+  "aliases": {
+    "calculator": {
+      "aliases": [
+        "calc",
+        "calculator"
+      ],
+      "launch_type": "known",
+      "learned_alias": "calculator",
+      "learned_at": 1781310152.2662292,
+      "learned_source": "close_success",
+      "name": "calculator",
+      "path": "",
+      "process_names": [
+        "calc.exe"
+      ],
+      "source": "known"
+    },
+    "chrome": {
+      "aliases": [
+        "browser",
+        "chrome",
+        "google",
+        "google browser",
+        "google chrome"
+      ],
+      "launch_type": "known",
+      "learned_alias": "chrome",
+      "learned_at": 1781310126.7713242,
+      "learned_source": "close_success",
+      "name": "chrome",
+      "path": "",
+      "process_names": [
+        "chrome.exe"
+      ],
+      "source": "known"
+    },
+    "notepad": {
+      "aliases": [
+        "notepad"
+      ],
+      "launch_type": "known",
+      "learned_alias": "notepad",
+      "learned_at": 1781309923.0089674,
+      "learned_source": "launch_success",
+      "name": "notepad",
+      "path": "",
+      "process_names": [
+        "notepad.exe"
+      ],
+      "source": "known"
+    },
+    "snipping tool": {
+      "aliases": [
+        "Snipping Tool",
+        "snipping tool"
+      ],
+      "launch_type": "aumid",
+      "learned_alias": "snipping tool",
+      "learned_at": 1781310364.5876732,
+      "learned_source": "close_success",
+      "name": "Snipping Tool",
+      "path": "Microsoft.ScreenSketch_8wekyb3d8bbwe!App",
+      "process_names": [],
+      "source": "start_apps"
+    }
+  },
+  "updated_at": 1781310364.5876732,
+  "version": 1
+}

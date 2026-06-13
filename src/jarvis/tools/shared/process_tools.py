@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import os
 import platform
 import re
+import sys
 import subprocess
 import webbrowser
 from typing import Any
@@ -40,10 +42,10 @@ KNOWN_APP_COMMANDS: dict[str, dict[str, list[str] | str]] = {
     "vs code": {"windows": ["code"], "darwin": ["open", "-a", "Visual Studio Code"], "default": ["code"]},
     "vscode": {"windows": ["code"], "darwin": ["open", "-a", "Visual Studio Code"], "default": ["code"]},
     "visual studio code": {"windows": ["code"], "darwin": ["open", "-a", "Visual Studio Code"], "default": ["code"]},
-    "chrome": {"windows": ["chrome"], "darwin": ["open", "-a", "Google Chrome"], "default": ["google-chrome"]},
-    "google chrome": {"windows": ["chrome"], "darwin": ["open", "-a", "Google Chrome"], "default": ["google-chrome"]},
-    "edge": {"windows": ["msedge"], "darwin": ["open", "-a", "Microsoft Edge"], "default": ["microsoft-edge"]},
-    "microsoft edge": {"windows": ["msedge"], "darwin": ["open", "-a", "Microsoft Edge"], "default": ["microsoft-edge"]},
+    "chrome": {"windows": ["cmd", "/c", "start", "", "chrome"], "darwin": ["open", "-a", "Google Chrome"], "default": ["google-chrome"]},
+    "google chrome": {"windows": ["cmd", "/c", "start", "", "chrome"], "darwin": ["open", "-a", "Google Chrome"], "default": ["google-chrome"]},
+    "edge": {"windows": ["cmd", "/c", "start", "", "msedge"], "darwin": ["open", "-a", "Microsoft Edge"], "default": ["microsoft-edge"]},
+    "microsoft edge": {"windows": ["cmd", "/c", "start", "", "msedge"], "darwin": ["open", "-a", "Microsoft Edge"], "default": ["microsoft-edge"]},
     "powershell": {"windows": ["powershell.exe"], "default": ["pwsh"]},
     "terminal": {"windows": ["wt.exe"], "darwin": ["open", "-a", "Terminal"], "default": ["x-terminal-emulator"]},
 }
@@ -117,13 +119,30 @@ def command_for_known_app(app_name: str, *, project_root: str | Path | None = No
     return command
 
 
+
+def _truthy(value: object) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _running_under_test_process() -> bool:
+    argv = " ".join(str(part).lower() for part in sys.argv)
+    return "unittest" in argv or "pytest" in argv
+
+
+def _effective_dry_run(dry_run: bool) -> bool:
+    if _truthy(os.environ.get("JARVIS_ALLOW_OS_LAUNCH_DURING_TESTS")):
+        return bool(dry_run)
+    return bool(dry_run) or _truthy(os.environ.get("JARVIS_APP_AGENT_DRY_RUN")) or _running_under_test_process()
+
 def launch_known_app(app_name: str, *, project_root: str | Path | None = None, dry_run: bool = False) -> LaunchResult:
     normalized = normalize_app_name(app_name)
     command = command_for_known_app(normalized, project_root=project_root)
     if command is None:
         known = ", ".join(sorted(set(KNOWN_APP_COMMANDS)))
         return LaunchResult(False, f"I do not have a safe launcher configured for '{clean_launch_target(app_name)}' yet. Known apps: {known}.", target=normalized, errors=["unknown_app"])
-    if dry_run:
+    if _effective_dry_run(dry_run):
         return LaunchResult(True, f"Ready to open {normalized}.", target=normalized, command=command)
     try:
         subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603 - allowlisted commands only
@@ -138,7 +157,7 @@ def open_website(target: str, *, dry_run: bool = False) -> LaunchResult:
     url = normalize_url(target)
     if not (looks_like_url_or_domain(url) or url.lower().startswith(("http://", "https://")) or url in KNOWN_WEBSITES.values()):
         return LaunchResult(False, f"I could not recognize '{target}' as a safe website yet.", target=target, launch_type="website", errors=["unknown_website"])
-    if dry_run:
+    if _effective_dry_run(dry_run):
         return LaunchResult(True, f"Ready to open {url}.", target=url, launch_type="website", command=url)
     try:
         opened = webbrowser.open(url)

@@ -147,10 +147,18 @@ def curated_ability_for_tool(tool_name: str, *, agent_name: str, intent: str, pe
     curated: dict[str, dict[str, Any]] = {
         "launcher": {
             "display_name": "Open Apps and Websites",
-            "description": "Open safe known desktop apps, project folders, and websites.",
+            "description": "Open desktop apps by learned aliases, safe known commands, Start Menu shortcuts, and close matches on the computer.",
             "risk_level": "safe",
-            "triggers": ["open", "launch", "start", "open app", "open website", "open project folder"],
-            "examples": ["Jarvis, open VS Code", "Jarvis, open the project folder"],
+            "triggers": ["open", "launch", "start", "run", "open app", "open website", "open project folder"],
+            "examples": ["Jarvis, open VS Code", "Jarvis, launch Chrome", "Jarvis, open the project folder"],
+            "permissions": ["app_control"],
+        },
+        "app_closer": {
+            "display_name": "Close Apps",
+            "description": "Close matching running desktop applications without force-closing critical system processes.",
+            "risk_level": "safe",
+            "triggers": ["close", "quit", "exit", "close app", "close window", "shut down app"],
+            "examples": ["Jarvis, close Chrome", "Jarvis, quit Notepad"],
             "permissions": ["app_control"],
         },
         "process_checker": {

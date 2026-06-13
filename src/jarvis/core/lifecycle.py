@@ -340,16 +340,12 @@ class JarvisRuntime:
             spoken_stream = self.spoken_pipeline.create_stream_adapter(stream_callback, enabled=True)
             callback = spoken_stream
         chat_result = self.handle_command(command, stream_callback=callback)
-        spoken_chunks = 0
-        if spoken_stream is not None:
-            spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
-            self.events.emit(
-                "voice.speech_playback_wait_started",
-                source="lifecycle",
-                message="Waiting for spoken response playback to finish.",
-                data={"spoken_chunks": spoken_chunks},
-            )
-            self.spoken_pipeline.wait_until_idle(timeout=120.0)
+        spoken_chunks = self._finish_spoken_result(
+            chat_result,
+            spoken_stream=spoken_stream,
+            wait_timeout=120.0,
+            wait_message="Waiting for spoken response playback to finish.",
+        )
 
         data = dict(chat_result.data)
         data.update(
@@ -466,9 +462,7 @@ class JarvisRuntime:
             callback = spoken_stream
 
         chat_result = self.handle_command(transcript, stream_callback=callback)
-        spoken_chunks = 0
-        if spoken_stream is not None:
-            spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
+        spoken_chunks = self._finish_spoken_result(chat_result, spoken_stream=spoken_stream, wait_timeout=30.0)
 
         data = dict(chat_result.data)
         data.update(
@@ -595,11 +589,12 @@ class JarvisRuntime:
                 spoken_stream = self.spoken_pipeline.create_stream_adapter(stream_callback, enabled=True)
                 callback = spoken_stream
             chat_result = self.handle_command(command, stream_callback=callback)
-            spoken_chunks = 0
-            if spoken_stream is not None:
-                spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
-                # Avoid immediately recording Jarvis's own speech on the next turn.
-                self.spoken_pipeline.wait_until_idle(timeout=30.0)
+            spoken_chunks = self._finish_spoken_result(
+                chat_result,
+                spoken_stream=spoken_stream,
+                wait_timeout=30.0,
+                wait_message="Waiting for spoken response playback to finish before the next listening turn.",
+            )
             if chat_result.success:
                 turns_handled += 1
                 self.events.emit(
@@ -790,10 +785,12 @@ class JarvisRuntime:
                 spoken_stream = self.spoken_pipeline.create_stream_adapter(stream_callback, enabled=True)
                 callback = spoken_stream
             chat_result = self.handle_command(command, stream_callback=callback)
-            spoken_chunks = 0
-            if spoken_stream is not None:
-                spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
-                self.spoken_pipeline.wait_until_idle(timeout=30.0)
+            spoken_chunks = self._finish_spoken_result(
+                chat_result,
+                spoken_stream=spoken_stream,
+                wait_timeout=30.0,
+                wait_message="Waiting for spoken response playback to finish before the next wake/sleep turn.",
+            )
 
             if chat_result.success:
                 turns_handled += 1
@@ -1105,6 +1102,35 @@ class JarvisRuntime:
         provider = "kokoro" if self.tts_manager.provider_name == "kokoro" else "xtts"
         result = self.tts_manager.say(text, play_audio=play_audio, voice_name=voice_name, provider_override=provider, allow_fallback=False)
         return format_tts_result(result)
+
+    def _finish_spoken_result(
+        self,
+        result: JarvisResult,
+        *,
+        spoken_stream: Any | None,
+        wait_timeout: float = 30.0,
+        wait_message: str = "Waiting for spoken response playback to finish.",
+    ) -> int:
+        """Flush streamed speech and speak non-streamed agent results too.
+
+        LLM chat can speak while text streams. Tool/agent actions usually return
+        a complete message at once, so without this helper Jarvis silently shows
+        the response but does not read it aloud.
+        """
+
+        spoken_chunks = 0
+        if spoken_stream is not None:
+            spoken_chunks = spoken_stream.finish(speak_remaining=bool(result.success and result.action == "llm_chat"))
+            if result.action != "llm_chat" and result.message:
+                spoken_chunks += self.spoken_pipeline.enqueue_text(result.message, source=f"{result.agent_name}.{result.action}")
+            self.events.emit(
+                "voice.speech_playback_wait_started",
+                source="lifecycle",
+                message=wait_message,
+                data={"spoken_chunks": spoken_chunks, "action": result.action, "agent_name": result.agent_name},
+            )
+            self.spoken_pipeline.wait_until_idle(timeout=wait_timeout)
+        return spoken_chunks
 
     def create_spoken_stream(self, display_callback=None):
         """Create a stream callback adapter for live spoken responses."""

@@ -12,8 +12,8 @@ from jarvis.agents.file_agent.agent import Agent as FileAgent
 
 class TestAppFileAbilities030(unittest.TestCase):
     def test_app_agent_launches_known_app_with_action_card(self) -> None:
-        with patch("jarvis.tools.shared.process_tools.subprocess.Popen") as popen:
-            result = AppAgent().handle("open notepad", context={"config": SimpleNamespace(project_root=Path.cwd())})
+        with patch.dict("os.environ", {"JARVIS_ALLOW_OS_LAUNCH_DURING_TESTS": "1"}), patch("jarvis.tools.shared.process_tools.subprocess.Popen") as popen:
+            result = AppAgent().handle("open notepad", context={"config": SimpleNamespace(project_root=Path.cwd()), "allow_os_launch_during_tests": True})
 
         self.assertTrue(result.success)
         self.assertEqual(result.action, "open_target")

@@ -601,10 +601,25 @@ class LocalJarvisAPI:
                 chat_result = self.runtime.handle_command(command, stream_callback=callback)
                 spoken_chunks = 0
                 if spoken_stream is not None:
-                    spoken_chunks = spoken_stream.finish(speak_remaining=bool(chat_result.success and chat_result.action == "llm_chat"))
                     self._set_voice_visual("Jarvis is finishing speech playback...", state="speaking", expression="active")
-                    self.runtime.spoken_pipeline.wait_until_idle(timeout=120.0)
+                    spoken_chunks = self.runtime._finish_spoken_result(
+                        chat_result,
+                        spoken_stream=spoken_stream,
+                        wait_timeout=120.0,
+                        wait_message="Waiting for app-shell spoken response playback to finish before the next sleep/wake turn.",
+                    )
                 response_text = "".join(chunks).strip() or chat_result.message
+                if response_text and speak and self.runtime.tts_manager.enabled and chat_result.action != "llm_chat" and spoken_chunks <= 0:
+                    # Safety fallback for complete, non-streamed tool/agent replies.
+                    # These responses do not produce LLM stream chunks, so make sure
+                    # Jarvis still says them out loud instead of only typing them.
+                    self._update_voice_session(live_response_text=response_text, last_response=response_text, live_response_started_at=_utc_now_iso())
+                    self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+                    try:
+                        self.runtime.tts_manager.say(response_text, play_audio=True)
+                        spoken_chunks = 1
+                    except Exception as exc:  # pragma: no cover - defensive TTS fallback
+                        self.runtime.events.emit("voice.app_shell_tool_tts_failed", source="app_shell", message=str(exc), data={"command": command, "response": response_text})
                 last_response = response_text
                 with self._lock:
                     self.workspace.add_chat_message("jarvis", response_text)

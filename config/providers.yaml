@@ -84,11 +84,14 @@ providers:
     default: faster_whisper
     enabled: true
     fallback_providers: mock
-    model: base.en
-    # 0.0.9c keeps CPU/int8 as the default stable path. GPU can still be
-    # tested later by setting device: auto or cuda after CUDA DLLs are configured.
-    device: cpu
-    compute_type: int8
+    # 0.2.3e upgrades live recognition to a clearer English model while
+    # keeping settings configurable from .env. On machines with usable CUDA,
+    # device:auto selects GPU/float16; otherwise it falls back to CPU/int8.
+    # Use JARVIS_STT_MODEL=large-v3 later if you want maximum accuracy and can
+    # accept the extra VRAM/load time.
+    model: medium.en
+    device: auto
+    compute_type: auto
     gpu_fallback_to_cpu: true
     device_index: 0
     warmup_on_boot: false

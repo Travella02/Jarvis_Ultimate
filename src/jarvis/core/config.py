@@ -304,7 +304,7 @@ class JarvisConfig:
     stt_enabled: bool = True
     stt_provider: str = "faster_whisper"
     stt_fallback_providers: str = "mock"
-    stt_model: str = "base.en"
+    stt_model: str = "medium.en"
     stt_device: str = "auto"
     stt_compute_type: str = "auto"
     stt_gpu_fallback_to_cpu: bool = True
@@ -458,7 +458,7 @@ class JarvisConfig:
             stt_enabled=_as_bool(_setting(_ENV_ALIASES["stt_enabled"], env_file, stt_config.get("enabled", "true")), default=True),
             stt_provider=str(_setting(_ENV_ALIASES["stt_provider"], env_file, stt_config.get("default", "faster_whisper"))).strip().lower(),
             stt_fallback_providers=str(_setting(_ENV_ALIASES["stt_fallback_providers"], env_file, stt_config.get("fallback_providers", "mock"))),
-            stt_model=str(_setting(_ENV_ALIASES["stt_model"], env_file, stt_config.get("model", "base.en"))),
+            stt_model=str(_setting(_ENV_ALIASES["stt_model"], env_file, stt_config.get("model", "medium.en"))),
             stt_device=str(_setting(_ENV_ALIASES["stt_device"], env_file, stt_config.get("device", "auto"))).strip().lower(),
             stt_compute_type=str(_setting(_ENV_ALIASES["stt_compute_type"], env_file, stt_config.get("compute_type", "auto"))).strip().lower(),
             stt_gpu_fallback_to_cpu=_as_bool(_setting(_ENV_ALIASES["stt_gpu_fallback_to_cpu"], env_file, stt_config.get("gpu_fallback_to_cpu", "true")), default=True),
