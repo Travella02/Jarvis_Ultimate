@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.0"
+APP_SHELL_VERSION = "0.2.4a"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -68,6 +68,11 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "test_safe_app_agent_dry_run",
         "registry_app_path_discovery",
         "app_shell_tool_response_tts_fallback",
+        "thinking_state_purple_orb_fix",
+        "background_app_index_warmup",
+        "fast_known_app_alias_resolution",
+        "llm_assisted_router_fallback_guard",
+        "snipping_tool_fast_aliases",
     )
 
 

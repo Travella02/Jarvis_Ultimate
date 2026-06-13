@@ -13,15 +13,18 @@ import platform
 import re
 import subprocess
 import sys
+import threading
 import time
 from typing import Any, Iterable
 
 from jarvis.tools.shared.process_tools import KNOWN_APP_COMMANDS, LaunchResult, command_for_known_app, launch_known_app
 
 _ALIAS_VERSION = 1
-_INDEX_VERSION = 4
+_INDEX_VERSION = 6
 _INDEX_TTL_SECONDS = 7 * 24 * 60 * 60
 _MAX_EXECUTABLE_SCAN_RESULTS = 750
+_INDEX_WARMUP_LOCK = threading.Lock()
+_INDEX_WARMUP_THREADS: dict[str, threading.Thread] = {}
 
 _EXECUTABLE_SUFFIXES = {".exe", ".lnk", ".url", ".app"}
 _SKIP_NAME_PARTS = {
@@ -94,6 +97,12 @@ BUILTIN_APP_ALIASES: dict[str, str] = {
     "notepad": "notepad",
     "powershell": "powershell",
     "terminal": "terminal",
+    "snipping tool": "snipping tool",
+    "snip": "snipping tool",
+    "snip tool": "snipping tool",
+    "screen snip": "snipping tool",
+    "screen clipping": "snipping tool",
+    "screenshot tool": "snipping tool",
 }
 
 # Process names and likely Windows install paths for common apps.  These do not
@@ -114,6 +123,9 @@ KNOWN_APP_PROCESS_NAMES: dict[str, list[str]] = {
     "explorer": ["explorer.exe"],
     "powershell": ["powershell.exe", "pwsh.exe"],
     "terminal": ["WindowsTerminal.exe", "wt.exe"],
+    "snipping tool": ["SnippingTool.exe", "ScreenSketch.exe"],
+    "snip": ["SnippingTool.exe", "ScreenSketch.exe"],
+    "screen snip": ["SnippingTool.exe", "ScreenSketch.exe"],
 }
 
 WINDOWS_COMMON_EXECUTABLES: dict[str, list[str]] = {
@@ -142,6 +154,10 @@ WINDOWS_COMMON_EXECUTABLES: dict[str, list[str]] = {
         r"%APPDATA%\Spotify\Spotify.exe",
         r"%LOCALAPPDATA%\Microsoft\WindowsApps\Spotify.exe",
     ],
+    "snipping tool": [
+        r"%WINDIR%\System32\SnippingTool.exe",
+        r"%LOCALAPPDATA%\Microsoft\WindowsApps\SnippingTool.exe",
+    ],
 }
 
 WINDOWS_TITLE_ALIASES: dict[str, list[str]] = {
@@ -153,6 +169,8 @@ WINDOWS_TITLE_ALIASES: dict[str, list[str]] = {
     "vscode": ["visual studio code", "code"],
     "visual studio code": ["visual studio code", "code"],
     "edge": ["microsoft edge", "edge"],
+    "snipping tool": ["snipping tool", "screen snip", "snip"],
+    "snip": ["snipping tool", "screen snip", "snip"],
 }
 
 _APP_VERB_RE = re.compile(
@@ -311,8 +329,50 @@ def normalize_query(value: str) -> str:
     return " ".join(text.split())
 
 
+
+def start_app_index_warmup(project_root: str | Path, *, force_refresh: bool = False) -> bool:
+    """Start a background app-index scan without blocking Jarvis startup.
+
+    The smart app agent already checks learned aliases and fast known launchers
+    first.  This warmup fills ``data/app_agent/app_index.json`` in the
+    background so slower Windows/system apps such as Snipping Tool are much
+    faster after startup.  It is intentionally disabled during tests/dry runs so
+    the full suite never spawns PowerShell app discovery or opens anything.
+    """
+
+    if _effective_dry_run(False):
+        return False
+    root = str(Path(project_root).resolve())
+    with _INDEX_WARMUP_LOCK:
+        existing = _INDEX_WARMUP_THREADS.get(root)
+        if existing is not None and existing.is_alive():
+            return False
+
+        def _worker() -> None:
+            try:
+                discover_apps(root, force_refresh=force_refresh, test_safe=False)
+            finally:
+                with _INDEX_WARMUP_LOCK:
+                    _INDEX_WARMUP_THREADS.pop(root, None)
+
+        thread = threading.Thread(target=_worker, name="jarvis-app-index-warmup", daemon=True)
+        _INDEX_WARMUP_THREADS[root] = thread
+        thread.start()
+        return True
+
+
+def refresh_app_index(project_root: str | Path) -> list[AppCandidate]:
+    """Synchronously rebuild the app index for diagnostics/manual refresh."""
+
+    return discover_apps(project_root, force_refresh=True, test_safe=_effective_dry_run(False))
+
 def discover_apps(project_root: str | Path, *, force_refresh: bool = False, test_safe: bool = False) -> list[AppCandidate]:
-    """Return known, cached, and discovered app candidates."""
+    """Return known, cached, and discovered app candidates.
+
+    The full index is meant for background warmup and rare fallbacks.  Normal
+    app launches should resolve from learned aliases, built-ins, or the quick
+    launcher scan first so Jarvis feels fast on any Windows machine.
+    """
 
     store = AppAliasStore(project_root)
     candidates = _known_app_candidates()
@@ -325,6 +385,24 @@ def discover_apps(project_root: str | Path, *, force_refresh: bool = False, test
         discovered = cached
     merged = _dedupe_candidates([*candidates, *discovered])
     return merged
+
+
+def discover_quick_apps(*, test_safe: bool = False) -> list[AppCandidate]:
+    """Return fast, non-recursive launcher candidates.
+
+    This is the first-run speed path for SaaS-style installs. It reads cheap
+    launch surfaces such as known paths, registry App Paths, PATH, Start Menu
+    shortcuts, desktop shortcuts, and WindowsApps. It intentionally avoids the
+    deep Program Files recursive scan so commands like "open Discord" or
+    "open Photoshop" can resolve quickly on a new computer when possible.
+    """
+
+    system = platform.system().lower()
+    if system == "windows":
+        return _quick_windows_app_candidates(test_safe=test_safe)
+    if system == "darwin":
+        return _scan_macos_apps()
+    return _scan_linux_apps()
 
 
 def resolve_app_target(target: str, project_root: str | Path, *, force_refresh: bool = False, dry_run: bool = False) -> AppMatch:
@@ -340,29 +418,38 @@ def resolve_app_target(target: str, project_root: str | Path, *, force_refresh: 
         return AppMatch(AppCandidate.from_dict(learned_aliases[query]), 1.0, "learned_alias", query, learned=True)
 
     builtin_key = BUILTIN_APP_ALIASES.get(query)
-    if dry_run and builtin_key:
+    safe_scan = _effective_dry_run(dry_run)
+
+    # Fast path: learned/built-in aliases should not trigger a full deep scan.
+    # This keeps commands like "open snipping tool" from waiting on StartApps or
+    # Program Files traversal when a safe known command/common path already
+    # exists.  Unknown apps still fall through to the full discovery index.
+    if builtin_key:
+        fast_match = _best_candidate_match(query, _fast_known_candidates(builtin_key))
+        if fast_match.candidate is not None and fast_match.score >= 0.62:
+            fast_match.source = "builtin_alias"
+            return fast_match
         candidate = _candidate_for_known_key(builtin_key)
         if candidate is not None:
             return AppMatch(candidate, 0.98, "builtin_alias", query)
 
-    safe_scan = _effective_dry_run(dry_run)
+    # Fast general search before the deep index.  This is what lets Jarvis
+    # work well on different computers without a hand-written alias for every
+    # app.  If the background index has already warmed up, the cached full index
+    # will still be used below; this quick pass avoids a one-minute first-use
+    # scan for most Start Menu/registry/PATH apps.
+    quick_candidates = _dedupe_candidates([*_known_app_candidates(), *discover_quick_apps(test_safe=safe_scan)])
+    quick_best = _best_candidate_match(query, quick_candidates)
+    if quick_best.candidate is not None and quick_best.score >= 0.68:
+        return quick_best
+
     candidates = discover_apps(project_root, force_refresh=force_refresh, test_safe=safe_scan)
 
-    # Prefer a real discovered launcher over a generic shell command.  This is
-    # especially important for Chrome and VS Code, where the app may not be in
-    # PATH even though it is installed.  In dry-run/test mode, the builtin branch
-    # above returns before shell-based discovery so tests never spawn apps or
-    # PowerShell discovery processes.
     if builtin_key:
         discovered_match = _best_candidate_match(query, [candidate for candidate in candidates if candidate.launch_type != "known"])
         if discovered_match.candidate is not None and discovered_match.score >= 0.62:
-            # Keep the public match source deterministic for tests/telemetry while
-            # still using the better real discovered launcher internally.
             discovered_match.source = "builtin_alias"
             return discovered_match
-        candidate = _candidate_for_known_key(builtin_key)
-        if candidate is not None:
-            return AppMatch(candidate, 0.98, "builtin_alias", query)
 
     best = _best_candidate_match(query, candidates)
     if best.candidate is not None and best.score >= 0.54:
@@ -387,7 +474,14 @@ def _best_candidate_match(query: str, candidates: Iterable[AppCandidate]) -> App
         aliases = _candidate_aliases(candidate)
         for alias in aliases:
             score = _match_score(query, alias)
-            if score > best_score:
+            better_score = score > best_score
+            tie_prefers_real_launcher = (
+                abs(score - best_score) < 0.0001
+                and best_candidate is not None
+                and best_candidate.launch_type == "known"
+                and candidate.launch_type != "known"
+            )
+            if better_score or tie_prefers_real_launcher:
                 best_candidate = candidate
                 best_score = score
                 best_source = f"match:{alias}"
@@ -461,6 +555,27 @@ def _known_app_candidates() -> list[AppCandidate]:
     return candidates
 
 
+
+def _fast_known_candidates(app_key: str) -> list[AppCandidate]:
+    """Return cheap candidates for a known app without deep scanning.
+
+    This intentionally avoids Get-StartApps, recursive Start Menu scans, and
+    Program Files traversal.  It uses allowlisted commands, known install paths,
+    registry App Paths, and PATH lookups only.
+    """
+
+    candidates: list[AppCandidate] = []
+    system = platform.system().lower()
+    if system == "windows":
+        candidates.extend(_windows_common_executable_candidates())
+        candidates.extend(_windows_registry_app_paths_candidates())
+        candidates.extend(_windows_path_candidates())
+    # Put the generic allowlisted command last so a real path/AUMID wins ties.
+    known = _candidate_for_known_key(app_key)
+    if known is not None:
+        candidates.append(known)
+    return _dedupe_candidates(candidates)
+
 def _aliases_for_known_key(key: str) -> set[str]:
     normalized = normalize_query(key)
     aliases = {normalized, key}
@@ -482,6 +597,36 @@ def _scan_common_app_locations(*, test_safe: bool = False) -> list[AppCandidate]
     if system == "darwin":
         return _scan_macos_apps()
     return _scan_linux_apps()
+
+
+def _quick_windows_app_candidates(*, test_safe: bool = False) -> list[AppCandidate]:
+    """Cheap Windows app discovery for foreground command handling."""
+
+    candidates: list[AppCandidate] = []
+    candidates.extend(_windows_common_executable_candidates())
+    candidates.extend(_windows_registry_app_paths_candidates())
+    candidates.extend(_windows_path_candidates())
+
+    shortcut_dirs = [
+        os.environ.get("PROGRAMDATA", "") and Path(os.environ["PROGRAMDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+        os.environ.get("APPDATA", "") and Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+        os.environ.get("USERPROFILE", "") and Path(os.environ["USERPROFILE"]) / "Desktop",
+        os.environ.get("PUBLIC", "") and Path(os.environ["PUBLIC"]) / "Desktop",
+    ]
+    for root in shortcut_dirs:
+        if root:
+            candidates.extend(_scan_paths(Path(root), suffixes={".lnk", ".url"}, recursive=True, source="quick_shortcut", max_depth=6))
+
+    windows_apps = os.environ.get("LOCALAPPDATA", "") and Path(os.environ["LOCALAPPDATA"]) / "Microsoft" / "WindowsApps"
+    if windows_apps:
+        candidates.extend(_scan_paths(Path(windows_apps), suffixes={".exe"}, recursive=False, source="quick_windowsapps"))
+
+    # Get-StartApps is useful, but it can be slower than shortcut/registry
+    # discovery.  Keep it out of test mode and use it only in the background/full
+    # scan path when possible.
+    if not test_safe and _truthy(os.environ.get("JARVIS_APP_DISCOVERY_QUICK_STARTAPPS")):
+        candidates.extend(_windows_start_apps_candidates())
+    return _dedupe_candidates(candidates)
 
 
 def _scan_windows_apps(*, test_safe: bool = False) -> list[AppCandidate]:
@@ -532,10 +677,10 @@ def _windows_common_executable_candidates() -> list[AppCandidate]:
                 continue
             candidates.append(
                 AppCandidate(
-                    name=_display_name_from_path(expanded),
+                    name=app_key,
                     path=str(expanded),
                     launch_type="path",
-                    aliases=aliases,
+                    aliases=sorted({*aliases, _display_name_from_path(expanded), expanded.stem}),
                     source="known_path",
                     process_names=_known_process_names_for_name(app_key) or _process_names_from_path(expanded),
                 )
@@ -601,9 +746,10 @@ def _windows_registry_app_paths_candidates() -> list[AppCandidate]:
                 mapped_key = BUILTIN_APP_ALIASES.get(normalized_name, BUILTIN_APP_ALIASES.get(normalize_query(path.stem), normalized_name))
                 aliases = _aliases_for_known_key(mapped_key)
                 aliases.update({display_name, path.stem, exe_name, normalized_name})
+                display_label = mapped_key if mapped_key in set(BUILTIN_APP_ALIASES.values()) else display_name
                 candidates.append(
                     AppCandidate(
-                        name=display_name,
+                        name=display_label,
                         path=str(path),
                         launch_type="path",
                         aliases=sorted(alias for alias in aliases if alias),
@@ -628,10 +774,10 @@ def _windows_path_candidates() -> list[AppCandidate]:
             checked.add(key)
             candidates.append(
                 AppCandidate(
-                    name=_display_name_from_path(path),
+                    name=app_key,
                     path=str(path),
                     launch_type="path",
-                    aliases=sorted({app_key, *[alias for alias, mapped in BUILTIN_APP_ALIASES.items() if mapped == app_key], path.stem}),
+                    aliases=sorted({app_key, _display_name_from_path(path), *[alias for alias, mapped in BUILTIN_APP_ALIASES.items() if mapped == app_key], path.stem}),
                     source="path",
                     process_names=_known_process_names_for_name(app_key) or _process_names_from_path(path),
                 )

@@ -26,8 +26,8 @@
       ],
       "launch_type": "known",
       "learned_alias": "chrome",
-      "learned_at": 1781310126.7713242,
-      "learned_source": "close_success",
+      "learned_at": 1781319961.9730563,
+      "learned_source": "launch_success",
       "name": "chrome",
       "path": "",
       "process_names": [
@@ -35,13 +35,69 @@
       ],
       "source": "known"
     },
+    "could you open google chrome for me": {
+      "aliases": [
+        "browser",
+        "chrome",
+        "chrome.exe",
+        "google",
+        "google browser",
+        "google chrome"
+      ],
+      "launch_type": "path",
+      "learned_alias": "could you open google chrome for me",
+      "learned_at": 1781319903.2210763,
+      "learned_source": "launch_success",
+      "name": "chrome",
+      "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "process_names": [
+        "chrome.exe"
+      ],
+      "source": "known_path"
+    },
+    "discord": {
+      "aliases": [
+        "Update",
+        "discord"
+      ],
+      "launch_type": "path",
+      "learned_alias": "discord",
+      "learned_at": 1781320138.753263,
+      "learned_source": "launch_success",
+      "name": "discord",
+      "path": "C:\\Users\\tanne\\AppData\\Local\\Discord\\Update.exe",
+      "process_names": [
+        "Update.exe"
+      ],
+      "source": "known_path"
+    },
+    "google": {
+      "aliases": [
+        "browser",
+        "chrome",
+        "chrome.exe",
+        "google",
+        "google browser",
+        "google chrome"
+      ],
+      "launch_type": "path",
+      "learned_alias": "google",
+      "learned_at": 1781319970.5431633,
+      "learned_source": "close_success",
+      "name": "chrome",
+      "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "process_names": [
+        "chrome.exe"
+      ],
+      "source": "known_path"
+    },
     "notepad": {
       "aliases": [
         "notepad"
       ],
       "launch_type": "known",
       "learned_alias": "notepad",
-      "learned_at": 1781309923.0089674,
+      "learned_at": 1781319902.235434,
       "learned_source": "launch_success",
       "name": "notepad",
       "path": "",
@@ -57,14 +113,30 @@
       ],
       "launch_type": "aumid",
       "learned_alias": "snipping tool",
-      "learned_at": 1781310364.5876732,
+      "learned_at": 1781319952.2445333,
       "learned_source": "close_success",
       "name": "Snipping Tool",
       "path": "Microsoft.ScreenSketch_8wekyb3d8bbwe!App",
       "process_names": [],
       "source": "start_apps"
+    },
+    "spotify": {
+      "aliases": [
+        "Spotify",
+        "spotify"
+      ],
+      "launch_type": "path",
+      "learned_alias": "spotify",
+      "learned_at": 1781320050.506233,
+      "learned_source": "launch_success",
+      "name": "spotify",
+      "path": "C:\\Users\\tanne\\AppData\\Local\\Microsoft\\WindowsApps\\Spotify.exe",
+      "process_names": [
+        "Spotify.exe"
+      ],
+      "source": "known_path"
     }
   },
-  "updated_at": 1781310364.5876732,
+  "updated_at": 1781320138.753263,
   "version": 1
 }
