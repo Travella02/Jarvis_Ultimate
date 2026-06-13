@@ -20,7 +20,7 @@ from typing import Any, Iterable
 from jarvis.tools.shared.process_tools import KNOWN_APP_COMMANDS, LaunchResult, command_for_known_app, launch_known_app
 
 _ALIAS_VERSION = 1
-_INDEX_VERSION = 6
+_INDEX_VERSION = 7
 _INDEX_TTL_SECONDS = 7 * 24 * 60 * 60
 _MAX_EXECUTABLE_SCAN_RESULTS = 750
 _INDEX_WARMUP_LOCK = threading.Lock()
@@ -103,6 +103,8 @@ BUILTIN_APP_ALIASES: dict[str, str] = {
     "screen snip": "snipping tool",
     "screen clipping": "snipping tool",
     "screenshot tool": "snipping tool",
+    "discord": "discord",
+    "spotify": "spotify",
 }
 
 # Process names and likely Windows install paths for common apps.  These do not
@@ -126,6 +128,8 @@ KNOWN_APP_PROCESS_NAMES: dict[str, list[str]] = {
     "snipping tool": ["SnippingTool.exe", "ScreenSketch.exe"],
     "snip": ["SnippingTool.exe", "ScreenSketch.exe"],
     "screen snip": ["SnippingTool.exe", "ScreenSketch.exe"],
+    "discord": ["Discord.exe", "Update.exe"],
+    "spotify": ["Spotify.exe"],
 }
 
 WINDOWS_COMMON_EXECUTABLES: dict[str, list[str]] = {
@@ -147,8 +151,9 @@ WINDOWS_COMMON_EXECUTABLES: dict[str, list[str]] = {
         r"%ProgramFiles(x86)%\Microsoft VS Code\Code.exe",
     ],
     "discord": [
-        r"%LOCALAPPDATA%\Discord\Update.exe",
+        r"%LOCALAPPDATA%\Discord\app-*\Discord.exe",
         r"%LOCALAPPDATA%\Programs\Discord\Discord.exe",
+        r"%LOCALAPPDATA%\Discord\Update.exe",
     ],
     "spotify": [
         r"%APPDATA%\Spotify\Spotify.exe",
@@ -171,6 +176,8 @@ WINDOWS_TITLE_ALIASES: dict[str, list[str]] = {
     "edge": ["microsoft edge", "edge"],
     "snipping tool": ["snipping tool", "screen snip", "snip"],
     "snip": ["snipping tool", "screen snip", "snip"],
+    "discord": ["discord"],
+    "spotify": ["spotify"],
 }
 
 _APP_VERB_RE = re.compile(
@@ -379,12 +386,13 @@ def discover_apps(project_root: str | Path, *, force_refresh: bool = False, test
     cached = None if force_refresh else store.load_index()
     if cached is None:
         discovered = _scan_common_app_locations(test_safe=test_safe)
+        merged = _dedupe_candidates([*candidates, *discovered])
         if not test_safe:
-            store.save_index(discovered)
-    else:
-        discovered = cached
-    merged = _dedupe_candidates([*candidates, *discovered])
-    return merged
+            # Cache the merged launcher index so future natural-language app
+            # requests can resolve quickly without repeating directory scans.
+            store.save_index(merged)
+        return merged
+    return _dedupe_candidates([*candidates, *cached])
 
 
 def discover_quick_apps(*, test_safe: bool = False) -> list[AppCandidate]:
@@ -667,25 +675,42 @@ def _scan_windows_apps(*, test_safe: bool = False) -> list[AppCandidate]:
     return _dedupe_candidates(candidates)
 
 
+def _expand_windows_environment_vars(template: str) -> str:
+    def repl(match: re.Match[str]) -> str:
+        return os.environ.get(match.group(1), match.group(0))
+    return re.sub(r"%([^%]+)%", repl, os.path.expandvars(template))
+
+
+def _expanded_windows_template_paths(template: str) -> list[Path]:
+    expanded_text = _expand_windows_environment_vars(template).replace("\\", os.sep)
+    if "*" not in expanded_text and "?" not in expanded_text:
+        path = Path(expanded_text)
+        return [path] if path.exists() else []
+    try:
+        import glob
+        matches = [Path(match) for match in glob.glob(expanded_text)]
+    except Exception:
+        matches = []
+    return [path for path in sorted(matches, key=lambda item: str(item).lower(), reverse=True) if path.exists()]
+
+
 def _windows_common_executable_candidates() -> list[AppCandidate]:
     candidates: list[AppCandidate] = []
     for app_key, templates in WINDOWS_COMMON_EXECUTABLES.items():
         aliases = sorted(_aliases_for_known_key(app_key))
         for template in templates:
-            expanded = Path(os.path.expandvars(template))
-            if not expanded.exists():
-                continue
-            candidates.append(
-                AppCandidate(
-                    name=app_key,
-                    path=str(expanded),
-                    launch_type="path",
-                    aliases=sorted({*aliases, _display_name_from_path(expanded), expanded.stem}),
-                    source="known_path",
-                    process_names=_known_process_names_for_name(app_key) or _process_names_from_path(expanded),
+            for expanded in _expanded_windows_template_paths(template):
+                candidates.append(
+                    AppCandidate(
+                        name=app_key,
+                        path=str(expanded),
+                        launch_type="path",
+                        aliases=sorted({*aliases, _display_name_from_path(expanded), expanded.stem}),
+                        source="known_path",
+                        process_names=_known_process_names_for_name(app_key) or _process_names_from_path(expanded),
+                    )
                 )
-            )
-    return candidates
+    return _dedupe_candidates(candidates)
 
 
 def _windows_registry_app_paths_candidates() -> list[AppCandidate]:
@@ -976,7 +1001,10 @@ def _launch_path(candidate: AppCandidate, *, dry_run: bool = False) -> LaunchRes
     try:
         system = platform.system().lower()
         if system == "windows":
-            os.startfile(str(path))  # type: ignore[attr-defined] # noqa: S606 - user-requested local app launch
+            if normalize_query(candidate.name) == "discord" and path.name.lower() == "update.exe":
+                subprocess.Popen([str(path), "--processStart", "Discord.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603
+            else:
+                os.startfile(str(path))  # type: ignore[attr-defined] # noqa: S606 - user-requested local app launch
         elif system == "darwin":
             subprocess.Popen(["open", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603
         else:

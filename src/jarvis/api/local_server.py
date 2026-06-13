@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import time
 from pathlib import Path
 import threading
 from typing import Any
@@ -138,6 +139,7 @@ class LocalJarvisAPI:
             for record in self.runtime.registry.enabled_records():
                 self.workspace.set_agent_status(record.name, "registered")
             self.workspace.add_notice("Local app-shell API bridge initialized.")
+            self._start_app_index_warmup()
             self._ensure_app_shell_voice_warmup(result)
             self.workspace.add_notice("Voice bridge ready: one-turn and sleep/wake controls are available.")
             self._booted = True
@@ -150,6 +152,21 @@ class LocalJarvisAPI:
             "runtime_started": bool(getattr(self.runtime, "started", False)),
             "voice": self.voice_session_snapshot(),
         }
+
+    def _start_app_index_warmup(self) -> None:
+        """Warm the desktop app index in the background without blocking voice startup."""
+
+        try:
+            started = start_app_index_warmup(self.runtime.config.project_root)
+            if started:
+                self.runtime.events.emit("app.index_warmup_started", source="local_api", message="Background app index warmup started.")
+                with self._lock:
+                    self.workspace.add_notice("Background app discovery warmup started.")
+        except Exception as exc:  # pragma: no cover - noncritical app index warmup boundary
+            try:
+                self.runtime.events.emit("app.index_warmup_failed", source="local_api", message=str(exc))
+            except Exception:
+                pass
 
     def _ensure_app_shell_voice_warmup(self, boot_result: JarvisResult | None = None) -> None:
         """Warm STT/TTS before the app shell accepts voice conversation.
@@ -196,11 +213,7 @@ class LocalJarvisAPI:
         with self._lock:
             self.workspace.add_notice("Voice systems warmed and ready.")
             self.workspace.avatar.set_state("sleeping", expression="calm", message="Voice systems warmed and ready. Entering sleep/wake mode, sir.")
-            try:
-                start_app_index_warmup(self.config.project_root)
-                self.events.emit("app.index_warmup_started", source="local_api", message="Background app index warmup started.")
-            except Exception:
-                pass
+            self._start_app_index_warmup()
 
     def _warm_voice_managers_for_app_shell(self) -> str:
         lines = ["App-shell voice warmup:"]
@@ -406,6 +419,26 @@ class LocalJarvisAPI:
             self.workspace.avatar.set_state(visual_state, expression=expression, message=status_message)
         self._update_voice_session(last_status=status_message)
 
+    def _stage_live_speech_caption(self, text: str, *, lead_seconds: float = 0.16) -> None:
+        """Expose short non-streamed responses to the app shell before audio starts.
+
+        App/tool responses are complete strings rather than LLM token streams. Without
+        this tiny lead, a short spoken result can finish before Electron's next poll,
+        making the caption appear after Jarvis is already done talking.
+        """
+
+        response = str(text or "").strip()
+        if not response:
+            return
+        self._update_voice_session(
+            live_response_text=response,
+            last_response=response,
+            live_response_started_at=_utc_now_iso(),
+        )
+        self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+        if lead_seconds > 0:
+            time.sleep(lead_seconds)
+
     def _run_voice_once_session(self, options: dict[str, Any]) -> None:
         chunks: list[str] = []
         transcript_seen = {"value": ""}
@@ -605,6 +638,20 @@ class LocalJarvisAPI:
                     spoken_stream = self.runtime.spoken_pipeline.create_stream_adapter(on_chunk, enabled=True)
                     callback = spoken_stream
                 chat_result = self.runtime.handle_command(command, stream_callback=callback)
+                early_response_text = "".join(chunks).strip() or chat_result.message
+                non_streamed_tool_response = bool(
+                    early_response_text
+                    and speak
+                    and self.runtime.tts_manager.enabled
+                    and chat_result.action != "llm_chat"
+                    and not chunks
+                )
+                if non_streamed_tool_response:
+                    # Stage complete app/tool replies before the spoken pipeline starts
+                    # playback. Without this, short actions like "Closing calculator"
+                    # can finish speaking before Electron sees the text, so the orb
+                    # caption appears only after Jarvis returns to listening.
+                    self._stage_live_speech_caption(early_response_text, lead_seconds=0.22)
                 spoken_chunks = 0
                 if spoken_stream is not None:
                     self._set_voice_visual("Jarvis is finishing speech playback...", state="speaking", expression="active")
@@ -614,13 +661,12 @@ class LocalJarvisAPI:
                         wait_timeout=120.0,
                         wait_message="Waiting for app-shell spoken response playback to finish before the next sleep/wake turn.",
                     )
-                response_text = "".join(chunks).strip() or chat_result.message
+                response_text = "".join(chunks).strip() or early_response_text
                 if response_text and speak and self.runtime.tts_manager.enabled and chat_result.action != "llm_chat" and spoken_chunks <= 0:
                     # Safety fallback for complete, non-streamed tool/agent replies.
                     # These responses do not produce LLM stream chunks, so make sure
                     # Jarvis still says them out loud instead of only typing them.
-                    self._update_voice_session(live_response_text=response_text, last_response=response_text, live_response_started_at=_utc_now_iso())
-                    self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+                    self._stage_live_speech_caption(response_text)
                     try:
                         self.runtime.tts_manager.say(response_text, play_audio=True)
                         spoken_chunks = 1

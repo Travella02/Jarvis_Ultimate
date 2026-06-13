@@ -7,7 +7,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "calculator",
-      "learned_at": 1781310152.2662292,
+      "learned_at": 1781329166.2359285,
       "learned_source": "close_success",
       "name": "calculator",
       "path": "",
@@ -26,7 +26,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "chrome",
-      "learned_at": 1781319961.9730563,
+      "learned_at": 1781328994.3245504,
       "learned_source": "launch_success",
       "name": "chrome",
       "path": "",
@@ -46,7 +46,7 @@
       ],
       "launch_type": "path",
       "learned_alias": "could you open google chrome for me",
-      "learned_at": 1781319903.2210763,
+      "learned_at": 1781329094.4088416,
       "learned_source": "launch_success",
       "name": "chrome",
       "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -62,7 +62,7 @@
       ],
       "launch_type": "path",
       "learned_alias": "discord",
-      "learned_at": 1781320138.753263,
+      "learned_at": 1781324285.40798,
       "learned_source": "launch_success",
       "name": "discord",
       "path": "C:\\Users\\tanne\\AppData\\Local\\Discord\\Update.exe",
@@ -97,7 +97,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "notepad",
-      "learned_at": 1781319902.235434,
+      "learned_at": 1781329093.1899114,
       "learned_source": "launch_success",
       "name": "notepad",
       "path": "",
@@ -106,6 +106,20 @@
       ],
       "source": "known"
     },
+    "rocket league": {
+      "aliases": [
+        "Rocket League",
+        "Rocket League"
+      ],
+      "launch_type": "path",
+      "learned_alias": "rocket league",
+      "learned_at": 1781329405.2411616,
+      "learned_source": "close_success",
+      "name": "Rocket League",
+      "path": "C:\\Users\\tanne\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Steam\\Rocket League.url",
+      "process_names": [],
+      "source": "quick_shortcut"
+    },
     "snipping tool": {
       "aliases": [
         "Snipping Tool",
@@ -113,7 +127,7 @@
       ],
       "launch_type": "aumid",
       "learned_alias": "snipping tool",
-      "learned_at": 1781319952.2445333,
+      "learned_at": 1781324378.9727511,
       "learned_source": "close_success",
       "name": "Snipping Tool",
       "path": "Microsoft.ScreenSketch_8wekyb3d8bbwe!App",
@@ -127,8 +141,8 @@
       ],
       "launch_type": "path",
       "learned_alias": "spotify",
-      "learned_at": 1781320050.506233,
-      "learned_source": "launch_success",
+      "learned_at": 1781324346.7384288,
+      "learned_source": "close_success",
       "name": "spotify",
       "path": "C:\\Users\\tanne\\AppData\\Local\\Microsoft\\WindowsApps\\Spotify.exe",
       "process_names": [
@@ -137,6 +151,6 @@
       "source": "known_path"
     }
   },
-  "updated_at": 1781320138.753263,
+  "updated_at": 1781329405.2411616,
   "version": 1
 }

@@ -15,7 +15,7 @@ class AppShellOrbRealismCaption021Tests(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_version_and_new_capabilities(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.2.4a")
+        self.assertEqual(APP_SHELL_VERSION, "0.2.5")
         capabilities = app_shell_capabilities()
         self.assertIn("realistic_3d_orb_core", capabilities)
         self.assertIn("soft_wake_sleep_brightness_ramp", capabilities)
