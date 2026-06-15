@@ -1,188 +1,125 @@
 # Jarvis Ultimate Handoff Instructions
 
-## Current Version
+This file exists so a future ChatGPT project chat can quickly understand the current state of Jarvis Ultimate and continue without losing momentum.
 
-**0.2.9 — Always-On Memory Tiers + Chat Archive Foundation**
+## Current project status
 
-Latest hotfix applied in this chat: **0.2.9b — Memory Response De-Dupe + Chat Scroll Comfort**
+Current committed milestone: **0.2.9 — Always-On Memory Tiers + Chat Archive Foundation**
 
-Jarvis Ultimate is a local-first desktop assistant project with a native Electron app shell, voice bridge, Jarvis orb UI, App Agent, and foundational memory pipeline.
+The latest requested task after 0.2.9 was to update `README.md` so the project can be made public on GitHub for job-search/portfolio purposes.
 
-## Standing Patch Rules
+Next planned main milestone: **0.3.0 — Memory Auto-Capture + Candidate Review**
 
-- Provide downloadable patch zip packages, not pasted code.
-- Include an installer script named like `apply_<version>_<description>_patch.py`.
-- Include all replacement files inside `patch_files/`.
-- Do not include README files outside `patch_files/`.
-- Do not include `START_HERE` files.
-- Include patch notes and a testing guide inside `patch_files/`.
-- Explain the apply steps directly in chat every time.
-- Run the full test suite before delivery:
-  `python -m unittest discover -s tests -v`
-- Include the tested result in the delivery message.
-- For future Jarvis versions, after `0.2.9`, the next main version is `0.3.0`, not `0.2.10`.
-- Update this handoff file with every patch.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Hotfixes may use suffixes like `0.2.9a`.
 
-## Project Direction
+## User patch/package preferences
 
-Jarvis is intended to be an always-on assistant that can stay running for weeks or months at a time. Future versions will control security systems, cameras, screen awareness, routines, and other long-running services. Do not rely on restarts for memory flushing, cleanup, indexing, or persistence.
+For every Jarvis patch/update/fix package:
 
-Memory and runtime systems should use:
+- Do not paste large code blocks in chat.
+- Provide downloadable patch/replacement files.
+- Include an installer script named like `apply_<version>_<summary>_patch.py`.
+- Include a `patch_files/` folder.
+- Include patch notes inside the patch package.
+- Include a user-facing testing guide inside the patch package.
+- Include direct “how to apply the patch” steps in the chat response.
+- Run or validate the test suite before delivery whenever possible:
+  ```powershell
+  python -m unittest discover -s tests -v
+  ```
+- Do not include `START_HERE` files in patch packages.
+- Do not include README files outside `patch_files/` in patch packages.
+- Keep this handoff file updated with every patch.
 
-- incremental saves
-- crash-safe writes
-- daily log/archive files
-- background or uptime-safe maintenance
-- bounded in-memory buffers
-- retention and rotation policies
-- explicit user control for saved memories
+## Current architecture summary
 
-## Current Core Capabilities
+Jarvis Ultimate is a local-first AI assistant with:
 
-### Native App Shell / UI
+- Python backend/runtime,
+- Electron desktop app shell,
+- local bridge API,
+- LM Studio-compatible local LLM integration,
+- Faster Whisper STT,
+- Kokoro TTS,
+- sleep/wake voice loop,
+- animated orb UI,
+- modular agents,
+- App Agent,
+- Memory Agent,
+- early File Agent foundation/placeholders,
+- always-on memory foundation.
 
-- Electron desktop app shell, not browser-based.
-- HTML/CSS/JS Jarvis orb interface.
-- Orb-only mode.
-- Holographic dark UI.
-- Smooth state animations for sleeping, listening, thinking, speaking, and error.
-- Speech captions under the orb, synced while Jarvis speaks.
-- Hide/show panels.
-- Chat panel no longer forces scroll while manually reading older messages.
+## App Agent current state
 
-### Voice
+The App Agent is mostly complete for now.
 
-- Faster Whisper STT.
-- Kokoro TTS.
-- Sleep/wake mode auto-starts after warmup.
-- Wake phrases include “Jarvis,” “Hey Jarvis,” and similar.
-- Sleep phrases include “that’s all Jarvis” and natural thank-you endings.
-- Jarvis should address the user as “sir.”
+Current abilities:
 
-### App Agent
+- open apps,
+- close apps,
+- focus/switch apps,
+- app discovery/cache,
+- taskkill fallback for app closing,
+- launch verification,
+- learned aliases,
+- multiple aliases per app,
+- default roles like browser/music/editor,
+- list/forget/change aliases.
 
-The App Agent is solid enough to pause for now.
+Possible future App Agent improvements:
 
-It supports:
+- window resize/move/minimize/maximize,
+- app picker when multiple close matches exist,
+- richer action cards,
+- better cross-platform support beyond Windows.
 
-- opening apps
-- closing apps with safe taskkill fallback
-- focusing/switching to already-open apps
-- app launch verification
-- learned app aliases
-- multiple aliases per app
-- default app roles like browser/music/editor
-- listing aliases
-- forgetting aliases/nicknames/names/app names
-- routing phrases like “when I say music or jams, open Spotify”
-- prioritizing learned aliases over broad discovery
+## Memory pipeline current state
 
-Future App Agent improvements can include window resizing/moving/minimizing, but those can wait.
+Current memory abilities:
 
-### Memory Pipeline
+- explicit long-term memory save/search/forget,
+- short-term memory with expiration,
+- daily chat archive files,
+- crash-safe JSON writes,
+- LLM-based chat archive summarization,
+- memory status command,
+- incremental always-on memory persistence.
 
-0.2.8 added explicit long-term memory.
+Known memory design goals:
 
-0.2.9 adds always-on memory tiers:
+- Jarvis will eventually run for weeks or months at a time.
+- Do not rely on restarts for memory processing or cleanup.
+- Memory should persist incrementally while running.
+- Future memory should include automatic memory candidate detection, candidate review, promotion/rejection, entity memory, people/pets/projects/apps/places, and eventually face identity memory.
 
-- rolling short-term conversation memory for current context
-- short-term fact memory that lasts a few days
-- permanent long-term memory
-- daily chat archive memory saved as JSONL
-- memory maintenance foundation
-- crash-safe JSON writes for memory tier files
-- chat archive search commands
-- temporary memory commands
+## Next recommended update
 
-Important memory files:
+**0.3.0 Memory Auto-Capture + Candidate Review**
 
-- `data/memory/long_term_memory.json`
-- `data/memory/short_term_memory.json`
-- `data/memory/chat_archive/YYYY-MM-DD.jsonl`
-- `data/memory/maintenance_status.json`
+Recommended goals:
 
-## Latest Update Summary — 0.2.9 / 0.2.9a / 0.2.9b
+- add candidate memory queue,
+- auto-save useful short-term context,
+- score candidate memories by importance,
+- add review commands:
+  - “what memories are waiting for review?”
+  - “save that permanently”
+  - “forget that candidate”
+  - “promote that to long-term memory”
+- keep sensitive/private memory behavior user-controlled,
+- keep everything local-first and always-on safe.
 
-0.2.9 added:
+## Public GitHub README update
 
-- `src/jarvis/memory/always_on.py`
-- `ShortTermFactStore`
-- `ChatArchiveStore`
-- `MemoryMaintenance`
-- config options for short-term fact memory and chat archive memory
-- daily chat archive persistence for every handled command
-- temporary memory commands such as “remember this for a few days”
-- chat archive search phrases such as “what did we talk about…”
-- memory tier status in runtime/app-shell snapshots
-- tests for memory tiers and chat archive persistence
+A new public-facing `README.md` was created to present Jarvis Ultimate as a portfolio/job-search project. It explains:
 
-0.2.9a hotfix improved:
+- project purpose,
+- current capabilities,
+- architecture,
+- setup,
+- testing,
+- privacy/local data handling,
+- version history,
+- roadmap,
+- recruiter/reviewer notes.
 
-- memory search responses so they sound human instead of like database dumps
-- chat archive responses so they summarize naturally instead of listing raw `You:` / `Jarvis:` turns
-- memory status responses so they hide raw file paths and read more naturally
-- long-term memory configuration so `0` means no fixed record cap
-- project defaults so long-term memory is not artificially capped at 500 records
-
-0.2.9b hotfix improved:
-
-- memory search de-duplication so partial matches like “your favorite test color” do not repeat beside the full fact
-- chat archive responses so they stay short and conversational instead of reading long transcript excerpts
-- chat panel scrolling so manual scrolling is not pulled back to the newest message while the user is reading
-
-## Next Recommended Step
-
-The next major version should be:
-
-**0.3.0 — File Agent Foundation**
-
-Suggested 0.3.0 goals:
-
-- find files by name
-- open files
-- open folders
-- search the Jarvis project
-- summarize project files
-- list recent project files
-- use confirmation for write/delete/move operations
-- connect file operations to memory where useful
-
-Memory roadmap after 0.3.0:
-
-- automatic memory candidate detection
-- memory review queue
-- promotion from short-term to long-term
-- entity memory for people, pets, places, apps, and projects
-- face/person memory integration when vision is added
-- semantic/vector search later
-
-## User Preferences To Preserve
-
-- The user prefers patch zips with installer scripts and `patch_files/`.
-- The user does not want code pasted into chat.
-- Apply steps should be written directly in chat.
-- Patch notes and testing guides must be included.
-- No README or START_HERE files outside patch files.
-- Jarvis should call the user “sir.”
-- Jarvis should be local-first and always-on.
-- Natural speech should route through the LLM/agent system; slash commands may bypass.
-- UI should feel like a real Jarvis interface, not a browser or demo dashboard.
-
-
-## Latest Hotfix: 0.2.9c Memory Chat Archive Test Compatibility
-
-- 0.2.9c is a small hotfix on top of the uncommitted 0.2.9 memory update.
-- It keeps the 0.2.9b shorter chat archive summaries, but makes the wording start naturally with “I remember…” so existing humanization tests and Jarvis tone expectations both match.
-- It keeps chat archive replies short and avoids transcript dumps.
-- Current commit target remains: `0.2.9 Add always-on memory tiers and chat archive`.
-- After 0.2.9 is committed, the next main version should be `0.3.0`, not `0.2.10`.
-
-## Latest Hotfix: 0.2.9d LLM Chat Archive Summary
-
-- 0.2.9d is a small hotfix on top of the uncommitted 0.2.9 memory update.
-- It changes chat archive search answers so Jarvis uses the attached local LLM to summarize relevant chat archive turns when available.
-- The chat archive remains the evidence source, but the LLM turns that evidence into a short, natural spoken answer instead of Jarvis stitching together awkward log fragments.
-- If the LLM is unavailable, Jarvis falls back to a safer deterministic summary that stays short and avoids raw transcript dumps.
-- It also keeps memory response de-duplication behavior so partial facts do not repeat beside complete facts.
-- Current commit target remains: `0.2.9 Add always-on memory tiers and chat archive`.
-- After 0.2.9 is committed, the next main version should be `0.3.0`, not `0.2.10`.
