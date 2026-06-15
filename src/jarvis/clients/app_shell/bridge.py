@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.2.7"
+APP_SHELL_VERSION = "0.2.8"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -89,6 +89,10 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "default_app_roles",
         "app_focus_existing_windows",
         "alias_forget_list_rename_commands",
+        "long_term_memory_pipeline_foundation",
+        "memory_agent_store_search_forget",
+        "memory_context_injection",
+        "project_handoff_file_maintained",
     )
 
 
@@ -144,6 +148,9 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
         except Exception:  # pragma: no cover - defensive bridge boundary
             abilities = []
 
+    long_term_memory = getattr(runtime, "long_term_memory", None)
+    short_term_memory = getattr(runtime, "short_term_memory", None)
+
     return {
         "started": bool(getattr(runtime, "started", False)),
         "llm_provider": getattr(getattr(runtime, "llm_provider", None), "provider_name", "unknown"),
@@ -156,6 +163,10 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
         "agents": names,
         "ability_count": len(abilities),
         "abilities": abilities,
+        "memory": {
+            "short_term": short_term_memory.status() if short_term_memory is not None and hasattr(short_term_memory, "status") else {},
+            "long_term": long_term_memory.status() if long_term_memory is not None and hasattr(long_term_memory, "status") else {},
+        },
     }
 
 

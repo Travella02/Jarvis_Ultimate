@@ -38,6 +38,10 @@ _ENV_ALIASES = {
     "memory_short_term_max_chars": ("JARVIS_MEMORY_SHORT_TERM_MAX_CHARS", "JARVIS_STM_MAX_CHARS"),
     "memory_short_term_inject_last_turns": ("JARVIS_MEMORY_SHORT_TERM_INJECT_LAST_TURNS", "JARVIS_STM_INJECT_LAST_TURNS"),
     "memory_short_term_autosave": ("JARVIS_MEMORY_SHORT_TERM_AUTOSAVE", "JARVIS_STM_AUTOSAVE"),
+    "memory_long_term_enabled": ("JARVIS_MEMORY_LONG_TERM_ENABLED", "JARVIS_LTM_ENABLED"),
+    "memory_long_term_max_records": ("JARVIS_MEMORY_LONG_TERM_MAX_RECORDS", "JARVIS_LTM_MAX_RECORDS"),
+    "memory_long_term_inject_limit": ("JARVIS_MEMORY_LONG_TERM_INJECT_LIMIT", "JARVIS_LTM_INJECT_LIMIT"),
+    "memory_long_term_path": ("JARVIS_MEMORY_LONG_TERM_PATH", "JARVIS_LTM_PATH"),
     "tts_enabled": ("JARVIS_TTS_ENABLED",),
     "tts_provider": ("JARVIS_TTS_PROVIDER",),
     "tts_fallback_providers": ("JARVIS_TTS_FALLBACK_PROVIDERS",),
@@ -280,6 +284,10 @@ class JarvisConfig:
     memory_short_term_max_chars: int = 12_000
     memory_short_term_inject_last_turns: int = 8
     memory_short_term_autosave: bool = False
+    memory_long_term_enabled: bool = True
+    memory_long_term_max_records: int = 500
+    memory_long_term_inject_limit: int = 5
+    memory_long_term_path: str = "data/memory/long_term_memory.json"
 
     tts_enabled: bool = True
     tts_provider: str = "kokoro"
@@ -429,6 +437,19 @@ class JarvisConfig:
             memory_short_term_autosave=_as_bool(
                 _setting(_ENV_ALIASES["memory_short_term_autosave"], env_file, provider_config.get("memory_short_term_autosave", "false")),
                 default=False,
+            ),
+            memory_long_term_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_long_term_enabled"], env_file, provider_config.get("memory_long_term_enabled", "true")),
+                default=True,
+            ),
+            memory_long_term_max_records=int(
+                _setting(_ENV_ALIASES["memory_long_term_max_records"], env_file, provider_config.get("memory_long_term_max_records", "500"))
+            ),
+            memory_long_term_inject_limit=int(
+                _setting(_ENV_ALIASES["memory_long_term_inject_limit"], env_file, provider_config.get("memory_long_term_inject_limit", "5"))
+            ),
+            memory_long_term_path=str(
+                _setting(_ENV_ALIASES["memory_long_term_path"], env_file, provider_config.get("memory_long_term_path", "data/memory/long_term_memory.json"))
             ),
             tts_enabled=_as_bool(_setting(_ENV_ALIASES["tts_enabled"], env_file, tts_config.get("enabled", "true")), default=True),
             tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "kokoro"))).strip().lower(),

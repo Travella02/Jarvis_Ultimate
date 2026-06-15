@@ -21,6 +21,7 @@ INTENT_AGENT_MAP = {
     "voice_control": "voice_agent",
     "avatar_control": "avatar_agent",
     "memory_write": "memory_agent",
+    "memory_search": "memory_agent",
     "file_task": "file_agent",
     "recording_task": "recorder_agent",
     "weather_lookup": "weather_agent",
@@ -39,6 +40,7 @@ class JarvisRouter:
         llm_provider: Any | None = None,
         config: Any | None = None,
         short_term_memory: Any | None = None,
+        long_term_memory: Any | None = None,
         ability_registry: Any | None = None,
     ) -> None:
         self.registry = registry
@@ -47,6 +49,7 @@ class JarvisRouter:
         self.llm_provider = llm_provider
         self.config = config
         self.short_term_memory = short_term_memory
+        self.long_term_memory = long_term_memory
         self.ability_registry = ability_registry
 
     def handle(self, command: str, *, timing: Any | None = None, stream_callback: LLMStreamCallback | None = None) -> JarvisResult:
@@ -96,6 +99,7 @@ class JarvisRouter:
             "timing": timing,
             "stream_callback": stream_callback,
             "short_term_memory": self.short_term_memory,
+            "long_term_memory": self.long_term_memory,
             "ability_registry": self.ability_registry,
             "ability_selection": ability_selection,
         }

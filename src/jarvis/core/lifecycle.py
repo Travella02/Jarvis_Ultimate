@@ -16,6 +16,7 @@ from jarvis.core.registry import AgentRegistry
 from jarvis.core.result import JarvisResult
 from jarvis.core.timing import TurnTimer, format_timing_summary
 from jarvis.memory.short_term import ShortTermMemory
+from jarvis.memory.long_term import LongTermMemoryStore
 from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 from jarvis.providers.tts.manager import TTSManager, format_tts_result
@@ -53,6 +54,15 @@ class JarvisRuntime:
             persist_path=self.config.data_dir / "conversations" / "short_term_session.json",
             autosave=getattr(self.config, "memory_short_term_autosave", False),
         )
+        configured_ltm_path = Path(str(getattr(self.config, "memory_long_term_path", "data/memory/long_term_memory.json")))
+        if not configured_ltm_path.is_absolute():
+            configured_ltm_path = self.config.project_root / configured_ltm_path
+        self.long_term_memory = LongTermMemoryStore(
+            enabled=getattr(self.config, "memory_long_term_enabled", True),
+            path=configured_ltm_path,
+            max_records=getattr(self.config, "memory_long_term_max_records", 500),
+            inject_limit=getattr(self.config, "memory_long_term_inject_limit", 5),
+        )
         self.started = False
         self.last_timing: TurnTimer | None = None
 
@@ -68,6 +78,7 @@ class JarvisRuntime:
             llm_provider=self.llm_provider,
             config=self.config,
             short_term_memory=self.short_term_memory,
+            long_term_memory=self.long_term_memory,
             ability_registry=self.ability_registry,
         )
         self.started = True
@@ -90,6 +101,7 @@ class JarvisRuntime:
                 "llm_model": getattr(self.llm_provider, "model", "unknown"),
                 "llm_streaming": getattr(self.llm_provider, "streaming_enabled", False),
                 "short_term_memory": self.short_term_memory.status(),
+                "long_term_memory": self.long_term_memory.status(),
                 "tts": {
                     "enabled": self.tts_manager.enabled,
                     "provider": self.tts_manager.provider_name,
@@ -208,12 +220,16 @@ class JarvisRuntime:
 
 
     def memory_status(self) -> str:
-        """Return user-facing short-term memory status."""
-        return self.short_term_memory.format_status()
+        """Return user-facing short-term and long-term memory status."""
+        return self.short_term_memory.format_status() + "\n\n" + self.long_term_memory.format_status()
 
     def memory_last(self, limit: int = 5) -> str:
         """Return recent short-term memory turns."""
         return self.short_term_memory.format_last(limit=limit)
+
+    def memory_long_term_list(self, limit: int = 10) -> str:
+        """Return recent long-term memory records."""
+        return self.long_term_memory.format_records(limit=limit)
 
     def memory_clear(self) -> str:
         """Clear short-term memory and return a short confirmation."""
@@ -1214,6 +1230,9 @@ class JarvisRuntime:
             f"- short-term memory: {'enabled' if getattr(self.config, 'memory_short_term_enabled', True) else 'disabled'}",
             f"- short-term memory turns: {len(self.short_term_memory.turns)} / {self.short_term_memory.max_turns}",
             f"- short-term injected turns: {self.short_term_memory.inject_last_turns}",
+            f"- long-term memory: {'enabled' if getattr(self.config, 'memory_long_term_enabled', True) else 'disabled'}",
+            f"- long-term memory records: {len(self.long_term_memory.records)} / {self.long_term_memory.max_records}",
+            f"- long-term injected memories: {self.long_term_memory.inject_limit}",
         ]
         lines.extend(self._loopback_warnings(base_url=base_url, native_base_url=native_base_url))
         return "\n".join(lines)

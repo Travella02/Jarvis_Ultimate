@@ -82,12 +82,19 @@ class Agent:
         system_prompt = get_system_prompt(prompt_mode)
         prompt_stats = get_prompt_stats(prompt_mode)
         short_term_memory = context.get("short_term_memory")
+        long_term_memory = context.get("long_term_memory")
         memory_messages = []
         if short_term_memory is not None and hasattr(short_term_memory, "to_llm_messages"):
             memory_messages = short_term_memory.to_llm_messages()
+        long_term_context = ""
+        if long_term_memory is not None and hasattr(long_term_memory, "relevant_context"):
+            long_term_context = long_term_memory.relevant_context(command.strip())
+            if long_term_context:
+                system_prompt = (system_prompt or "").rstrip() + "\n\n" + long_term_context + "\nUse these saved memories only when they are relevant to the user's request."
         messages = [*memory_messages, {"role": "user", "content": command.strip()}]
         memory_turns = len(memory_messages) // 2
-        self._mark(timing, "conversation.memory_context_selected", turns=memory_turns, messages=len(memory_messages))
+        long_term_memories_used = long_term_context.count("\n-") if long_term_context else 0
+        self._mark(timing, "conversation.memory_context_selected", turns=memory_turns, messages=len(memory_messages), long_term_memories=long_term_memories_used)
         self._mark(timing, "conversation.prompt_selected", **prompt_stats)
         self._mark(timing, "conversation.llm_chat_start", stream_callback=stream_callback is not None, message_count=len(messages))
         response = llm_provider.chat(messages, system_prompt=system_prompt, timing=timing, stream_callback=stream_callback)
@@ -115,6 +122,7 @@ class Agent:
                     "prompt_mode": prompt_stats["mode"],
                     "system_prompt_chars": prompt_stats["chars"],
                     "short_term_memory_turns_used": memory_turns,
+                    "long_term_memories_used": long_term_memories_used,
                 },
             )
 
@@ -133,6 +141,7 @@ class Agent:
                 "prompt_mode": prompt_stats["mode"],
                 "system_prompt_chars": prompt_stats["chars"],
                 "short_term_memory_turns_used": memory_turns,
+                "long_term_memories_used": long_term_memories_used,
             },
         )
 

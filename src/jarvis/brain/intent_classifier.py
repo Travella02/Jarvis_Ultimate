@@ -80,8 +80,31 @@ class IntentClassifier:
         if any(phrase in text for phrase in ["avatar", "body", "character", "change how you look", "visual"]):
             return IntentResult("avatar_control", 0.75, "Avatar/body phrase detected.")
 
-        if any(phrase in text for phrase in ["remember", "save this", "store this", "memory"]):
-            return IntentResult("memory_write", 0.75, "Memory phrase detected.")
+        memory_phrases = [
+            "remember",
+            "save this",
+            "save that",
+            "store this",
+            "store that",
+            "make a note",
+            "note that",
+            "memory",
+            "memories",
+            "what do you remember",
+            "what memories",
+            "list memories",
+            "show memories",
+            "search memory",
+            "search memories",
+            "forget that",
+            "forget memory",
+            "forget memories",
+            "stop remembering",
+        ]
+        if any(phrase in text for phrase in memory_phrases):
+            if any(phrase in text for phrase in ["what do you remember", "what memories", "list memories", "show memories", "search memory", "search memories"]):
+                return IntentResult("memory_search", 0.82, "Memory search/list phrase detected.")
+            return IntentResult("memory_write", 0.78, "Memory phrase detected.")
 
         if any(phrase in text for phrase in ["search project files", "find file", "project status", "jarvis project status", "file", "folder", "storage", "delete", "move this"]):
             return IntentResult("file_task", 0.7, "File/storage phrase detected.")
