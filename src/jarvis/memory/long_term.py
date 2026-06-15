@@ -113,12 +113,12 @@ class LongTermMemoryStore:
         *,
         enabled: bool = True,
         path: str | Path | None = None,
-        max_records: int = 500,
+        max_records: int = 0,
         inject_limit: int = 5,
     ) -> None:
         self.enabled = bool(enabled)
         self.path = Path(path) if path else Path("data/memory/long_term_memory.json")
-        self.max_records = max(10, int(max_records))
+        self.max_records = int(max_records)
         self.inject_limit = max(0, int(inject_limit))
         self._records: list[LongTermMemoryRecord] = []
         self.load()
@@ -286,16 +286,24 @@ class LongTermMemoryStore:
 
     def format_status(self) -> str:
         info = self.status()
-        state = "enabled" if info["enabled"] else "disabled"
+        state = "online" if info["enabled"] else "disabled"
+        record_word = "memory" if info["records"] == 1 else "memories"
         lines = [
             "Long-term memory status:",
-            f"Memory is {state}, sir. I currently have {info['records']} of {info['max_records']} possible long-term memories saved.",
-            f"I can inject up to {info['inject_limit']} relevant memories into a conversation when they match what we are talking about.",
-            f"Memory file: {info['path']}",
+            f"Long-term memory is {state}, sir. I currently have {info['records']} permanent {record_word} saved.",
         ]
+        if info["max_records"] and int(info["max_records"]) > 0:
+            lines.append(
+                f"There is an internal safety limit of {info['max_records']} records right now, but that is not meant to be the final long-term cap."
+            )
+        else:
+            lines.append("There is no fixed long-term memory cap configured right now; we will scale storage and indexing as Jarvis grows.")
+        lines.append(
+            f"I can pull up to {info['inject_limit']} relevant permanent memories into a conversation when they match what we are talking about."
+        )
         if info["categories"]:
             categories = ", ".join(f"{name}: {count}" for name, count in info["categories"].items())
-            lines.append(f"Categories: {categories}.")
+            lines.append(f"The saved memory categories currently include {categories}.")
         return "\n".join(lines)
 
     def format_records(self, *, limit: int = 10, query: str = "") -> str:
@@ -393,6 +401,8 @@ class LongTermMemoryStore:
         return None
 
     def _trim(self) -> None:
+        if self.max_records <= 0:
+            return
         while len(self._records) > self.max_records:
             self._records.pop(0)
 

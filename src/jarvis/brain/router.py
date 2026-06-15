@@ -41,6 +41,8 @@ class JarvisRouter:
         config: Any | None = None,
         short_term_memory: Any | None = None,
         long_term_memory: Any | None = None,
+        short_term_fact_memory: Any | None = None,
+        chat_archive: Any | None = None,
         ability_registry: Any | None = None,
     ) -> None:
         self.registry = registry
@@ -50,6 +52,8 @@ class JarvisRouter:
         self.config = config
         self.short_term_memory = short_term_memory
         self.long_term_memory = long_term_memory
+        self.short_term_fact_memory = short_term_fact_memory
+        self.chat_archive = chat_archive
         self.ability_registry = ability_registry
 
     def handle(self, command: str, *, timing: Any | None = None, stream_callback: LLMStreamCallback | None = None) -> JarvisResult:
@@ -99,7 +103,9 @@ class JarvisRouter:
             "timing": timing,
             "stream_callback": stream_callback,
             "short_term_memory": self.short_term_memory,
+            "short_term_fact_memory": self.short_term_fact_memory,
             "long_term_memory": self.long_term_memory,
+            "chat_archive": self.chat_archive,
             "ability_registry": self.ability_registry,
             "ability_selection": ability_selection,
         }

@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.2.8"
+APP_SHELL_VERSION = "0.2.9"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -93,6 +93,11 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "memory_agent_store_search_forget",
         "memory_context_injection",
         "project_handoff_file_maintained",
+        "always_on_memory_tiers",
+        "short_term_fact_memory",
+        "daily_chat_archive_memory",
+        "crash_safe_memory_writes",
+        "memory_maintenance_foundation",
     )
 
 
@@ -150,6 +155,9 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
 
     long_term_memory = getattr(runtime, "long_term_memory", None)
     short_term_memory = getattr(runtime, "short_term_memory", None)
+    short_term_facts = getattr(runtime, "short_term_facts", None)
+    chat_archive = getattr(runtime, "chat_archive", None)
+    memory_maintenance = getattr(runtime, "memory_maintenance", None)
 
     return {
         "started": bool(getattr(runtime, "started", False)),
@@ -165,7 +173,10 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
         "abilities": abilities,
         "memory": {
             "short_term": short_term_memory.status() if short_term_memory is not None and hasattr(short_term_memory, "status") else {},
+            "short_term_facts": short_term_facts.status() if short_term_facts is not None and hasattr(short_term_facts, "status") else {},
             "long_term": long_term_memory.status() if long_term_memory is not None and hasattr(long_term_memory, "status") else {},
+            "chat_archive": chat_archive.status() if chat_archive is not None and hasattr(chat_archive, "status") else {},
+            "maintenance": memory_maintenance.status() if memory_maintenance is not None and hasattr(memory_maintenance, "status") else {},
         },
     }
 

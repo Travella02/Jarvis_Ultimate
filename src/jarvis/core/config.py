@@ -38,10 +38,20 @@ _ENV_ALIASES = {
     "memory_short_term_max_chars": ("JARVIS_MEMORY_SHORT_TERM_MAX_CHARS", "JARVIS_STM_MAX_CHARS"),
     "memory_short_term_inject_last_turns": ("JARVIS_MEMORY_SHORT_TERM_INJECT_LAST_TURNS", "JARVIS_STM_INJECT_LAST_TURNS"),
     "memory_short_term_autosave": ("JARVIS_MEMORY_SHORT_TERM_AUTOSAVE", "JARVIS_STM_AUTOSAVE"),
+    "memory_short_term_fact_enabled": ("JARVIS_MEMORY_SHORT_TERM_FACT_ENABLED", "JARVIS_STF_ENABLED"),
+    "memory_short_term_fact_max_records": ("JARVIS_MEMORY_SHORT_TERM_FACT_MAX_RECORDS", "JARVIS_STF_MAX_RECORDS"),
+    "memory_short_term_fact_default_days": ("JARVIS_MEMORY_SHORT_TERM_FACT_DEFAULT_DAYS", "JARVIS_STF_DEFAULT_DAYS"),
+    "memory_short_term_fact_inject_limit": ("JARVIS_MEMORY_SHORT_TERM_FACT_INJECT_LIMIT", "JARVIS_STF_INJECT_LIMIT"),
+    "memory_short_term_fact_path": ("JARVIS_MEMORY_SHORT_TERM_FACT_PATH", "JARVIS_STF_PATH"),
     "memory_long_term_enabled": ("JARVIS_MEMORY_LONG_TERM_ENABLED", "JARVIS_LTM_ENABLED"),
     "memory_long_term_max_records": ("JARVIS_MEMORY_LONG_TERM_MAX_RECORDS", "JARVIS_LTM_MAX_RECORDS"),
     "memory_long_term_inject_limit": ("JARVIS_MEMORY_LONG_TERM_INJECT_LIMIT", "JARVIS_LTM_INJECT_LIMIT"),
     "memory_long_term_path": ("JARVIS_MEMORY_LONG_TERM_PATH", "JARVIS_LTM_PATH"),
+    "memory_chat_archive_enabled": ("JARVIS_MEMORY_CHAT_ARCHIVE_ENABLED", "JARVIS_CHAT_ARCHIVE_ENABLED"),
+    "memory_chat_archive_dir": ("JARVIS_MEMORY_CHAT_ARCHIVE_DIR", "JARVIS_CHAT_ARCHIVE_DIR"),
+    "memory_chat_archive_max_search_days": ("JARVIS_MEMORY_CHAT_ARCHIVE_MAX_SEARCH_DAYS", "JARVIS_CHAT_ARCHIVE_MAX_SEARCH_DAYS"),
+    "memory_chat_archive_retention_days": ("JARVIS_MEMORY_CHAT_ARCHIVE_RETENTION_DAYS", "JARVIS_CHAT_ARCHIVE_RETENTION_DAYS"),
+    "memory_maintenance_interval_seconds": ("JARVIS_MEMORY_MAINTENANCE_INTERVAL_SECONDS",),
     "tts_enabled": ("JARVIS_TTS_ENABLED",),
     "tts_provider": ("JARVIS_TTS_PROVIDER",),
     "tts_fallback_providers": ("JARVIS_TTS_FALLBACK_PROVIDERS",),
@@ -284,10 +294,20 @@ class JarvisConfig:
     memory_short_term_max_chars: int = 12_000
     memory_short_term_inject_last_turns: int = 8
     memory_short_term_autosave: bool = False
+    memory_short_term_fact_enabled: bool = True
+    memory_short_term_fact_max_records: int = 300
+    memory_short_term_fact_default_days: int = 3
+    memory_short_term_fact_inject_limit: int = 3
+    memory_short_term_fact_path: str = "data/memory/short_term_memory.json"
     memory_long_term_enabled: bool = True
-    memory_long_term_max_records: int = 500
+    memory_long_term_max_records: int = 0
     memory_long_term_inject_limit: int = 5
     memory_long_term_path: str = "data/memory/long_term_memory.json"
+    memory_chat_archive_enabled: bool = True
+    memory_chat_archive_dir: str = "data/memory/chat_archive"
+    memory_chat_archive_max_search_days: int = 30
+    memory_chat_archive_retention_days: int = 90
+    memory_maintenance_interval_seconds: int = 300
 
     tts_enabled: bool = True
     tts_provider: str = "kokoro"
@@ -438,18 +458,50 @@ class JarvisConfig:
                 _setting(_ENV_ALIASES["memory_short_term_autosave"], env_file, provider_config.get("memory_short_term_autosave", "false")),
                 default=False,
             ),
+            memory_short_term_fact_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_short_term_fact_enabled"], env_file, provider_config.get("memory_short_term_fact_enabled", "true")),
+                default=True,
+            ),
+            memory_short_term_fact_max_records=int(
+                _setting(_ENV_ALIASES["memory_short_term_fact_max_records"], env_file, provider_config.get("memory_short_term_fact_max_records", "300"))
+            ),
+            memory_short_term_fact_default_days=int(
+                _setting(_ENV_ALIASES["memory_short_term_fact_default_days"], env_file, provider_config.get("memory_short_term_fact_default_days", "3"))
+            ),
+            memory_short_term_fact_inject_limit=int(
+                _setting(_ENV_ALIASES["memory_short_term_fact_inject_limit"], env_file, provider_config.get("memory_short_term_fact_inject_limit", "3"))
+            ),
+            memory_short_term_fact_path=str(
+                _setting(_ENV_ALIASES["memory_short_term_fact_path"], env_file, provider_config.get("memory_short_term_fact_path", "data/memory/short_term_memory.json"))
+            ),
             memory_long_term_enabled=_as_bool(
                 _setting(_ENV_ALIASES["memory_long_term_enabled"], env_file, provider_config.get("memory_long_term_enabled", "true")),
                 default=True,
             ),
             memory_long_term_max_records=int(
-                _setting(_ENV_ALIASES["memory_long_term_max_records"], env_file, provider_config.get("memory_long_term_max_records", "500"))
+                _setting(_ENV_ALIASES["memory_long_term_max_records"], env_file, provider_config.get("memory_long_term_max_records", "0"))
             ),
             memory_long_term_inject_limit=int(
                 _setting(_ENV_ALIASES["memory_long_term_inject_limit"], env_file, provider_config.get("memory_long_term_inject_limit", "5"))
             ),
             memory_long_term_path=str(
                 _setting(_ENV_ALIASES["memory_long_term_path"], env_file, provider_config.get("memory_long_term_path", "data/memory/long_term_memory.json"))
+            ),
+            memory_chat_archive_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_chat_archive_enabled"], env_file, provider_config.get("memory_chat_archive_enabled", "true")),
+                default=True,
+            ),
+            memory_chat_archive_dir=str(
+                _setting(_ENV_ALIASES["memory_chat_archive_dir"], env_file, provider_config.get("memory_chat_archive_dir", "data/memory/chat_archive"))
+            ),
+            memory_chat_archive_max_search_days=int(
+                _setting(_ENV_ALIASES["memory_chat_archive_max_search_days"], env_file, provider_config.get("memory_chat_archive_max_search_days", "30"))
+            ),
+            memory_chat_archive_retention_days=int(
+                _setting(_ENV_ALIASES["memory_chat_archive_retention_days"], env_file, provider_config.get("memory_chat_archive_retention_days", "90"))
+            ),
+            memory_maintenance_interval_seconds=int(
+                _setting(_ENV_ALIASES["memory_maintenance_interval_seconds"], env_file, provider_config.get("memory_maintenance_interval_seconds", "300"))
             ),
             tts_enabled=_as_bool(_setting(_ENV_ALIASES["tts_enabled"], env_file, tts_config.get("enabled", "true")), default=True),
             tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "kokoro"))).strip().lower(),

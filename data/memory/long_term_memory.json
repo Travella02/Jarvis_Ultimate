@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "saved_at": "2026-06-15T08:26:22.942168+00:00",
+  "saved_at": "2026-06-15T09:14:19.872509+00:00",
   "records": [
     {
       "text": "my favorite test color is blue",
@@ -12,9 +12,24 @@
       "importance": 3,
       "id": "mem_3fa2a0789d66",
       "created_at": "2026-06-15T08:26:22.942168+00:00",
-      "updated_at": "2026-06-15T08:26:22.942168+00:00",
+      "updated_at": "2026-06-15T09:14:19.872509+00:00",
       "metadata": {
-        "source_command": "remember that my favorite test color is blue"
+        "source_command": "Remember that my favorite test color is blue."
+      }
+    },
+    {
+      "text": "my favorite test color",
+      "category": "preference",
+      "tags": [
+        "preference"
+      ],
+      "source": "user",
+      "importance": 3,
+      "id": "mem_f7dc1ccf66ab",
+      "created_at": "2026-06-15T09:14:11.647122+00:00",
+      "updated_at": "2026-06-15T09:14:11.647122+00:00",
+      "metadata": {
+        "source_command": "remember that my favorite test color"
       }
     }
   ]

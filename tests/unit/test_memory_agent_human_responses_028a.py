@@ -37,8 +37,8 @@ class MemoryAgentHumanResponses028aTests(unittest.TestCase):
             memory.add("my main music app is Spotify", category="preference", tags=["music"])
             status = memory.format_status()
             self.assertIn("Long-term memory status", status)
-            self.assertIn("Memory is enabled, sir", status)
-            self.assertIn("1 of", status)
+            self.assertIn("Long-term memory is online, sir", status)
+            self.assertIn("1 permanent memory", status)
 
 
 if __name__ == "__main__":

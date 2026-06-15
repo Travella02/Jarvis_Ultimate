@@ -28,6 +28,8 @@ let orbCaptionDisplayed = '';
 let orbCaptionTimer = null;
 let lastCaptionSignature = '';
 let motionLastFrame = 0;
+let chatManualScrollUntil = 0;
+const CHAT_SCROLL_LOCK_MS = 9000;
 const motionAngles = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 };
 
 // Test compatibility signatures for older 0.2.5 caption-sync tests.
@@ -36,7 +38,6 @@ const motionAngles = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 
 // return voiceActive ? 180 : 700
 // remaining > 90 ? 7
 // window.setTimeout(stepOrbCaption, 16)
-// els.chatLog.scrollTop = els.chatLog.scrollHeight
 const motionSpeeds = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 };
 let motionTargets = motionProfileForState(DEFAULT_STATE.avatar.state);
 const visualColors = {
@@ -380,9 +381,23 @@ function chatRoleClass(role) {
   return 'jarvis';
 }
 
-function isNearScrollBottom(element, threshold = 80) {
+function isNearScrollBottom(element, threshold = 36) {
   if (!element) return true;
   return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold;
+}
+
+function isChatScrollLocked() {
+  return Date.now() < chatManualScrollUntil;
+}
+
+function lockChatScroll() {
+  chatManualScrollUntil = Date.now() + CHAT_SCROLL_LOCK_MS;
+}
+
+function maybeUnlockChatScroll() {
+  if (isNearScrollBottom(els.chatLog, 24)) {
+    chatManualScrollUntil = 0;
+  }
 }
 
 function preserveOrAutoScroll(element, shouldAutoScroll, previousScrollTop) {
@@ -422,7 +437,7 @@ function renderState(snapshot) {
 
   renderActionCards(workspace.workspace_cards || []);
 
-  const chatShouldAutoScroll = isNearScrollBottom(els.chatLog);
+  const chatShouldAutoScroll = !isChatScrollLocked() && isNearScrollBottom(els.chatLog);
   const chatPreviousScrollTop = els.chatLog ? els.chatLog.scrollTop : 0;
   const chats = workspace.chat_messages || [];
   els.chatLog.innerHTML = chats.length
@@ -610,8 +625,20 @@ async function boot() {
   els.stopVoiceButton.addEventListener('click', stopVoice);
   if (els.autoWakeToggle) els.autoWakeToggle.addEventListener('click', toggleAutoSleepWake);
   if (els.orbFocusButton) els.orbFocusButton.addEventListener('click', toggleOrbFocus);
+  if (els.chatLog) {
+    els.chatLog.addEventListener('wheel', lockChatScroll, { passive: true });
+    els.chatLog.addEventListener('touchstart', lockChatScroll, { passive: true });
+    els.chatLog.addEventListener('pointerdown', lockChatScroll);
+    els.chatLog.addEventListener('scroll', maybeUnlockChatScroll, { passive: true });
+  }
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && orbFocus) toggleOrbFocus();
+    if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      const active = document.activeElement;
+      if (active === els.chatLog || els.chatLog?.contains(active) || document.activeElement === document.body) {
+        lockChatScroll();
+      }
+    }
   });
   for (const button of els.panelToggleButtons) {
     button.addEventListener('click', () => togglePanel(button.dataset.panelToggle));

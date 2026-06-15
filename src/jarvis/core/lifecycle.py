@@ -17,6 +17,7 @@ from jarvis.core.result import JarvisResult
 from jarvis.core.timing import TurnTimer, format_timing_summary
 from jarvis.memory.short_term import ShortTermMemory
 from jarvis.memory.long_term import LongTermMemoryStore
+from jarvis.memory.always_on import ChatArchiveStore, MemoryMaintenance, ShortTermFactStore
 from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 from jarvis.providers.tts.manager import TTSManager, format_tts_result
@@ -60,8 +61,33 @@ class JarvisRuntime:
         self.long_term_memory = LongTermMemoryStore(
             enabled=getattr(self.config, "memory_long_term_enabled", True),
             path=configured_ltm_path,
-            max_records=getattr(self.config, "memory_long_term_max_records", 500),
+            max_records=getattr(self.config, "memory_long_term_max_records", 0),
             inject_limit=getattr(self.config, "memory_long_term_inject_limit", 5),
+        )
+        configured_stf_path = Path(str(getattr(self.config, "memory_short_term_fact_path", "data/memory/short_term_memory.json")))
+        if not configured_stf_path.is_absolute():
+            configured_stf_path = self.config.project_root / configured_stf_path
+        self.short_term_facts = ShortTermFactStore(
+            enabled=getattr(self.config, "memory_short_term_fact_enabled", True),
+            path=configured_stf_path,
+            max_records=getattr(self.config, "memory_short_term_fact_max_records", 300),
+            default_days=getattr(self.config, "memory_short_term_fact_default_days", 3),
+            inject_limit=getattr(self.config, "memory_short_term_fact_inject_limit", 3),
+        )
+        configured_chat_dir = Path(str(getattr(self.config, "memory_chat_archive_dir", "data/memory/chat_archive")))
+        if not configured_chat_dir.is_absolute():
+            configured_chat_dir = self.config.project_root / configured_chat_dir
+        self.chat_archive = ChatArchiveStore(
+            enabled=getattr(self.config, "memory_chat_archive_enabled", True),
+            root_dir=configured_chat_dir,
+            max_search_days=getattr(self.config, "memory_chat_archive_max_search_days", 30),
+        )
+        self.memory_maintenance = MemoryMaintenance(
+            short_term_facts=self.short_term_facts,
+            chat_archive=self.chat_archive,
+            status_path=self.config.data_dir / "memory" / "maintenance_status.json",
+            interval_seconds=getattr(self.config, "memory_maintenance_interval_seconds", 300),
+            chat_keep_days=getattr(self.config, "memory_chat_archive_retention_days", 90),
         )
         self.started = False
         self.last_timing: TurnTimer | None = None
@@ -79,6 +105,8 @@ class JarvisRuntime:
             config=self.config,
             short_term_memory=self.short_term_memory,
             long_term_memory=self.long_term_memory,
+            short_term_fact_memory=self.short_term_facts,
+            chat_archive=self.chat_archive,
             ability_registry=self.ability_registry,
         )
         self.started = True
@@ -101,7 +129,10 @@ class JarvisRuntime:
                 "llm_model": getattr(self.llm_provider, "model", "unknown"),
                 "llm_streaming": getattr(self.llm_provider, "streaming_enabled", False),
                 "short_term_memory": self.short_term_memory.status(),
+                "short_term_facts": self.short_term_facts.status(),
                 "long_term_memory": self.long_term_memory.status(),
+                "chat_archive": self.chat_archive.status(),
+                "memory_maintenance": self.memory_maintenance.status(),
                 "tts": {
                     "enabled": self.tts_manager.enabled,
                     "provider": self.tts_manager.provider_name,
@@ -149,6 +180,8 @@ class JarvisRuntime:
         result = self.router.handle(command, timing=timing, stream_callback=stream_callback)
         timing.mark("runtime.handle_command_finished", success=result.success, action=result.action, streamed=result.data.get("streamed_output"))
         self._record_short_term_turn(command, result, timing=timing)
+        self._record_chat_archive_turn(command, result, timing=timing)
+        self._run_memory_maintenance_if_due(timing=timing)
         result.data["timing"] = timing.to_dict()
         self.last_timing = timing
         self.logger.log_result(result)
@@ -220,8 +253,14 @@ class JarvisRuntime:
 
 
     def memory_status(self) -> str:
-        """Return user-facing short-term and long-term memory status."""
-        return self.short_term_memory.format_status() + "\n\n" + self.long_term_memory.format_status()
+        """Return user-facing status for all local memory tiers."""
+        return "\n\n".join([
+            self.short_term_memory.format_status(),
+            self.short_term_facts.format_status(),
+            self.long_term_memory.format_status(),
+            self.chat_archive.format_status(),
+            self.memory_maintenance.format_status(),
+        ])
 
     def memory_last(self, limit: int = 5) -> str:
         """Return recent short-term memory turns."""
@@ -1203,6 +1242,40 @@ class JarvisRuntime:
             data={"turns": len(self.short_term_memory.turns), "session_id": self.short_term_memory.session_id},
         )
 
+    def _record_chat_archive_turn(self, command: str, result: JarvisResult, *, timing: TurnTimer | None = None) -> None:
+        """Archive every completed user/Jarvis turn incrementally for long uptime."""
+        if not getattr(self.config, "memory_chat_archive_enabled", True):
+            return
+        archived = self.chat_archive.append_turn(
+            user=command,
+            assistant=result.message,
+            session_id=self.short_term_memory.session_id,
+            agent_name=result.agent_name,
+            action=result.action,
+            success=result.success,
+            metadata={
+                "intent": result.data.get("intent"),
+                "selected_agent": result.data.get("selected_agent"),
+                "timing_id": getattr(timing, "turn_id", ""),
+            },
+        )
+        if archived is None:
+            return
+        if timing is not None:
+            timing.mark("memory.chat_archive_turn_saved", archive_id=archived.id)
+        self.events.emit(
+            "memory.chat_archive_saved",
+            source="lifecycle",
+            message="Chat archive turn saved.",
+            data={"archive_id": archived.id, "session_id": self.short_term_memory.session_id},
+        )
+
+    def _run_memory_maintenance_if_due(self, *, timing: TurnTimer | None = None) -> None:
+        """Run lightweight memory maintenance without relying on restarts."""
+        status = self.memory_maintenance.run_if_due()
+        if timing is not None:
+            timing.mark("memory.maintenance_checked", last_run_at=status.get("last_run_at", ""))
+
     def prompt_diagnostics(self) -> str:
         """Return current LLM prompt/config diagnostics for the CLI."""
         stats = get_prompt_stats(getattr(self.config, "conversation_prompt_mode", "normal"))
@@ -1230,8 +1303,10 @@ class JarvisRuntime:
             f"- short-term memory: {'enabled' if getattr(self.config, 'memory_short_term_enabled', True) else 'disabled'}",
             f"- short-term memory turns: {len(self.short_term_memory.turns)} / {self.short_term_memory.max_turns}",
             f"- short-term injected turns: {self.short_term_memory.inject_last_turns}",
+            f"- temporary memory facts: {len(self.short_term_facts.records)} / {self.short_term_facts.max_records}",
+            f"- chat archive: {'enabled' if getattr(self.config, 'memory_chat_archive_enabled', True) else 'disabled'}",
             f"- long-term memory: {'enabled' if getattr(self.config, 'memory_long_term_enabled', True) else 'disabled'}",
-            f"- long-term memory records: {len(self.long_term_memory.records)} / {self.long_term_memory.max_records}",
+            f"- long-term memory records: {len(self.long_term_memory.records)} / {self.long_term_memory.max_records if self.long_term_memory.max_records > 0 else 'unlimited'}",
             f"- long-term injected memories: {self.long_term_memory.inject_limit}",
         ]
         lines.extend(self._loopback_warnings(base_url=base_url, native_base_url=native_base_url))

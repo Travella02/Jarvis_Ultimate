@@ -1,0 +1,8 @@
+{
+  "last_run_at": "2026-06-15T11:33:36.695570+00:00",
+  "interval_seconds": 300,
+  "chat_keep_days": 90,
+  "last_expired_short_term": 0,
+  "last_rotated_chat_files": 0,
+  "status_path": "C:\\Users\\tanne\\Desktop\\Jarvis_Ultimate\\data\\memory\\maintenance_status.json"
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-06-15T09:15:02.070587+00:00",
+  "records": [
+    {
+      "text": "I am testing temporary memory",
+      "category": "personal",
+      "tags": [
+        "personal"
+      ],
+      "source": "user",
+      "importance": 2,
+      "expires_at": "2026-06-18T09:15:02.070587+00:00",
+      "id": "stm_197bb6119452",
+      "created_at": "2026-06-15T09:15:02.070587+00:00",
+      "updated_at": "2026-06-15T09:15:02.070587+00:00",
+      "metadata": {
+        "source_command": "Remember that I am testing temporary memory for a few days."
+      }
+    }
+  ]
+}
