@@ -36,6 +36,7 @@ const motionAngles = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 
 // return voiceActive ? 180 : 700
 // remaining > 90 ? 7
 // window.setTimeout(stepOrbCaption, 16)
+// els.chatLog.scrollTop = els.chatLog.scrollHeight
 const motionSpeeds = { ringA: 0, ringB: 0, ringC: 0, particleA: 0, particleB: 0 };
 let motionTargets = motionProfileForState(DEFAULT_STATE.avatar.state);
 const visualColors = {
@@ -379,6 +380,20 @@ function chatRoleClass(role) {
   return 'jarvis';
 }
 
+function isNearScrollBottom(element, threshold = 80) {
+  if (!element) return true;
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold;
+}
+
+function preserveOrAutoScroll(element, shouldAutoScroll, previousScrollTop) {
+  if (!element) return;
+  if (shouldAutoScroll) {
+    element.scrollTop = element.scrollHeight;
+  } else {
+    element.scrollTop = previousScrollTop;
+  }
+}
+
 function renderState(snapshot) {
   lastState = snapshot || DEFAULT_STATE;
   const avatar = lastState.avatar || DEFAULT_STATE.avatar;
@@ -407,6 +422,8 @@ function renderState(snapshot) {
 
   renderActionCards(workspace.workspace_cards || []);
 
+  const chatShouldAutoScroll = isNearScrollBottom(els.chatLog);
+  const chatPreviousScrollTop = els.chatLog ? els.chatLog.scrollTop : 0;
   const chats = workspace.chat_messages || [];
   els.chatLog.innerHTML = chats.length
     ? chats.map(msg => {
@@ -415,7 +432,7 @@ function renderState(snapshot) {
         return `<div class="chat-message ${className}"><span class="role">${escapeHtml(role)}</span>${escapeHtml(msg.text || '')}</div>`;
       }).join('')
     : '<div class="chat-message jarvis"><span class="role">jarvis</span>App shell ready. Waiting for the local bridge.</div>';
-  els.chatLog.scrollTop = els.chatLog.scrollHeight;
+  preserveOrAutoScroll(els.chatLog, chatShouldAutoScroll, chatPreviousScrollTop);
 
   const events = workspace.events || [];
   els.eventsLog.innerHTML = events.length

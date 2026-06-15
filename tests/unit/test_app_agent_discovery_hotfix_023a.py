@@ -22,6 +22,7 @@ class TestAppAgentDiscoveryHotfix023a(unittest.TestCase):
                  patch("jarvis.tools.shared.app_discovery.WINDOWS_COMMON_EXECUTABLES", common_paths), \
                  patch("jarvis.tools.shared.app_discovery.discover_apps") as discover_apps, \
                  patch("jarvis.tools.shared.app_discovery.platform.system", return_value="Windows"), \
+                 patch("jarvis.tools.shared.app_discovery._wait_for_processes", return_value=True), \
                  patch("jarvis.tools.shared.app_discovery.os.startfile", create=True) as startfile:
                 result = AppAgent().handle("open google browser", context={"config": SimpleNamespace(project_root=root), "allow_os_launch_during_tests": True})
 

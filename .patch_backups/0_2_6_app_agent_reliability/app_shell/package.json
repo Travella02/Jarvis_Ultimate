@@ -1,0 +1,13 @@
+{
+  "name": "jarvis-ultimate-app-shell",
+  "version": "0.2.5",
+  "private": true,
+  "description": "Native Electron app shell for Jarvis Ultimate.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "latest"
+  }
+}

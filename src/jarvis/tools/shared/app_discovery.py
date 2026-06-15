@@ -20,9 +20,10 @@ from typing import Any, Iterable
 from jarvis.tools.shared.process_tools import KNOWN_APP_COMMANDS, LaunchResult, command_for_known_app, launch_known_app
 
 _ALIAS_VERSION = 1
-_INDEX_VERSION = 7
+_INDEX_VERSION = 8
 _INDEX_TTL_SECONDS = 7 * 24 * 60 * 60
 _MAX_EXECUTABLE_SCAN_RESULTS = 750
+_DEFAULT_LAUNCH_VERIFY_SECONDS = 5.0
 _INDEX_WARMUP_LOCK = threading.Lock()
 _INDEX_WARMUP_THREADS: dict[str, threading.Thread] = {}
 
@@ -105,6 +106,8 @@ BUILTIN_APP_ALIASES: dict[str, str] = {
     "screenshot tool": "snipping tool",
     "discord": "discord",
     "spotify": "spotify",
+    "media player": "media player",
+    "windows media player": "media player",
 }
 
 # Process names and likely Windows install paths for common apps.  These do not
@@ -130,6 +133,8 @@ KNOWN_APP_PROCESS_NAMES: dict[str, list[str]] = {
     "screen snip": ["SnippingTool.exe", "ScreenSketch.exe"],
     "discord": ["Discord.exe", "Update.exe"],
     "spotify": ["Spotify.exe"],
+    "media player": ["Microsoft.Media.Player.exe", "wmplayer.exe", "Music.UI.exe"],
+    "windows media player": ["Microsoft.Media.Player.exe", "wmplayer.exe", "Music.UI.exe"],
 }
 
 WINDOWS_COMMON_EXECUTABLES: dict[str, list[str]] = {
@@ -159,6 +164,10 @@ WINDOWS_COMMON_EXECUTABLES: dict[str, list[str]] = {
         r"%APPDATA%\Spotify\Spotify.exe",
         r"%LOCALAPPDATA%\Microsoft\WindowsApps\Spotify.exe",
     ],
+    "media player": [
+        r"%ProgramFiles%\Windows Media Player\wmplayer.exe",
+        r"%LOCALAPPDATA%\Microsoft\WindowsApps\Microsoft.Media.Player.exe",
+    ],
     "snipping tool": [
         r"%WINDIR%\System32\SnippingTool.exe",
         r"%LOCALAPPDATA%\Microsoft\WindowsApps\SnippingTool.exe",
@@ -178,6 +187,8 @@ WINDOWS_TITLE_ALIASES: dict[str, list[str]] = {
     "snip": ["snipping tool", "screen snip", "snip"],
     "discord": ["discord"],
     "spotify": ["spotify"],
+    "media player": ["media player", "windows media player"],
+    "windows media player": ["media player", "windows media player"],
 }
 
 _APP_VERB_RE = re.compile(
@@ -206,6 +217,14 @@ def _effective_dry_run(dry_run: bool) -> bool:
     if _truthy(os.environ.get("JARVIS_ALLOW_OS_LAUNCH_DURING_TESTS")):
         return bool(dry_run)
     return bool(dry_run) or _truthy(os.environ.get("JARVIS_APP_AGENT_DRY_RUN")) or _running_under_test_process()
+
+
+def _float_env(name: str, default: float) -> float:
+    try:
+        value = float(str(os.environ.get(name, "")).strip())
+    except (TypeError, ValueError):
+        return default
+    return value if value >= 0 else default
 
 
 @dataclass(slots=True)
@@ -499,34 +518,87 @@ def _best_candidate_match(query: str, candidates: Iterable[AppCandidate]) -> App
 
 
 def launch_app_match(match: AppMatch, *, project_root: str | Path, alias_to_learn: str = "", dry_run: bool = False) -> LaunchResult:
-    """Launch a resolved app match and learn the requested alias on success."""
+    """Launch a resolved app match, verify it started, and learn aliases.
+
+    Jarvis should not tell the user an app opened simply because a command was
+    accepted by Windows.  For desktop apps with safe process names, this waits a
+    short time for the expected process to appear.  If a learned launcher is
+    stale, for example Discord pointing at Update.exe, Jarvis refreshes discovery
+    and retries a better real launcher before giving up.
+    """
 
     candidate = match.candidate
     if candidate is None:
         return LaunchResult(False, f"I could not find an app matching '{match.query}', sir.", target=match.query, errors=["app_not_found"])
 
-    if candidate.launch_type == "known":
-        result = launch_known_app(candidate.name, project_root=project_root, dry_run=dry_run)
-        if not result.success:
-            fallback = _launch_discovered_fallback(match.query or alias_to_learn or candidate.name, project_root=project_root, dry_run=dry_run)
-            if fallback is not None and fallback.success:
-                if alias_to_learn and fallback.command:
-                    fallback_candidate = AppCandidate(
-                        name=fallback.target,
-                        path=str(fallback.command),
-                        launch_type="path",
-                        aliases=[alias_to_learn, fallback.target],
-                        source="launch_fallback",
-                        process_names=_known_process_names_for_name(fallback.target),
-                    )
-                    AppAliasStore(project_root).save_alias(alias_to_learn, fallback_candidate, source="launch_fallback_success")
-                return fallback
-    else:
-        result = _launch_path(candidate, dry_run=dry_run)
+    safe_dry_run = _effective_dry_run(dry_run)
+    result = _launch_candidate(candidate, match=match, project_root=project_root, dry_run=safe_dry_run)
+    if not result.success:
+        fallback = _launch_verified_fallback(match.query or alias_to_learn or candidate.name, project_root=project_root, dry_run=safe_dry_run)
+        if fallback is not None and fallback.success:
+            _learn_successful_alias(project_root, alias_to_learn, fallback, source="launch_fallback_success")
+            return fallback
+        return result
 
-    if result.success and alias_to_learn:
-        AppAliasStore(project_root).save_alias(alias_to_learn, candidate, source="launch_success")
-    return result
+    verified = _verify_launch_result(candidate, result, dry_run=safe_dry_run)
+    if not verified.success:
+        fallback = _launch_verified_fallback(match.query or alias_to_learn or candidate.name, project_root=project_root, dry_run=safe_dry_run, skip_path=candidate.path)
+        if fallback is not None and fallback.success:
+            _learn_successful_alias(project_root, alias_to_learn, fallback, source="verified_fallback_success")
+            return fallback
+        return verified
+
+    if alias_to_learn:
+        AppAliasStore(project_root).save_alias(alias_to_learn, candidate, source="verified_launch_success")
+    return verified
+
+
+def _launch_candidate(candidate: AppCandidate, *, match: AppMatch, project_root: str | Path, dry_run: bool) -> LaunchResult:
+    if candidate.launch_type == "known":
+        return launch_known_app(candidate.name, project_root=project_root, dry_run=dry_run)
+    return _launch_path(candidate, dry_run=dry_run)
+
+
+def _learn_successful_alias(project_root: str | Path, alias_to_learn: str, result: LaunchResult, *, source: str) -> None:
+    if not alias_to_learn or not result.command:
+        return
+    command = result.command[0] if isinstance(result.command, list) and result.command else result.command
+    if not isinstance(command, str):
+        command = str(command)
+    candidate = AppCandidate(
+        name=result.target,
+        path=command,
+        launch_type=result.launch_type if result.launch_type in {"path", "aumid"} else "path",
+        aliases=[alias_to_learn, result.target],
+        source=source,
+        process_names=_known_process_names_for_name(result.target) or _process_names_from_command(result.command),
+    )
+    AppAliasStore(project_root).save_alias(alias_to_learn, candidate, source=source)
+
+
+def _verify_launch_result(candidate: AppCandidate, result: LaunchResult, *, dry_run: bool) -> LaunchResult:
+    if dry_run:
+        return result
+    if platform.system().lower() != "windows":
+        return result
+    process_names = _process_names_for_candidate(candidate)
+    if not process_names:
+        # Shortcuts and protocol launches do not always expose a reliable process
+        # name.  Keep the launch accepted, but avoid claiming stronger proof.
+        return LaunchResult(True, result.message, target=result.target, launch_type=result.launch_type, command=result.command, errors=result.errors)
+
+    timeout = _float_env("JARVIS_APP_LAUNCH_VERIFY_SECONDS", _DEFAULT_LAUNCH_VERIFY_SECONDS)
+    if _wait_for_processes(process_names, timeout_seconds=timeout):
+        return result
+    return LaunchResult(
+        False,
+        f"I tried to open {result.target}, but I could not verify that it started, sir.",
+        target=result.target,
+        launch_type=result.launch_type,
+        command=result.command,
+        errors=[*(result.errors or []), "launch_not_verified", *process_names],
+    )
+
 
 
 def close_app_match(match: AppMatch, *, project_root: str | Path, alias_to_learn: str = "", dry_run: bool = False) -> LaunchResult:
@@ -544,11 +616,22 @@ def close_app_match(match: AppMatch, *, project_root: str | Path, alias_to_learn
 
 
 def _launch_discovered_fallback(query: str, *, project_root: str | Path, dry_run: bool = False) -> LaunchResult | None:
-    refreshed = discover_apps(project_root, force_refresh=True, test_safe=dry_run)
-    match = _best_candidate_match(normalize_query(query), [candidate for candidate in refreshed if candidate.launch_type != "known"])
+    return _launch_verified_fallback(query, project_root=project_root, dry_run=dry_run)
+
+
+def _launch_verified_fallback(query: str, *, project_root: str | Path, dry_run: bool = False, skip_path: str = "") -> LaunchResult | None:
+    safe_dry_run = _effective_dry_run(dry_run)
+    refreshed = discover_apps(project_root, force_refresh=True, test_safe=safe_dry_run)
+    candidates = [candidate for candidate in refreshed if candidate.launch_type != "known"]
+    if skip_path:
+        candidates = [candidate for candidate in candidates if str(candidate.path).lower() != str(skip_path).lower()]
+    match = _best_candidate_match(normalize_query(query), candidates)
     if match.candidate is None or match.score < 0.54:
         return None
-    return _launch_path(match.candidate, dry_run=dry_run)
+    result = _launch_path(match.candidate, dry_run=safe_dry_run)
+    if not result.success:
+        return result
+    return _verify_launch_result(match.candidate, result, dry_run=safe_dry_run)
 
 
 def _known_app_candidates() -> list[AppCandidate]:
@@ -1234,6 +1317,20 @@ def _windows_running_processes() -> list[str]:
         if row:
             names.append(row[0].strip())
     return names
+
+
+def _wait_for_processes(process_names: list[str], *, timeout_seconds: float) -> bool:
+    safe_names = [name for name in process_names if _is_safe_process_name(name)]
+    if not safe_names:
+        return False
+    deadline = time.time() + max(0.0, timeout_seconds)
+    while True:
+        running = _windows_running_processes()
+        if _match_running_processes(safe_names, running):
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(0.18)
 
 
 def _match_running_processes(process_names: list[str], running_names: list[str]) -> list[str]:

@@ -149,8 +149,8 @@ def curated_ability_for_tool(tool_name: str, *, agent_name: str, intent: str, pe
             "display_name": "Open Apps and Websites",
             "description": "Open desktop apps by learned aliases, safe known commands, Start Menu shortcuts, and close matches on the computer.",
             "risk_level": "safe",
-            "triggers": ["open", "launch", "start", "run", "pull up", "bring up", "can you open", "could you open", "open app", "open website", "open project folder"],
-            "examples": ["Jarvis, open VS Code", "Jarvis, launch Chrome", "Jarvis, pull up Snipping Tool", "Jarvis, open the project folder"],
+            "triggers": ["open", "launch", "start", "run", "pull up", "bring up", "can you open", "could you open", "open app", "open website", "open project folder", "when i say", "call this app", "remember this app"],
+            "examples": ["Jarvis, open VS Code", "Jarvis, launch Chrome", "Jarvis, pull up Snipping Tool", "Jarvis, when I say music, open Spotify", "Jarvis, open the project folder"],
             "permissions": ["app_control"],
         },
         "app_closer": {

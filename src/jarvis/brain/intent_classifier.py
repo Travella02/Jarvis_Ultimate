@@ -29,8 +29,24 @@ class IntentClassifier:
             return IntentResult("status", 0.95, "Status phrase detected.")
 
         app_prefixes = ["open ", "launch ", "start app ", "start ", "run ", "open website ", "open site ", "close ", "quit ", "exit ", "switch to "]
-        app_phrases = ["pull up", "bring up", "open up", "can you open", "could you open", "can you launch", "could you launch", "can you close", "could you close", "close out of"]
+        app_phrases = [
+            "pull up",
+            "bring up",
+            "open up",
+            "can you open",
+            "could you open",
+            "can you launch",
+            "could you launch",
+            "can you close",
+            "could you close",
+            "close out of",
+            "when i say",
+            "call this app",
+            "remember this app",
+        ]
         if any(text.startswith(prefix) for prefix in app_prefixes) or any(phrase in text for phrase in app_phrases):
+            if "when i say" in text and any(phrase in text for phrase in [" open ", " launch ", " start ", " run "]):
+                return IntentResult("app_control", 0.92, "App alias teaching phrase detected.")
             return IntentResult("app_control", 0.85, "App control trigger detected.")
 
         if any(phrase in text for phrase in ["screen", "read this", "look at this", "what does this say", "what am i looking at"]):

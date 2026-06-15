@@ -10,6 +10,7 @@ from typing import Any
 
 from jarvis.core.result import JarvisEvent, JarvisResult
 from jarvis.tools.shared.app_discovery import (
+    AppAliasStore,
     clean_app_target,
     close_app_match,
     launch_app_match,
@@ -32,9 +33,51 @@ class Agent:
         command_text = str(command or "").strip()
 
         dry_run = _dry_run_requested(context)
+        alias_request = _parse_alias_teach_command(command_text)
+        if alias_request is not None:
+            alias, target = alias_request
+            return self._handle_alias_teach(alias, target, command_text, project_root=project_root, dry_run=dry_run)
         if _is_close_command(command_text):
             return self._handle_close(command_text, project_root=project_root, dry_run=dry_run)
         return self._handle_open(command_text, project_root=project_root, dry_run=dry_run)
+
+    def _handle_alias_teach(self, alias: str, target: str, command_text: str, *, project_root: Path, dry_run: bool = False) -> JarvisResult:
+        alias = str(alias or "").strip().strip(".?!")
+        target = str(target or "").strip().strip(".?!")
+        if not alias or not target:
+            return JarvisResult.fail(
+                "Tell me the nickname and the app you want it to open, sir.",
+                agent_name=self.name,
+                action="learn_app_alias",
+                data={"command": command_text, "alias": alias, "target": target},
+            )
+
+        match = resolve_app_target(target, project_root, dry_run=dry_run)
+        if match.candidate is None:
+            return JarvisResult.fail(
+                f"I could not find {target} yet, so I cannot learn that app name, sir.",
+                agent_name=self.name,
+                action="learn_app_alias",
+                errors=["app_not_found"],
+                data={"command": command_text, "alias": alias, "target": target, "app_match": match.to_dict()},
+            )
+
+        AppAliasStore(project_root).save_alias(alias, match.candidate, source="manual_teach")
+        message = f"Understood, sir. When you say {alias}, I will use {match.candidate.name}."
+        event = _action_card_event(
+            title="Learned App Alias",
+            status="complete",
+            target=match.candidate.name,
+            message=message,
+            agent_name=self.name,
+        )
+        return JarvisResult.ok(
+            message,
+            agent_name=self.name,
+            action="learn_app_alias",
+            data={"command": command_text, "alias": alias, "target": target, "app_match": match.to_dict(), "implemented": True},
+            events=[event],
+        )
 
     def _handle_open(self, command_text: str, *, project_root: Path, dry_run: bool = False) -> JarvisResult:
         target = clean_app_target(command_text)
@@ -168,6 +211,22 @@ def _truthy(value: Any) -> bool:
 def _running_under_test_process() -> bool:
     argv = " ".join(str(part).lower() for part in sys.argv)
     return "unittest" in argv or "pytest" in argv
+
+
+def _parse_alias_teach_command(command: str) -> tuple[str, str] | None:
+    text = str(command or "").strip().strip(".?!")
+    patterns = [
+        r"^(?:jarvis[, ]+)?(?:please\s+)?(?:remember|learn)\s+(?:that\s+)?when\s+i\s+say\s+['\"]?(?P<alias>[^'\",]+)['\"]?\s*,?\s*(?:open|launch|start)\s+(?P<target>.+)$",
+        r"^(?:jarvis[, ]+)?(?:please\s+)?when\s+i\s+say\s+['\"]?(?P<alias>[^'\",]+)['\"]?\s*,?\s*(?:open|launch|start)\s+(?P<target>.+)$",
+        r"^(?:jarvis[, ]+)?(?:please\s+)?(?:remember|learn)\s+(?:that\s+)?['\"]?(?P<alias>[^'\",]+)['\"]?\s+means\s+(?P<target>.+)$",
+    ]
+    for pattern in patterns:
+        match = re.match(pattern, text, flags=re.IGNORECASE)
+        if match:
+            alias = " ".join(match.group("alias").split())
+            target = " ".join(match.group("target").split())
+            return alias, target
+    return None
 
 
 def _is_close_command(command: str) -> bool:

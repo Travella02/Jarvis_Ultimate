@@ -7,7 +7,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "calculator",
-      "learned_at": 1781329166.2359285,
+      "learned_at": 1781503806.3475132,
       "learned_source": "close_success",
       "name": "calculator",
       "path": "",
@@ -26,8 +26,8 @@
       ],
       "launch_type": "known",
       "learned_alias": "chrome",
-      "learned_at": 1781328994.3245504,
-      "learned_source": "launch_success",
+      "learned_at": 1781505089.815211,
+      "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "",
       "process_names": [
@@ -46,8 +46,8 @@
       ],
       "launch_type": "path",
       "learned_alias": "could you open google chrome for me",
-      "learned_at": 1781329094.4088416,
-      "learned_source": "launch_success",
+      "learned_at": 1781505186.4595382,
+      "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
       "process_names": [
@@ -62,8 +62,8 @@
       ],
       "launch_type": "path",
       "learned_alias": "discord",
-      "learned_at": 1781324285.40798,
-      "learned_source": "launch_success",
+      "learned_at": 1781503790.2442658,
+      "learned_source": "close_success",
       "name": "discord",
       "path": "C:\\Users\\tanne\\AppData\\Local\\Discord\\Update.exe",
       "process_names": [
@@ -91,14 +91,30 @@
       ],
       "source": "known_path"
     },
+    "music": {
+      "aliases": [
+        "Spotify",
+        "spotify"
+      ],
+      "launch_type": "path",
+      "learned_alias": "music",
+      "learned_at": 1781505266.26985,
+      "learned_source": "close_success",
+      "name": "spotify",
+      "path": "C:\\Users\\tanne\\AppData\\Local\\Microsoft\\WindowsApps\\Spotify.exe",
+      "process_names": [
+        "Spotify.exe"
+      ],
+      "source": "known_path"
+    },
     "notepad": {
       "aliases": [
         "notepad"
       ],
       "launch_type": "known",
       "learned_alias": "notepad",
-      "learned_at": 1781329093.1899114,
-      "learned_source": "launch_success",
+      "learned_at": 1781505185.3264637,
+      "learned_source": "verified_launch_success",
       "name": "notepad",
       "path": "",
       "process_names": [
@@ -141,8 +157,8 @@
       ],
       "launch_type": "path",
       "learned_alias": "spotify",
-      "learned_at": 1781324346.7384288,
-      "learned_source": "close_success",
+      "learned_at": 1781503823.340296,
+      "learned_source": "verified_launch_success",
       "name": "spotify",
       "path": "C:\\Users\\tanne\\AppData\\Local\\Microsoft\\WindowsApps\\Spotify.exe",
       "process_names": [
@@ -151,6 +167,6 @@
       "source": "known_path"
     }
   },
-  "updated_at": 1781329405.2411616,
+  "updated_at": 1781505266.26985,
   "version": 1
 }

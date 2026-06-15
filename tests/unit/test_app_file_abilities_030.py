@@ -12,8 +12,13 @@ from jarvis.agents.file_agent.agent import Agent as FileAgent
 
 class TestAppFileAbilities030(unittest.TestCase):
     def test_app_agent_launches_known_app_with_action_card(self) -> None:
-        with patch.dict("os.environ", {"JARVIS_ALLOW_OS_LAUNCH_DURING_TESTS": "1"}), patch("jarvis.tools.shared.process_tools.subprocess.Popen") as popen:
-            result = AppAgent().handle("open notepad", context={"config": SimpleNamespace(project_root=Path.cwd()), "allow_os_launch_during_tests": True})
+        """App-agent tests must resolve apps without launching real OS apps."""
+
+        context = {"config": SimpleNamespace(project_root=Path.cwd()), "dry_run": True}
+        with patch("jarvis.tools.shared.process_tools.subprocess.Popen") as process_popen, patch(
+            "jarvis.tools.shared.app_discovery.subprocess.Popen"
+        ) as discovery_popen:
+            result = AppAgent().handle("open notepad", context=context)
 
         self.assertTrue(result.success)
         self.assertEqual(result.action, "open_target")
@@ -21,7 +26,8 @@ class TestAppFileAbilities030(unittest.TestCase):
         self.assertEqual(result.data["target"], "notepad")
         self.assertTrue(result.events)
         self.assertEqual(result.events[0].event_type, "ui.workspace_card")
-        popen.assert_called_once()
+        process_popen.assert_not_called()
+        discovery_popen.assert_not_called()
 
     def test_file_agent_project_status_and_search_are_read_only(self) -> None:
         with TemporaryDirectory() as tmp:
