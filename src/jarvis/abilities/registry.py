@@ -149,8 +149,8 @@ def curated_ability_for_tool(tool_name: str, *, agent_name: str, intent: str, pe
             "display_name": "Open Apps and Websites",
             "description": "Open desktop apps by learned aliases, safe known commands, Start Menu shortcuts, and close matches on the computer.",
             "risk_level": "safe",
-            "triggers": ["open", "launch", "start", "run", "pull up", "bring up", "can you open", "could you open", "open app", "open website", "open project folder", "when i say", "call this app", "remember this app"],
-            "examples": ["Jarvis, open VS Code", "Jarvis, launch Chrome", "Jarvis, pull up Snipping Tool", "Jarvis, when I say music, open Spotify", "Jarvis, open the project folder"],
+            "triggers": ["open", "launch", "start", "run", "pull up", "bring up", "can you open", "could you open", "open app", "open website", "open project folder", "when i say", "call this app", "remember this app", "forget alias", "forget nickname", "list aliases", "use as my browser", "default browser"],
+            "examples": ["Jarvis, open VS Code", "Jarvis, launch Chrome", "Jarvis, pull up Snipping Tool", "Jarvis, when I say music or jams, open Spotify", "Jarvis, use Edge as my main browser", "Jarvis, forget the nickname jams"],
             "permissions": ["app_control"],
         },
         "app_closer": {
@@ -170,10 +170,10 @@ def curated_ability_for_tool(tool_name: str, *, agent_name: str, intent: str, pe
         },
         "window_controller": {
             "display_name": "Window Control",
-            "description": "Future window switching and focus control.",
-            "risk_level": "confirm",
-            "triggers": ["switch to", "focus window", "close window"],
-            "examples": ["Jarvis, switch to VS Code"],
+            "description": "Bring an already-running app window forward when possible.",
+            "risk_level": "safe",
+            "triggers": ["switch to", "focus window", "bring up", "show app"],
+            "examples": ["Jarvis, switch to VS Code", "Jarvis, bring up Chrome"],
         },
         "file_search": {
             "display_name": "Search Project Files",

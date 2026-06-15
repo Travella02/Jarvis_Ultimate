@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.2.6"
+APP_SHELL_VERSION = "0.2.7"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -85,6 +85,10 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "manual_chat_scroll_preservation",
         "app_alias_teaching_router",
         "media_player_close_process_aliases",
+        "multi_app_alias_management",
+        "default_app_roles",
+        "app_focus_existing_windows",
+        "alias_forget_list_rename_commands",
     )
 
 

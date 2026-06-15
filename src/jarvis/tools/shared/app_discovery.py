@@ -19,8 +19,8 @@ from typing import Any, Iterable
 
 from jarvis.tools.shared.process_tools import KNOWN_APP_COMMANDS, LaunchResult, command_for_known_app, launch_known_app
 
-_ALIAS_VERSION = 1
-_INDEX_VERSION = 8
+_ALIAS_VERSION = 2
+_INDEX_VERSION = 9
 _INDEX_TTL_SECONDS = 7 * 24 * 60 * 60
 _MAX_EXECUTABLE_SCAN_RESULTS = 750
 _DEFAULT_LAUNCH_VERIFY_SECONDS = 5.0
@@ -108,6 +108,18 @@ BUILTIN_APP_ALIASES: dict[str, str] = {
     "spotify": "spotify",
     "media player": "media player",
     "windows media player": "media player",
+}
+
+DEFAULT_APP_ROLE_ALIASES: dict[str, list[str]] = {
+    "browser": ["browser", "main browser", "my browser"],
+    "music": ["music", "music app", "my music app"],
+    "editor": ["editor", "code editor", "my editor"],
+    "messages": ["messages", "messaging", "chat app", "messaging app"],
+    "notes": ["notes", "note app", "notepad app"],
+    "terminal": ["terminal", "console", "command line"],
+    "screenshots": ["screenshots", "screenshot tool", "snipping tool"],
+    "video": ["video", "video player", "media player"],
+    "mail": ["mail", "email", "email app"],
 }
 
 # Process names and likely Windows install paths for common apps.  These do not
@@ -274,7 +286,12 @@ class AppMatch:
 
 
 class AppAliasStore:
-    """Small JSON store for learned app aliases and discovered app cache."""
+    """Small JSON store for learned app aliases, default roles, and discovered app cache.
+
+    Aliases are intentionally user/device local.  The same app can have any
+    number of spoken names, and default roles such as browser or music are stored
+    alongside those aliases so SaaS users can customize their own computers.
+    """
 
     def __init__(self, project_root: str | Path) -> None:
         self.project_root = Path(project_root)
@@ -282,32 +299,130 @@ class AppAliasStore:
         self.alias_path = self.data_dir / "app_aliases.json"
         self.index_path = self.data_dir / "app_index.json"
 
-    def load_aliases(self) -> dict[str, dict[str, Any]]:
+    def _load_alias_payload(self) -> dict[str, Any]:
         data = _read_json(self.alias_path, default={})
         if not isinstance(data, dict):
-            return {}
+            return {"version": _ALIAS_VERSION, "aliases": {}, "roles": {}}
         aliases = data.get("aliases", data)
         if not isinstance(aliases, dict):
-            return {}
-        return {normalize_query(alias): dict(value) for alias, value in aliases.items() if normalize_query(alias) and isinstance(value, dict)}
+            aliases = {}
+        roles = data.get("roles", {})
+        if not isinstance(roles, dict):
+            roles = {}
+        return {
+            "version": int(data.get("version") or _ALIAS_VERSION),
+            "updated_at": float(data.get("updated_at") or 0.0),
+            "aliases": {normalize_query(alias): dict(value) for alias, value in aliases.items() if normalize_query(alias) and isinstance(value, dict)},
+            "roles": {normalize_query(role): dict(value) for role, value in roles.items() if normalize_query(role) and isinstance(value, dict)},
+        }
 
-    def save_alias(self, alias: str, candidate: AppCandidate, *, source: str = "automatic") -> None:
-        clean_alias = normalize_query(alias)
-        if not clean_alias or candidate is None:
-            return
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        aliases = self.load_aliases()
-        payload = candidate.to_dict()
-        payload.update({"learned_alias": clean_alias, "learned_source": source, "learned_at": time.time()})
-        aliases[clean_alias] = payload
+    def _write_alias_payload(self, *, aliases: dict[str, dict[str, Any]], roles: dict[str, dict[str, Any]]) -> None:
         _write_json(
             self.alias_path,
             {
                 "version": _ALIAS_VERSION,
                 "updated_at": time.time(),
                 "aliases": aliases,
+                "roles": roles,
             },
         )
+
+    def load_aliases(self) -> dict[str, dict[str, Any]]:
+        return dict(self._load_alias_payload().get("aliases", {}))
+
+    def load_roles(self) -> dict[str, dict[str, Any]]:
+        return dict(self._load_alias_payload().get("roles", {}))
+
+    def save_alias(self, alias: str, candidate: AppCandidate, *, source: str = "automatic") -> None:
+        clean_alias = normalize_query(alias)
+        if not clean_alias or candidate is None:
+            return
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        payload = self._load_alias_payload()
+        aliases = dict(payload.get("aliases", {}))
+        roles = dict(payload.get("roles", {}))
+        candidate_payload = candidate.to_dict()
+        candidate_payload.update({"learned_alias": clean_alias, "learned_source": source, "learned_at": time.time()})
+        aliases[clean_alias] = candidate_payload
+        self._write_alias_payload(aliases=aliases, roles=roles)
+
+    def save_aliases(self, aliases_to_save: Iterable[str], candidate: AppCandidate, *, source: str = "automatic") -> list[str]:
+        saved: list[str] = []
+        for alias in aliases_to_save:
+            clean_alias = normalize_query(alias)
+            if not clean_alias or clean_alias in saved:
+                continue
+            self.save_alias(clean_alias, candidate, source=source)
+            saved.append(clean_alias)
+        return saved
+
+    def delete_alias(self, alias: str) -> bool:
+        clean_alias = normalize_query(alias)
+        if not clean_alias:
+            return False
+        payload = self._load_alias_payload()
+        aliases = dict(payload.get("aliases", {}))
+        roles = dict(payload.get("roles", {}))
+        existed = clean_alias in aliases
+        if existed:
+            aliases.pop(clean_alias, None)
+            self._write_alias_payload(aliases=aliases, roles=roles)
+        return existed
+
+    def rename_alias(self, old_alias: str, new_alias: str, *, source: str = "manual_rename") -> bool:
+        old_clean = normalize_query(old_alias)
+        new_clean = normalize_query(new_alias)
+        if not old_clean or not new_clean:
+            return False
+        payload = self._load_alias_payload()
+        aliases = dict(payload.get("aliases", {}))
+        roles = dict(payload.get("roles", {}))
+        existing = aliases.get(old_clean)
+        if not isinstance(existing, dict):
+            return False
+        replacement = dict(existing)
+        replacement.update({"learned_alias": new_clean, "learned_source": source, "learned_at": time.time()})
+        aliases[new_clean] = replacement
+        aliases.pop(old_clean, None)
+        self._write_alias_payload(aliases=aliases, roles=roles)
+        return True
+
+    def save_role(self, role: str, candidate: AppCandidate, *, source: str = "manual_role") -> list[str]:
+        clean_role = normalize_query(role)
+        if not clean_role or candidate is None:
+            return []
+        payload = self._load_alias_payload()
+        aliases = dict(payload.get("aliases", {}))
+        roles = dict(payload.get("roles", {}))
+        role_payload = candidate.to_dict()
+        role_payload.update({"role": clean_role, "learned_source": source, "learned_at": time.time()})
+        roles[clean_role] = role_payload
+        self._write_alias_payload(aliases=aliases, roles=roles)
+        role_aliases = DEFAULT_APP_ROLE_ALIASES.get(clean_role, [clean_role])
+        return self.save_aliases(role_aliases, candidate, source=f"{source}:{clean_role}")
+
+    def alias_groups(self) -> dict[str, dict[str, Any]]:
+        groups: dict[str, dict[str, Any]] = {}
+        for alias, payload in self.load_aliases().items():
+            candidate = AppCandidate.from_dict(payload)
+            key = _candidate_identity(candidate)
+            if key not in groups:
+                groups[key] = {"candidate": candidate, "aliases": []}
+            groups[key]["aliases"].append(alias)
+        for group in groups.values():
+            group["aliases"] = sorted(set(group["aliases"]))
+        return groups
+
+    def aliases_for_target(self, target: str) -> list[str]:
+        clean_target = normalize_query(target)
+        if not clean_target:
+            return []
+        aliases: list[str] = []
+        for alias, payload in self.load_aliases().items():
+            candidate = AppCandidate.from_dict(payload)
+            if clean_target in _candidate_aliases(candidate) or _match_score(clean_target, normalize_query(candidate.name)) >= 0.82:
+                aliases.append(alias)
+        return sorted(set(aliases))
 
     def load_index(self) -> list[AppCandidate] | None:
         data = _read_json(self.index_path, default={})
@@ -331,7 +446,6 @@ class AppAliasStore:
                 "candidates": [candidate.to_dict() for candidate in candidates],
             },
         )
-
 
 def clean_app_target(command_or_target: str, *, close: bool = False) -> str:
     """Extract the app name from natural-language open/close commands."""
@@ -444,6 +558,10 @@ def resolve_app_target(target: str, project_root: str | Path, *, force_refresh: 
     if query in learned_aliases:
         return AppMatch(AppCandidate.from_dict(learned_aliases[query]), 1.0, "learned_alias", query, learned=True)
 
+    learned_roles = store.load_roles()
+    if query in learned_roles:
+        return AppMatch(AppCandidate.from_dict(learned_roles[query]), 1.0, "learned_role", query, learned=True)
+
     builtin_key = BUILTIN_APP_ALIASES.get(query)
     safe_scan = _effective_dry_run(dry_run)
 
@@ -532,6 +650,13 @@ def launch_app_match(match: AppMatch, *, project_root: str | Path, alias_to_lear
         return LaunchResult(False, f"I could not find an app matching '{match.query}', sir.", target=match.query, errors=["app_not_found"])
 
     safe_dry_run = _effective_dry_run(dry_run)
+    if _candidate_is_running(candidate, dry_run=safe_dry_run):
+        focus_result = focus_app_match(match, dry_run=safe_dry_run)
+        if focus_result.success:
+            if alias_to_learn:
+                AppAliasStore(project_root).save_alias(alias_to_learn, candidate, source="focus_existing_success")
+            return LaunchResult(True, f"{candidate.name} is already open, sir. I brought it forward.", target=candidate.name, launch_type="focus", command=focus_result.command, errors=focus_result.errors)
+
     result = _launch_candidate(candidate, match=match, project_root=project_root, dry_run=safe_dry_run)
     if not result.success:
         fallback = _launch_verified_fallback(match.query or alias_to_learn or candidate.name, project_root=project_root, dry_run=safe_dry_run)
@@ -599,6 +724,59 @@ def _verify_launch_result(candidate: AppCandidate, result: LaunchResult, *, dry_
         errors=[*(result.errors or []), "launch_not_verified", *process_names],
     )
 
+
+
+def focus_app_match(match: AppMatch, *, dry_run: bool = False) -> LaunchResult:
+    """Bring an already-running app to the foreground when the OS allows it."""
+
+    candidate = match.candidate
+    if candidate is None:
+        return LaunchResult(False, f"I could not find an app matching '{match.query}' to focus, sir.", target=match.query, launch_type="focus", errors=["app_not_found"])
+
+    process_names = _process_names_for_candidate(candidate)
+    if not process_names:
+        return LaunchResult(False, f"I do not know which process to focus for {candidate.name}, sir.", target=candidate.name, launch_type="focus", errors=["missing_process_name"])
+
+    safe_dry_run = _effective_dry_run(dry_run)
+    if safe_dry_run:
+        return LaunchResult(True, f"I would bring {candidate.name} forward, sir.", target=candidate.name, launch_type="focus", command=["focus", *process_names])
+
+    if platform.system().lower() != "windows":
+        return LaunchResult(True, f"{candidate.name} appears to be running, sir.", target=candidate.name, launch_type="focus", command=["focus-unavailable", *process_names])
+
+    focused = _focus_windows_process(process_names)
+    if focused:
+        return LaunchResult(True, f"I brought {candidate.name} forward, sir.", target=candidate.name, launch_type="focus", command=["focus", *process_names])
+    return LaunchResult(False, f"I found {candidate.name}, but I could not bring its window forward, sir.", target=candidate.name, launch_type="focus", command=["focus", *process_names], errors=["focus_failed"])
+
+
+def _candidate_is_running(candidate: AppCandidate, *, dry_run: bool = False) -> bool:
+    if _effective_dry_run(dry_run):
+        return False
+    if platform.system().lower() != "windows":
+        return False
+    process_names = _process_names_for_candidate(candidate)
+    if not process_names:
+        return False
+    return bool(_match_running_processes(process_names, _windows_running_processes()))
+
+
+def _focus_windows_process(process_names: list[str]) -> bool:
+    safe_names = [Path(name).stem for name in process_names if _is_safe_process_name(name)]
+    if not safe_names:
+        return False
+    quoted_names = ",".join("'" + name.replace("'", "''") + "'" for name in safe_names)
+    script = (
+        "$names=@(" + quoted_names + ");"
+        "$p=Get-Process -ErrorAction SilentlyContinue | Where-Object { $names -contains $_.ProcessName } | "
+        "Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1;"
+        "if($p){$ws=New-Object -ComObject WScript.Shell; if($ws.AppActivate($p.Id)){exit 0}else{exit 2}} else {exit 3}"
+    )
+    try:
+        completed = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], capture_output=True, text=True, timeout=4)  # noqa: S603,S607
+    except Exception:
+        return False
+    return completed.returncode == 0
 
 
 def close_app_match(match: AppMatch, *, project_root: str | Path, alias_to_learn: str = "", dry_run: bool = False) -> LaunchResult:
@@ -1023,6 +1201,12 @@ def _should_skip_app_name(name: str) -> bool:
     if not normalized:
         return True
     return any(part in normalized for part in _SKIP_NAME_PARTS)
+
+
+def _candidate_identity(candidate: AppCandidate) -> str:
+    if candidate.path:
+        return candidate.path.lower()
+    return f"name:{normalize_query(candidate.name)}"
 
 
 def _dedupe_candidates(candidates: Iterable[AppCandidate]) -> list[AppCandidate]:

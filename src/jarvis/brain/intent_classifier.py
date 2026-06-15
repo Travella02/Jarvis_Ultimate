@@ -28,7 +28,7 @@ class IntentClassifier:
         if text in {"status", "system status", "jarvis status"} or "are you online" in text:
             return IntentResult("status", 0.95, "Status phrase detected.")
 
-        app_prefixes = ["open ", "launch ", "start app ", "start ", "run ", "open website ", "open site ", "close ", "quit ", "exit ", "switch to "]
+        app_prefixes = ["open ", "launch ", "start app ", "start ", "run ", "open website ", "open site ", "close ", "quit ", "exit ", "switch to ", "focus ", "show "]
         app_phrases = [
             "pull up",
             "bring up",
@@ -43,10 +43,32 @@ class IntentClassifier:
             "when i say",
             "call this app",
             "remember this app",
+            "what app aliases",
+            "what aliases",
+            "list aliases",
+            "show aliases",
+            "forget the alias",
+            "forget the name",
+            "forget the nickname",
+            "remove the alias",
+            "remove the name",
+            "remove the nickname",
+            "delete the app name",
+            "stop using",
+            "don't call",
+            "dont call",
+            "use ",
+            " as my main browser",
+            " as my default browser",
+            " as my browser",
+            " as my music app",
+            " as my editor",
         ]
         if any(text.startswith(prefix) for prefix in app_prefixes) or any(phrase in text for phrase in app_phrases):
             if "when i say" in text and any(phrase in text for phrase in [" open ", " launch ", " start ", " run "]):
                 return IntentResult("app_control", 0.92, "App alias teaching phrase detected.")
+            if any(phrase in text for phrase in ["alias", "nickname", "app name", "when i say", " as my ", "default browser", "main browser"]):
+                return IntentResult("app_control", 0.9, "App alias/default-role phrase detected.")
             return IntentResult("app_control", 0.85, "App control trigger detected.")
 
         if any(phrase in text for phrase in ["screen", "read this", "look at this", "what does this say", "what am i looking at"]):

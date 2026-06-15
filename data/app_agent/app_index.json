@@ -5946,13 +5946,34 @@
     },
     {
       "aliases": [
+        "media player",
+        "windows media player",
+        "wmplayer"
+      ],
+      "launch_type": "path",
+      "name": "media player",
+      "path": "C:\\Program Files\\Windows Media Player\\wmplayer.exe",
+      "process_names": [
+        "Microsoft.Media.Player.exe",
+        "Music.UI.exe",
+        "wmplayer.exe"
+      ],
+      "source": "known_path"
+    },
+    {
+      "aliases": [
         "Media Player",
-        "media player"
+        "media player",
+        "windows media player"
       ],
       "launch_type": "aumid",
       "name": "Media Player",
       "path": "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic",
-      "process_names": [],
+      "process_names": [
+        "Microsoft.Media.Player.exe",
+        "Music.UI.exe",
+        "wmplayer.exe"
+      ],
       "source": "start_apps"
     },
     {
@@ -13128,6 +13149,8 @@
     {
       "aliases": [
         "Windows Media Player Legacy",
+        "media player",
+        "windows media player",
         "windows media player legacy"
       ],
       "launch_type": "aumid",
@@ -13466,19 +13489,6 @@
         "wmplayer.exe"
       ],
       "source": "registry_app_paths"
-    },
-    {
-      "aliases": [
-        "wmplayer",
-        "wmplayer"
-      ],
-      "launch_type": "path",
-      "name": "wmplayer",
-      "path": "C:\\Program Files\\Windows Media Player\\wmplayer.exe",
-      "process_names": [
-        "wmplayer.exe"
-      ],
-      "source": "program_files"
     },
     {
       "aliases": [
@@ -14012,6 +14022,6 @@
       "source": "program_files"
     }
   ],
-  "created_at": 1781503986.8428752,
-  "version": 8
+  "created_at": 1781508732.0612535,
+  "version": 9
 }

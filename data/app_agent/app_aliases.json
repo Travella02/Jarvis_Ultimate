@@ -26,7 +26,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "chrome",
-      "learned_at": 1781505089.815211,
+      "learned_at": 1781508414.0878115,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "",
@@ -46,7 +46,7 @@
       ],
       "launch_type": "path",
       "learned_alias": "could you open google chrome for me",
-      "learned_at": 1781505186.4595382,
+      "learned_at": 1781508511.9560404,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -98,8 +98,8 @@
       ],
       "launch_type": "path",
       "learned_alias": "music",
-      "learned_at": 1781505266.26985,
-      "learned_source": "close_success",
+      "learned_at": 1781509047.0132885,
+      "learned_source": "verified_launch_success",
       "name": "spotify",
       "path": "C:\\Users\\tanne\\AppData\\Local\\Microsoft\\WindowsApps\\Spotify.exe",
       "process_names": [
@@ -113,7 +113,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "notepad",
-      "learned_at": 1781505185.3264637,
+      "learned_at": 1781508510.8177636,
       "learned_source": "verified_launch_success",
       "name": "notepad",
       "path": "",
@@ -167,6 +167,7 @@
       "source": "known_path"
     }
   },
-  "updated_at": 1781505266.26985,
-  "version": 1
+  "roles": {},
+  "updated_at": 1781509047.0132885,
+  "version": 2
 }

@@ -15,7 +15,7 @@ class AppShellOrbCaption020Tests(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_version_and_capabilities_include_orb_caption_controls(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.2.6")
+        self.assertEqual(APP_SHELL_VERSION, "0.2.7")
         capabilities = app_shell_capabilities()
         self.assertIn("continuous_js_orb_motion", capabilities)
         self.assertIn("orb_speech_caption_typewriter", capabilities)

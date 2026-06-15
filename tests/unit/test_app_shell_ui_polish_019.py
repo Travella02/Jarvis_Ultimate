@@ -12,7 +12,7 @@ class TestAppShellUIPolish019(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_app_shell_version_and_capabilities_include_main_interface_polish(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.2.6")
+        self.assertEqual(APP_SHELL_VERSION, "0.2.7")
         capabilities = app_shell_capabilities()
         self.assertIn("cinematic_main_interface_layout", capabilities)
         self.assertIn("collapsible_diagnostics_drawer", capabilities)
@@ -38,7 +38,7 @@ class TestAppShellUIPolish019(unittest.TestCase):
         self.assertIn("toggleDiagnostics", self.renderer_js)
         self.assertIn("diagnostics-collapsed", self.renderer_js)
         self.assertIn("chatRoleClass", self.renderer_js)
-        self.assertIn("els.chatLog.scrollTop = els.chatLog.scrollHeight", self.renderer_js)
+        self.assertIn("preserveOrAutoScroll(els.chatLog", self.renderer_js)
         self.assertIn("Initializing Jarvis", self.renderer_js)
 
 
