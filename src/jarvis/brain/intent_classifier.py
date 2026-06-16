@@ -99,11 +99,21 @@ class IntentClassifier:
             "forget that",
             "forget memory",
             "forget memories",
-            "stop remembering",
+            "memory candidate",
+            "memory candidates",
+            "waiting for review",
+            "what did you learn recently",
+            "what have you learned recently",
+            "approve that",
+            "approve memory",
+            "save that permanently",
+            "promote that",
+            "reject that",
+            "forget that candidate",
         ]
         if any(phrase in text for phrase in memory_phrases):
-            if any(phrase in text for phrase in ["what do you remember", "what memories", "list memories", "show memories", "search memory", "search memories"]):
-                return IntentResult("memory_search", 0.82, "Memory search/list phrase detected.")
+            if any(phrase in text for phrase in ["what do you remember", "what memories", "list memories", "show memories", "search memory", "search memories", "memory candidates", "waiting for review", "what did you learn recently", "what have you learned recently"]):
+                return IntentResult("memory_search", 0.86, "Memory search/list/review phrase detected.")
             return IntentResult("memory_write", 0.78, "Memory phrase detected.")
 
         if any(phrase in text for phrase in ["search project files", "find file", "project status", "jarvis project status", "file", "folder", "storage", "delete", "move this"]):

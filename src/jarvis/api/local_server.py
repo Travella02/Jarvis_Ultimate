@@ -748,6 +748,30 @@ def _json_bytes(payload: dict[str, Any] | list[Any]) -> bytes:
     return json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
 
 
+def _is_client_disconnect_error(exc: BaseException) -> bool:
+    """Return True when a browser/app client cancelled an API poll response.
+
+    Electron can close or replace frequent /api/state and /api/events requests
+    while the local Python bridge is still writing the JSON response.  That is
+    expected UI polling behavior, not a Jarvis runtime failure, so the request
+    handler should suppress those socket errors instead of printing full
+    tracebacks during long always-on sessions.
+    """
+
+    if isinstance(exc, (BrokenPipeError, ConnectionAbortedError, ConnectionResetError)):
+        return True
+
+    if isinstance(exc, OSError):
+        errno_value = getattr(exc, "errno", None)
+        winerror_value = getattr(exc, "winerror", None)
+        if errno_value in {32, 54, 104, 10053, 10054}:
+            return True
+        if winerror_value in {10053, 10054}:
+            return True
+
+    return False
+
+
 def make_handler(api: LocalJarvisAPI) -> type[BaseHTTPRequestHandler]:
     class JarvisLocalAPIHandler(BaseHTTPRequestHandler):
         server_version = "JarvisLocalAPI/0.2.0"
@@ -757,14 +781,19 @@ def make_handler(api: LocalJarvisAPI) -> type[BaseHTTPRequestHandler]:
 
         def _send(self, payload: dict[str, Any] | list[Any], *, status: int = 200) -> None:
             body = _json_bytes(payload)
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.end_headers()
+                self.wfile.write(body)
+            except OSError as exc:
+                if _is_client_disconnect_error(exc):
+                    return
+                raise
 
         def do_OPTIONS(self) -> None:  # noqa: N802 - stdlib hook
             self._send(api_ok(message="ok"))

@@ -89,6 +89,7 @@ class ShortTermFactRecord:
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
     metadata: dict[str, Any] = field(default_factory=dict)
+    source: str = "chat_archive"
 
     @property
     def normalized_text(self) -> str:
@@ -146,6 +147,512 @@ class MemoryMatch:
         return data
 
 
+
+
+@dataclass(slots=True)
+class MemoryCandidateRecord:
+    """A possible memory Jarvis noticed but has not permanently saved yet."""
+
+    text: str
+    suggested_tier: str = "review"
+    category: str = "general"
+    tags: list[str] = field(default_factory=list)
+    importance: int = 2
+    confidence: float = 0.5
+    reason: str = "needs review"
+    status: str = "pending"
+    source: str = "auto_capture"
+    source_user: str = ""
+    source_assistant: str = ""
+    id: str = field(default_factory=lambda: f"cand_{uuid4().hex[:12]}")
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def normalized_text(self) -> str:
+        return normalize_text(self.text)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, item: dict[str, Any]) -> "MemoryCandidateRecord | None":
+        text = str(item.get("text") or "").strip()
+        if not text:
+            return None
+        try:
+            importance = int(item.get("importance", 2))
+        except (TypeError, ValueError):
+            importance = 2
+        try:
+            confidence = float(item.get("confidence", 0.5))
+        except (TypeError, ValueError):
+            confidence = 0.5
+        tags_raw = item.get("tags")
+        return cls(
+            id=str(item.get("id") or f"cand_{uuid4().hex[:12]}"),
+            text=" ".join(text.split()),
+            suggested_tier=str(item.get("suggested_tier") or "review").strip().lower() or "review",
+            category=str(item.get("category") or "general").strip().lower() or "general",
+            tags=_normalize_tags(tags_raw if isinstance(tags_raw, list) else []),
+            importance=max(1, min(5, importance)),
+            confidence=max(0.0, min(1.0, confidence)),
+            reason=str(item.get("reason") or "needs review"),
+            status=str(item.get("status") or "pending").strip().lower() or "pending",
+            source=str(item.get("source") or "auto_capture"),
+            source_user=str(item.get("source_user") or ""),
+            source_assistant=str(item.get("source_assistant") or ""),
+            created_at=str(item.get("created_at") or utc_now_iso()),
+            updated_at=str(item.get("updated_at") or item.get("created_at") or utc_now_iso()),
+            metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
+        )
+
+
+class MemoryCandidateStore:
+    """Crash-safe queue for memories Jarvis may want to save permanently later."""
+
+    schema_version = 1
+
+    def __init__(
+        self,
+        *,
+        enabled: bool = True,
+        path: str | Path | None = None,
+        max_records: int = 1000,
+        review_limit: int = 8,
+    ) -> None:
+        self.enabled = bool(enabled)
+        self.path = Path(path) if path else Path("data/memory/memory_candidates.json")
+        self.max_records = max(50, int(max_records))
+        self.review_limit = max(1, int(review_limit))
+        self._records: list[MemoryCandidateRecord] = []
+        self.load()
+
+    @property
+    def records(self) -> tuple[MemoryCandidateRecord, ...]:
+        return tuple(self._records)
+
+    def add(
+        self,
+        text: str,
+        *,
+        suggested_tier: str = "review",
+        category: str = "general",
+        tags: Iterable[str] | None = None,
+        importance: int = 2,
+        confidence: float = 0.5,
+        reason: str = "needs review",
+        source: str = "auto_capture",
+        source_user: str = "",
+        source_assistant: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> MemoryCandidateRecord | None:
+        if not self.enabled:
+            return None
+        cleaned = " ".join(str(text or "").strip().split())
+        if not cleaned:
+            return None
+        normalized = normalize_text(cleaned)
+        existing = self._find_duplicate(normalized, friendly_key=self._friendly_key(cleaned))
+        now = utc_now_iso()
+        if existing is not None:
+            existing.text = cleaned
+            existing.suggested_tier = suggested_tier
+            existing.category = category
+            existing.tags = sorted(set([*existing.tags, *_normalize_tags(tags or [])]))
+            existing.importance = max(existing.importance, max(1, min(5, int(importance))))
+            existing.confidence = max(existing.confidence, max(0.0, min(1.0, float(confidence))))
+            existing.reason = reason or existing.reason
+            existing.status = "pending"
+            existing.updated_at = now
+            existing.metadata.update(metadata or {})
+            self.save()
+            return existing
+        record = MemoryCandidateRecord(
+            text=cleaned,
+            suggested_tier=str(suggested_tier or "review").strip().lower() or "review",
+            category=str(category or "general").strip().lower() or "general",
+            tags=_normalize_tags(tags or []),
+            importance=max(1, min(5, int(importance))),
+            confidence=max(0.0, min(1.0, float(confidence))),
+            reason=reason or "needs review",
+            source=source,
+            source_user=str(source_user or ""),
+            source_assistant=str(source_assistant or ""),
+            metadata=dict(metadata or {}),
+        )
+        self._records.append(record)
+        self._trim()
+        self.save()
+        return record
+
+    def pending(self, *, limit: int | None = None) -> list[MemoryCandidateRecord]:
+        selected = [record for record in self._records if record.status == "pending"]
+        return selected[-(limit or self.review_limit):]
+
+    def latest_pending(self) -> MemoryCandidateRecord | None:
+        pending = self.pending(limit=1)
+        return pending[-1] if pending else None
+
+    def approve(self, query: str = "", *, all_matches: bool = False) -> list[MemoryCandidateRecord]:
+        matches = self._expand_duplicate_matches(self._select(query, all_matches=all_matches))
+        for record in matches:
+            record.status = "approved"
+            record.updated_at = utc_now_iso()
+        if matches:
+            self.save()
+        return matches
+
+    def reject(self, query: str = "", *, all_matches: bool = False) -> list[MemoryCandidateRecord]:
+        matches = self._expand_duplicate_matches(self._select(query, all_matches=all_matches))
+        for record in matches:
+            record.status = "rejected"
+            record.updated_at = utc_now_iso()
+        if matches:
+            self.save()
+        return matches
+
+    def search(self, query: str, *, limit: int = 8) -> list[MemoryMatch]:
+        normalized_query = normalize_text(query)
+        if not normalized_query:
+            return []
+        tokens = token_variants(normalized_query.split())
+        results: list[MemoryMatch] = []
+        for record in self._records:
+            score, reason = self._score(record, normalized_query, tokens)
+            if score > 0:
+                results.append(MemoryMatch(record=record, score=round(score, 3), reason=reason, tier="candidate"))
+        results.sort(key=lambda item: (item.score, getattr(item.record, "updated_at", "")), reverse=True)
+        return results[:max(1, int(limit))]
+
+    def status(self) -> dict[str, Any]:
+        counts: dict[str, int] = {}
+        for record in self._records:
+            counts[record.status] = counts.get(record.status, 0) + 1
+        return {
+            "enabled": self.enabled,
+            "records": len(self._records),
+            "pending": counts.get("pending", 0),
+            "approved": counts.get("approved", 0),
+            "rejected": counts.get("rejected", 0),
+            "max_records": self.max_records,
+            "review_limit": self.review_limit,
+            "path": str(self.path),
+        }
+
+    def format_pending(self, *, limit: int | None = None) -> str:
+        pending = self._dedupe_display_records(self.pending(limit=limit))
+        if not pending:
+            return "I do not have any memory candidates waiting for review right now, sir."
+
+        if len(pending) == 1:
+            record = pending[0]
+            tier = self._friendly_tier(record.suggested_tier)
+            text = self._friendly_candidate(record)
+            return f"I found one possible memory waiting for review, sir: {text}. I would treat that as {tier}."
+
+        lines = [f"I found {len(pending)} possible memories waiting for review, sir:"]
+        for record in pending:
+            lines.append(f"- {self._friendly_candidate(record)} — {self._friendly_tier(record.suggested_tier)}")
+        return "\n".join(lines)
+
+    def format_status(self) -> str:
+        info = self.status()
+        state = "online" if info["enabled"] else "disabled"
+        return (
+            f"Memory candidate review is {state}, sir. I have {info['pending']} candidate"
+            f"{'s' if info['pending'] != 1 else ''} waiting for review."
+        )
+
+    def save(self) -> None:
+        if not self.enabled:
+            return
+        payload = {
+            "schema_version": self.schema_version,
+            "updated_at": utc_now_iso(),
+            "records": [record.to_dict() for record in self._records],
+        }
+        atomic_write_json(self.path, payload)
+
+    def load(self) -> None:
+        if not self.enabled or not self.path.exists():
+            self._records = []
+            return
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            self._records = []
+            return
+        records: list[MemoryCandidateRecord] = []
+        for item in payload.get("records", []):
+            if isinstance(item, dict):
+                record = MemoryCandidateRecord.from_dict(item)
+                if record is not None:
+                    records.append(record)
+        self._records = self._dedupe_loaded_records(records)
+        self._trim()
+
+    def _select(self, query: str = "", *, all_matches: bool = False) -> list[MemoryCandidateRecord]:
+        cleaned = " ".join(str(query or "").strip().split())
+        if all_matches:
+            return self.pending(limit=len(self._records))
+        if not cleaned or normalize_text(cleaned) in {"that", "it", "latest", "last"}:
+            latest = self.latest_pending()
+            return [latest] if latest is not None else []
+        if cleaned.startswith("cand_"):
+            return [record for record in self._records if record.id == cleaned and record.status == "pending"]
+        return [match.record for match in self.search(cleaned, limit=1) if match.record.status == "pending"]
+
+    def _find_duplicate(self, normalized: str, *, friendly_key: str = "") -> MemoryCandidateRecord | None:
+        for record in self._records:
+            if record.status != "pending":
+                continue
+            if record.normalized_text == normalized:
+                return record
+            if friendly_key and self._friendly_key(record.text) == friendly_key:
+                return record
+        return None
+
+    def _friendly_key(self, text: str) -> str:
+        return normalize_text(ShortTermFactStore._for_user(text))
+
+    def _dedupe_display_records(self, records: list[MemoryCandidateRecord]) -> list[MemoryCandidateRecord]:
+        selected: dict[str, MemoryCandidateRecord] = {}
+        order: list[str] = []
+        for record in records:
+            key = self._friendly_key(record.text) or record.normalized_text
+            if not key:
+                continue
+            existing = selected.get(key)
+            if existing is None:
+                selected[key] = record
+                order.append(key)
+                continue
+            if record.confidence > existing.confidence or len(record.text) > len(existing.text):
+                selected[key] = record
+        return [selected[key] for key in order if key in selected]
+
+    def _expand_duplicate_matches(self, matches: list[MemoryCandidateRecord]) -> list[MemoryCandidateRecord]:
+        if not matches:
+            return []
+        keys = {self._friendly_key(record.text) or record.normalized_text for record in matches}
+        expanded: list[MemoryCandidateRecord] = []
+        seen_ids: set[str] = set()
+        for record in self._records:
+            if record.status != "pending":
+                continue
+            key = self._friendly_key(record.text) or record.normalized_text
+            if key in keys and record.id not in seen_ids:
+                expanded.append(record)
+                seen_ids.add(record.id)
+        return expanded
+
+    def _dedupe_loaded_records(self, records: list[MemoryCandidateRecord]) -> list[MemoryCandidateRecord]:
+        deduped: dict[tuple[str, str], MemoryCandidateRecord] = {}
+        order: list[tuple[str, str]] = []
+        for record in records:
+            key = (record.status, self._friendly_key(record.text) or record.normalized_text)
+            if not key[1]:
+                continue
+            existing = deduped.get(key)
+            if existing is None:
+                deduped[key] = record
+                order.append(key)
+                continue
+            existing.tags = sorted(set([*existing.tags, *record.tags]))
+            existing.importance = max(existing.importance, record.importance)
+            existing.confidence = max(existing.confidence, record.confidence)
+            existing.metadata.update(record.metadata)
+            existing.updated_at = max(existing.updated_at, record.updated_at)
+            if len(record.text) > len(existing.text):
+                existing.text = record.text
+        return [deduped[key] for key in order if key in deduped]
+
+    def _trim(self) -> None:
+        while len(self._records) > self.max_records:
+            # Prefer trimming old rejected/approved records before pending ones.
+            index = next((idx for idx, record in enumerate(self._records) if record.status != "pending"), 0)
+            self._records.pop(index)
+
+    def _score(self, record: MemoryCandidateRecord, normalized_query: str, query_tokens: set[str]) -> tuple[float, str]:
+        normalized_record = record.normalized_text
+        combined = token_variants(normalized_record.split()) | set(record.tags) | {normalize_text(record.category), normalize_text(record.suggested_tier)}
+        score = 0.0
+        reasons: list[str] = []
+        if normalized_query in normalized_record:
+            score += 2.0
+            reasons.append("text contains query")
+        overlap = query_tokens & combined
+        if overlap:
+            score += len(overlap) / max(len(query_tokens), 1)
+            reasons.append("token overlap")
+        if score > 0:
+            score += record.importance * 0.02
+        return score, "; ".join(reasons)
+
+    @staticmethod
+    def _friendly_candidate(record: MemoryCandidateRecord) -> str:
+        return ShortTermFactStore._for_user(record.text).strip(" .?!")
+
+    @staticmethod
+    def _friendly_tier(tier: str) -> str:
+        normalized = str(tier or "review").strip().lower().replace("-", "_")
+        if normalized in {"long_term", "permanent"}:
+            return "a permanent memory"
+        if normalized in {"short_term", "temporary"}:
+            return "a temporary memory"
+        if normalized == "chat_archive_only":
+            return "chat history only"
+        return "something to review first"
+
+
+class MemoryAutoCaptureEngine:
+    """Decides whether a completed turn might contain useful memory."""
+
+    def __init__(self, *, min_importance: int = 2, llm_review_enabled: bool = False) -> None:
+        self.min_importance = max(1, min(5, int(min_importance)))
+        self.llm_review_enabled = bool(llm_review_enabled)
+
+    def classify_turn(self, user: str, assistant: str = "", *, llm_provider: Any | None = None) -> dict[str, Any]:
+        user_text = " ".join(str(user or "").strip().split())
+        if not user_text or self._is_low_value(user_text):
+            return {"decision": "ignore", "text": "", "importance": 1, "confidence": 0.0, "reason": "low-value or empty turn", "category": "general", "tags": []}
+
+        llm_decision = self._classify_with_llm(user_text, assistant, llm_provider=llm_provider)
+        if llm_decision:
+            return llm_decision
+
+        return self._classify_with_rules(user_text, assistant)
+
+    def _classify_with_rules(self, user_text: str, assistant: str = "") -> dict[str, Any]:
+        lowered = user_text.lower()
+        cleaned = self._clean_candidate_text(user_text)
+        category = self._infer_category(cleaned)
+        tags = self._infer_tags(cleaned, category=category)
+
+        if any(phrase in lowered for phrase in ["from now on", "going forward", "always ", "never ", "remember to", "i prefer", "i like", "my favorite", "i want jarvis", "for future"]):
+            return {
+                "decision": "long_term",
+                "text": cleaned,
+                "importance": 4 if "jarvis" not in lowered else 5,
+                "confidence": 0.82,
+                "reason": "stable preference, instruction, or Jarvis project rule",
+                "category": category,
+                "tags": tags,
+            }
+
+        if any(phrase in lowered for phrase in ["my fiance", "my fiancée", "my wife", "my brother", "my dog", "my pet", "my cat", "my car", "my name is"]):
+            return {
+                "decision": "long_term",
+                "text": cleaned,
+                "importance": 4,
+                "confidence": 0.78,
+                "reason": "relationship, pet, identity, or durable personal detail",
+                "category": category,
+                "tags": tags,
+            }
+
+        if any(phrase in lowered for phrase in ["i ate", "i had for", "today i", "right now", "i'm testing", "i am testing", "we are testing", "i made the commit", "we left off", "next step"]):
+            return {
+                "decision": "short_term",
+                "text": cleaned,
+                "importance": 2,
+                "confidence": 0.68,
+                "reason": "recent context useful for follow-up but not necessarily permanent",
+                "category": category,
+                "tags": tags,
+            }
+
+        return {"decision": "ignore", "text": "", "importance": 1, "confidence": 0.25, "reason": "not important enough to capture automatically", "category": category, "tags": tags}
+
+    def _classify_with_llm(self, user_text: str, assistant: str, *, llm_provider: Any | None = None) -> dict[str, Any] | None:
+        if not self.llm_review_enabled or llm_provider is None or not hasattr(llm_provider, "chat"):
+            return None
+        system_prompt = (
+            "You classify possible memories for a local assistant. Return compact JSON only with keys: "
+            "decision, text, category, tags, importance, confidence, reason. decision must be one of "
+            "long_term, short_term, review, chat_archive_only, ignore. Prefer review over long_term when unsure. "
+            "Do not save sensitive details permanently unless the user explicitly frames them as useful to remember."
+        )
+        prompt = f"User said: {user_text}\nAssistant replied: {assistant[:300]}\nClassify whether this contains useful memory."
+        try:
+            response = llm_provider.chat([{"role": "user", "content": prompt}], system_prompt=system_prompt)
+        except Exception:
+            return None
+        if not getattr(response, "success", False):
+            return None
+        try:
+            raw = json.loads(str(getattr(response, "content", "")).strip())
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(raw, dict):
+            return None
+        decision = str(raw.get("decision") or "review").strip().lower()
+        if decision not in {"long_term", "short_term", "review", "chat_archive_only", "ignore"}:
+            decision = "review"
+        text = " ".join(str(raw.get("text") or user_text).split())
+        try:
+            importance = int(raw.get("importance", 2))
+        except (TypeError, ValueError):
+            importance = 2
+        try:
+            confidence = float(raw.get("confidence", 0.5))
+        except (TypeError, ValueError):
+            confidence = 0.5
+        tags_raw = raw.get("tags")
+        tags = _normalize_tags(tags_raw if isinstance(tags_raw, list) else [])
+        return {
+            "decision": decision,
+            "text": text,
+            "importance": max(1, min(5, importance)),
+            "confidence": max(0.0, min(1.0, confidence)),
+            "reason": str(raw.get("reason") or "LLM memory classifier"),
+            "category": str(raw.get("category") or self._infer_category(text)).strip().lower() or "general",
+            "tags": tags or self._infer_tags(text, category=str(raw.get("category") or "general")),
+        }
+
+    def _is_low_value(self, text: str) -> bool:
+        lowered = normalize_text(text)
+        low_value = {"thanks jarvis", "thank you jarvis", "okay", "ok", "yes", "no", "bye", "goodbye", "list agents", "memory status", "status"}
+        if lowered in low_value:
+            return True
+        return lowered.startswith("what do you remember") or lowered.startswith("what did we talk about")
+
+    def _clean_candidate_text(self, text: str) -> str:
+        cleaned = " ".join(str(text or "").strip().split())
+        cleaned = re.sub(r"^(?:jarvis,?\s*)", "", cleaned, flags=re.IGNORECASE).strip()
+        # Keep the durable fact, not the command phrasing.  For example,
+        # "From now on, I prefer short instructions" should later read back as
+        # "you prefer short instructions," not as a command transcript.
+        cleaned = re.sub(r"^(?:from now on|going forward|for future updates?|for the future),?\s+", "", cleaned, flags=re.IGNORECASE).strip()
+        return cleaned.strip(" .?!")
+
+    def _infer_category(self, text: str) -> str:
+        lowered = text.lower()
+        if any(word in lowered for word in ["prefer", "favorite", "like", "want"]):
+            return "preference"
+        if any(word in lowered for word in ["jarvis", "project", "patch", "update", "version", "commit", "memory pipeline"]):
+            return "project"
+        if any(word in lowered for word in ["fiance", "fiancée", "wife", "brother", "pet", "dog", "cat", "car", "name"]):
+            return "personal"
+        if any(word in lowered for word in ["ate", "dinner", "lunch", "breakfast", "food"]):
+            return "daily_life"
+        return "general"
+
+    def _infer_tags(self, text: str, *, category: str) -> list[str]:
+        tags = [category]
+        lowered = text.lower()
+        if "jarvis" in lowered:
+            tags.append("jarvis")
+        if "app" in lowered or "spotify" in lowered or "chrome" in lowered:
+            tags.append("apps")
+        if "memory" in lowered:
+            tags.append("memory")
+        if "food" in lowered or "ate" in lowered:
+            tags.append("food")
+        return _normalize_tags(tags)
+
 class ShortTermFactStore:
     """A few-days memory tier for useful but not permanent facts."""
 
@@ -196,6 +703,9 @@ class ShortTermFactStore:
         now = utc_now_iso()
         expires_at = (utc_now() + timedelta(days=max(1, int(days or self.default_days)))).isoformat()
         existing = self._find_duplicate(normalized)
+        if existing is None:
+            friendly_normalized = normalize_text(self._for_user(cleaned_text))
+            existing = self._find_duplicate(friendly_normalized, friendly=True)
         if existing is not None:
             existing.text = cleaned_text
             existing.category = str(category or "general").strip().lower() or "general"
@@ -254,16 +764,18 @@ class ShortTermFactStore:
             results = self.search(query, limit=limit)
             if not results:
                 return f"I do not have any temporary memories about {query}, sir."
-            if len(results) == 1:
-                return f"I temporarily remember that {self._for_user(results[0].record.text)}, sir."
-            lines = [f"I found {len(results)} temporary memories about {query}, sir:"]
-            lines.extend(f"- {self._for_user(item.record.text)}" for item in results)
+            phrases = self._dedupe_user_phrases([self._for_user(item.record.text) for item in results])
+            if len(phrases) == 1:
+                return f"I temporarily remember that {phrases[0]}, sir."
+            lines = [f"I found {len(phrases)} temporary memories about {query}, sir:"]
+            lines.extend(f"- {phrase}" for phrase in phrases)
             return "\n".join(lines)
         records = list(self.records)[-limit:]
         if not records:
             return "I do not have any temporary memories saved right now, sir."
-        lines = [f"I have {len(records)} recent temporary memory item(s), sir:"]
-        lines.extend(f"- {self._for_user(record.text)}" for record in records)
+        phrases = self._dedupe_user_phrases([self._for_user(record.text) for record in records])
+        lines = [f"I have {len(phrases)} recent temporary memory item(s), sir:"]
+        lines.extend(f"- {phrase}" for phrase in phrases)
         return "\n".join(lines)
 
     def forget(self, query: str, *, limit: int | None = None) -> list[ShortTermFactRecord]:
@@ -354,14 +866,50 @@ class ShortTermFactStore:
             record = ShortTermFactRecord.from_dict(item)
             if record is not None and not record.is_expired():
                 loaded.append(record)
-        self._records = loaded
+        self._records = self._dedupe_loaded_records(loaded)
         self._trim()
 
-    def _find_duplicate(self, normalized: str) -> ShortTermFactRecord | None:
+    def _find_duplicate(self, normalized: str, *, friendly: bool = False) -> ShortTermFactRecord | None:
         for record in self._records:
-            if record.normalized_text == normalized:
+            record_key = normalize_text(self._for_user(record.text)) if friendly else record.normalized_text
+            if record_key == normalized:
                 return record
         return None
+
+    def _dedupe_loaded_records(self, records: list[ShortTermFactRecord]) -> list[ShortTermFactRecord]:
+        deduped: dict[str, ShortTermFactRecord] = {}
+        order: list[str] = []
+        for record in records:
+            key = normalize_text(self._for_user(record.text)) or record.normalized_text
+            if not key:
+                continue
+            existing = deduped.get(key)
+            if existing is None:
+                deduped[key] = record
+                order.append(key)
+                continue
+            existing.tags = sorted(set([*existing.tags, *record.tags]))
+            existing.importance = max(existing.importance, record.importance)
+            existing.expires_at = max(existing.expires_at, record.expires_at)
+            existing.metadata.update(record.metadata)
+            existing.updated_at = max(existing.updated_at, record.updated_at)
+            if len(record.text) > len(existing.text):
+                existing.text = record.text
+        return [deduped[key] for key in order if key in deduped]
+
+    def _dedupe_user_phrases(self, phrases: list[str]) -> list[str]:
+        selected: dict[str, tuple[int, str]] = {}
+        order = 0
+        for phrase in phrases:
+            cleaned = " ".join(str(phrase or "").strip(" .?!").split())
+            key = normalize_text(cleaned)
+            if not key:
+                continue
+            existing = selected.get(key)
+            if existing is None or len(cleaned) > len(existing[1]):
+                selected[key] = (existing[0] if existing else order, cleaned)
+            order += 1
+        return [phrase for _, phrase in sorted(selected.values(), key=lambda item: item[0])]
 
     def _trim(self) -> None:
         while len(self._records) > self.max_records:
@@ -397,16 +945,27 @@ class ShortTermFactStore:
 
     @staticmethod
     def _for_user(text: str) -> str:
-        cleaned = str(text or "").strip()
+        cleaned = " ".join(str(text or "").strip().strip(" .?!").split())
+        cleaned = re.sub(r"^(?:from now on|going forward|for future updates?|for the future),?\s+", "", cleaned, flags=re.IGNORECASE).strip()
         replacements = [
             (r"\bmy\b", "your"),
+            (r"\bmine\b", "yours"),
             (r"\bi am\b", "you are"),
             (r"\bi'm\b", "you are"),
+            (r"\bi like\b", "you like"),
+            (r"\bi prefer\b", "you prefer"),
+            (r"\bi want\b", "you want"),
+            (r"\bi need\b", "you need"),
+            (r"\bi have\b", "you have"),
+            (r"\bi use\b", "you use"),
             (r"\bme\b", "you"),
+            (r"\bi\b", "you"),
         ]
         for pattern, replacement in replacements:
             cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
-        return cleaned
+        cleaned = re.sub(r"\byou are prefer\b", "you prefer", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .?!")
+        return cleaned[:1].lower() + cleaned[1:] if cleaned else cleaned
 
 
 @dataclass(slots=True)
@@ -422,6 +981,7 @@ class ChatArchiveRecord:
     id: str = field(default_factory=lambda: f"chat_{uuid4().hex[:12]}")
     timestamp: str = field(default_factory=utc_now_iso)
     metadata: dict[str, Any] = field(default_factory=dict)
+    source: str = "chat_archive"
 
     @property
     def normalized_text(self) -> str:
@@ -446,6 +1006,7 @@ class ChatArchiveRecord:
             success=bool(item.get("success", True)),
             timestamp=str(item.get("timestamp") or utc_now_iso()),
             metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
+            source=str(item.get("source") or "chat_archive"),
         )
 
 
@@ -817,6 +1378,10 @@ class ChatArchiveStore:
         if len(compact) <= limit:
             return compact
         return compact[: limit - 3] + "..."
+
+
+# Backward-compatible name used by earlier tests/docs.
+ChatArchiveMemory = ChatArchiveStore
 
 
 class MemoryMaintenance:

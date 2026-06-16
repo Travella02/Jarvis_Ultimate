@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.core.result import JarvisResult
-from jarvis.memory.always_on import ChatArchiveStore, ShortTermFactStore
+from jarvis.memory.always_on import ChatArchiveStore, MemoryCandidateStore, ShortTermFactStore
 from jarvis.memory.long_term import LongTermMemoryStore
 
 
@@ -30,6 +30,7 @@ class Agent:
         long_term = context.get("long_term_memory") or self._fallback_long_term(config)
         short_term_facts = context.get("short_term_fact_memory") or self._fallback_short_term_facts(config)
         chat_archive = context.get("chat_archive") or self._fallback_chat_archive(config)
+        memory_candidates = context.get("memory_candidates") or self._fallback_memory_candidates(config)
 
         text = " ".join(str(command or "").strip().split())
         lowered = text.lower()
@@ -46,8 +47,86 @@ class Agent:
                 message,
                 agent_name=self.name,
                 action="memory_status",
-                data={"short_term_facts": short_term_facts.status(), "long_term_memory": long_term.status(), "chat_archive": chat_archive.status()},
+                data={"short_term_facts": short_term_facts.status(), "long_term_memory": long_term.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status()},
             )
+
+        candidate_action = self._extract_candidate_action(text)
+        if candidate_action is not None:
+            action_name, query, all_matches = candidate_action
+            if action_name == "list":
+                return JarvisResult.ok(
+                    memory_candidates.format_pending(),
+                    agent_name=self.name,
+                    action="memory_candidates_list",
+                    data={"memory_candidates": memory_candidates.status(), "pending": [record.to_dict() for record in memory_candidates.pending()]},
+                )
+            if action_name == "approve":
+                approved = memory_candidates.approve(query, all_matches=all_matches)
+                if not approved:
+                    return JarvisResult.ok(
+                        "I do not have a matching memory candidate waiting for review, sir.",
+                        agent_name=self.name,
+                        action="memory_candidate_approve",
+                        data={"approved": []},
+                    )
+                saved: list[dict[str, Any]] = []
+                temporary: list[dict[str, Any]] = []
+                seen_saved_keys: set[str] = set()
+                seen_temp_keys: set[str] = set()
+                for candidate in approved:
+                    candidate_key = self._memory_phrase_key(candidate.text)
+                    if candidate.suggested_tier in {"short_term", "temporary"}:
+                        record = short_term_facts.add(
+                            candidate.text,
+                            category=candidate.category,
+                            tags=candidate.tags,
+                            source="candidate_review",
+                            importance=candidate.importance,
+                            metadata={"candidate_id": candidate.id},
+                        )
+                        if record is not None and candidate_key not in seen_temp_keys:
+                            temporary.append(record.to_dict())
+                            seen_temp_keys.add(candidate_key)
+                    else:
+                        record = long_term.add(
+                            candidate.text,
+                            category=candidate.category,
+                            tags=candidate.tags,
+                            source="candidate_review",
+                            importance=candidate.importance,
+                            metadata={"candidate_id": candidate.id, "candidate_reason": candidate.reason},
+                        )
+                        if record is not None and candidate_key not in seen_saved_keys:
+                            saved.append(record.to_dict())
+                            seen_saved_keys.add(candidate_key)
+                if saved and not temporary:
+                    message = "I saved that permanently, sir." if len(saved) == 1 else f"I saved {len(saved)} memories permanently, sir."
+                elif temporary and not saved:
+                    message = "I saved that as a temporary memory, sir." if len(temporary) == 1 else f"I saved {len(temporary)} temporary memories, sir."
+                else:
+                    message = f"I approved {len(approved)} memory candidate(s), sir."
+                return JarvisResult.ok(
+                    message,
+                    agent_name=self.name,
+                    action="memory_candidate_approve",
+                    data={"approved": [record.to_dict() for record in approved], "saved_long_term": saved, "saved_short_term": temporary},
+                )
+            if action_name == "reject":
+                rejected = memory_candidates.reject(query, all_matches=all_matches)
+                if not rejected:
+                    return JarvisResult.ok(
+                        "I do not have a matching memory candidate waiting for review, sir.",
+                        agent_name=self.name,
+                        action="memory_candidate_reject",
+                        data={"rejected": []},
+                    )
+                message = "I rejected that memory candidate, sir." if len(rejected) == 1 else f"I rejected {len(rejected)} memory candidates, sir."
+                return JarvisResult.ok(
+                    message,
+                    agent_name=self.name,
+                    action="memory_candidate_reject",
+                    data={"rejected": [record.to_dict() for record in rejected]},
+                )
 
         chat_query = self._extract_chat_archive_query(text)
         if chat_query is not None:
@@ -150,7 +229,7 @@ class Agent:
             "I can save permanent memories, temporary memories, search recent chat archives, and forget saved memories now, sir.",
             agent_name=self.name,
             action="memory_help",
-            data={"implemented": True, "long_term_memory": long_term.status(), "short_term_facts": short_term_facts.status(), "chat_archive": chat_archive.status()},
+            data={"implemented": True, "long_term_memory": long_term.status(), "short_term_facts": short_term_facts.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status()},
         )
 
     def _fallback_long_term(self, config: Any | None) -> LongTermMemoryStore:
@@ -165,6 +244,10 @@ class Agent:
         root = getattr(config, "data_dir", None) / "memory" / "chat_archive" if getattr(config, "data_dir", None) else None
         return ChatArchiveStore(root_dir=root)
 
+    def _fallback_memory_candidates(self, config: Any | None) -> MemoryCandidateStore:
+        path = getattr(config, "data_dir", None) / "memory" / "memory_candidates.json" if getattr(config, "data_dir", None) else None
+        return MemoryCandidateStore(path=path)
+
     def _is_status(self, lowered: str) -> bool:
         return lowered in {
             "memory status",
@@ -174,6 +257,40 @@ class Agent:
             "chat archive status",
             "memory pipeline status",
         }
+
+    def _extract_candidate_action(self, text: str) -> tuple[str, str, bool] | None:
+        lowered = text.lower().strip(" ?.!)\"'")
+        list_phrases = (
+            "what memories are waiting for review",
+            "what memory candidates",
+            "memory candidates",
+            "review memory candidates",
+            "what did you learn recently",
+            "what have you learned recently",
+            "show memory candidates",
+            "list memory candidates",
+        )
+        if any(phrase in lowered for phrase in list_phrases):
+            return ("list", "", False)
+
+        approve_phrases = ("save that permanently", "promote that", "approve that", "approve the memory", "save it permanently")
+        if any(phrase in lowered for phrase in approve_phrases):
+            return ("approve", "that", False)
+        if "approve all" in lowered or "save all" in lowered or "promote all" in lowered:
+            return ("approve", "", True)
+        approve_match = re.search(r"(?:approve|promote|save)\s+(?:the\s+)?(?:candidate|memory candidate|memory)\s+(?:about\s+)?(.+)$", text, flags=re.IGNORECASE)
+        if approve_match:
+            return ("approve", self._clean_tail(approve_match.group(1)), False)
+
+        reject_phrases = ("reject that", "forget that candidate", "do not remember that", "don't remember that", "dont remember that")
+        if any(phrase in lowered for phrase in reject_phrases):
+            return ("reject", "that", False)
+        if "reject all" in lowered or "forget all candidates" in lowered or "clear memory candidates" in lowered:
+            return ("reject", "", True)
+        reject_match = re.search(r"(?:reject|forget|remove|delete)\s+(?:the\s+)?(?:candidate|memory candidate)\s+(?:about\s+)?(.+)$", text, flags=re.IGNORECASE)
+        if reject_match:
+            return ("reject", self._clean_tail(reject_match.group(1)), False)
+        return None
 
     def _extract_list_query(self, text: str) -> str | None:
         lowered = text.lower().strip(" ?.!\")'")
@@ -347,27 +464,46 @@ class Agent:
         # Prefer the most complete version of a memory fact.  For example,
         # keep "your favorite test color is blue" instead of also saying the
         # partial match "your favorite test color."
-        normalized_pairs: list[tuple[str, str]] = []
-        for phrase in phrases:
+        normalized_pairs: list[tuple[int, str, str]] = []
+        for index, phrase in enumerate(phrases):
             normalized = re.sub(r"[^a-z0-9\s]", " ", phrase.lower())
             normalized = " ".join(normalized.split())
             if normalized:
-                normalized_pairs.append((phrase, normalized))
+                normalized_pairs.append((index, phrase, normalized))
 
-        normalized_pairs.sort(key=lambda item: len(item[1]), reverse=True)
-        kept: list[tuple[str, str]] = []
-        for phrase, normalized in normalized_pairs:
-            if any(normalized == old or normalized in old or old in normalized for _, old in kept):
+        sorted_pairs = sorted(normalized_pairs, key=lambda item: len(item[2]), reverse=True)
+        kept: list[tuple[int, str, str]] = []
+        for index, phrase, normalized in sorted_pairs:
+            if any(normalized == old or normalized in old or old in normalized for _, _, old in kept):
                 continue
-            kept.append((phrase, normalized))
+            kept.append((index, phrase, normalized))
 
-        # Restore the original conversational order where possible.
-        return [phrase for phrase in phrases if any(phrase == kept_phrase for kept_phrase, _ in kept)]
+        kept.sort(key=lambda item: item[0])
+        return [phrase for _, phrase, _ in kept]
+
+    def _memory_phrase_key(self, text: str) -> str:
+        return re.sub(r"[^a-z0-9\s]", " ", self._for_user(text).lower()).strip()
 
     @staticmethod
     def _for_user(text: str) -> str:
-        cleaned = str(text or "").strip()
-        replacements = [(r"\bmy\b", "your"), (r"\bi am\b", "you are"), (r"\bi'm\b", "you are"), (r"\bme\b", "you")]
+        cleaned = " ".join(str(text or "").strip().strip(" .?!").split())
+        cleaned = re.sub(r"^(?:from now on|going forward|for future updates?|for the future),?\s+", "", cleaned, flags=re.IGNORECASE).strip()
+        replacements = [
+            (r"\bmy\b", "your"),
+            (r"\bmine\b", "yours"),
+            (r"\bi am\b", "you are"),
+            (r"\bi'm\b", "you are"),
+            (r"\bi like\b", "you like"),
+            (r"\bi prefer\b", "you prefer"),
+            (r"\bi want\b", "you want"),
+            (r"\bi need\b", "you need"),
+            (r"\bi have\b", "you have"),
+            (r"\bi use\b", "you use"),
+            (r"\bme\b", "you"),
+            (r"\bi\b", "you"),
+        ]
         for pattern, replacement in replacements:
             cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
-        return cleaned
+        cleaned = re.sub(r"\byou are prefer\b", "you prefer", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .?!")
+        return cleaned[:1].lower() + cleaned[1:] if cleaned else cleaned

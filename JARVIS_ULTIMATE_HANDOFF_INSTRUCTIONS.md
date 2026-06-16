@@ -4,13 +4,11 @@ This file exists so a future ChatGPT project chat can quickly understand the cur
 
 ## Current project status
 
-Current committed milestone: **0.2.9 — Always-On Memory Tiers + Chat Archive Foundation**
+Current committed milestone before this patch: **0.2.9 — Always-On Memory Tiers + Chat Archive Foundation**
 
-The latest requested task after 0.2.9 was to update `README.md` so the project can be made public on GitHub for job-search/portfolio purposes.
+Current patch milestone: **0.3.0 — Memory Auto-Capture + Candidate Review**
 
-Next planned main milestone: **0.3.0 — Memory Auto-Capture + Candidate Review**
-
-Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Hotfixes may use suffixes like `0.2.9a`.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Hotfixes may use suffixes like `0.3.0a`.
 
 ## User patch/package preferences
 
@@ -46,7 +44,7 @@ Jarvis Ultimate is a local-first AI assistant with:
 - modular agents,
 - App Agent,
 - Memory Agent,
-- early File Agent foundation/placeholders,
+- early File Agent foundation,
 - always-on memory foundation.
 
 ## App Agent current state
@@ -83,35 +81,45 @@ Current memory abilities:
 - crash-safe JSON writes,
 - LLM-based chat archive summarization,
 - memory status command,
-- incremental always-on memory persistence.
+- incremental always-on memory persistence,
+- memory candidate queue,
+- automatic memory candidate capture,
+- automatic short-term memory capture for recent context,
+- candidate review commands,
+- approve/promote candidate to long-term or short-term memory,
+- reject candidate memories.
+
+Memory auto-capture design:
+
+- Explicit “remember that…” commands still save directly through the Memory Agent.
+- Non-memory turns can be analyzed after the response is ready.
+- Obvious durable preferences/project rules become long-term candidates, not automatic permanent memories yet.
+- Recent work/testing/daily context can be saved automatically as short-term memory.
+- LLM-based memory classification is supported behind `JARVIS_MEMORY_AUTO_CAPTURE_LLM_REVIEW=false` by default, so the deterministic guardrails are used first.
+- Candidate review is local-first and crash-safe.
 
 Known memory design goals:
 
 - Jarvis will eventually run for weeks or months at a time.
 - Do not rely on restarts for memory processing or cleanup.
 - Memory should persist incrementally while running.
-- Future memory should include automatic memory candidate detection, candidate review, promotion/rejection, entity memory, people/pets/projects/apps/places, and eventually face identity memory.
+- Future memory should include safer auto-promotion rules, entity memory, people/pets/projects/apps/places, and eventually face identity memory.
 
 ## Next recommended update
 
-**0.3.0 Memory Auto-Capture + Candidate Review**
+Recommended next milestone: **0.3.1 Memory Candidate Review Polish + Auto-Promotion Rules** or **0.3.1 Entity Memory Foundation**.
 
 Recommended goals:
 
-- add candidate memory queue,
-- auto-save useful short-term context,
-- score candidate memories by importance,
-- add review commands:
-  - “what memories are waiting for review?”
-  - “save that permanently”
-  - “forget that candidate”
-  - “promote that to long-term memory”
-- keep sensitive/private memory behavior user-controlled,
-- keep everything local-first and always-on safe.
+- make candidate review responses more conversational after real testing,
+- add “remember things like this automatically” / “do not remember things like this” controls,
+- add safer high-confidence auto-promotion rules,
+- add entity memory schema for people, pets, apps, projects, places, and relationships,
+- keep sensitive/private memory behavior user-controlled.
 
 ## Public GitHub README update
 
-A new public-facing `README.md` was created to present Jarvis Ultimate as a portfolio/job-search project. It explains:
+A public-facing `README.md` was created to present Jarvis Ultimate as a portfolio/job-search project. It explains:
 
 - project purpose,
 - current capabilities,
@@ -123,3 +131,17 @@ A new public-facing `README.md` was created to present Jarvis Ultimate as a port
 - roadmap,
 - recruiter/reviewer notes.
 
+## 0.3.0c Local API Disconnect Guard Hotfix
+
+This hotfix keeps the 0.3.0 memory auto-capture work intact and only improves local API bridge stability for long always-on sessions.
+
+Changes:
+- The local Python app-shell API now suppresses expected client disconnect socket errors such as `ConnectionAbortedError`, `BrokenPipeError`, and `ConnectionResetError` when Electron cancels a polling request.
+- Real unexpected API errors still raise normally.
+- This helps prevent scary terminal tracebacks during normal app-shell refresh/poll behavior.
+- This does not change microphone/STT routing, memory behavior, or voice loop logic.
+
+Current status:
+- App Agent is stable enough for now.
+- Memory foundation includes explicit long-term memory, short-term memory, chat archives, candidate review, duplicate filtering, and humanized memory responses.
+- Next recommended update after committing 0.3.0: `0.3.1 Entity Memory Foundation` or memory auto-promotion tuning.

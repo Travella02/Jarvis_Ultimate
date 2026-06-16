@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-06-16T08:02:24.501734+00:00",
+  "records": [
+    {
+      "text": "From now on, I prefer short direct patch instructions",
+      "suggested_tier": "long_term",
+      "category": "preference",
+      "tags": [
+        "preference"
+      ],
+      "importance": 4,
+      "confidence": 0.82,
+      "reason": "stable preference, instruction, or Jarvis project rule",
+      "status": "approved",
+      "source": "auto_capture",
+      "source_user": "From now on, I prefer short direct patch instructions.",
+      "source_assistant": "Understood, sir. I will provide short, direct instructions from now on.",
+      "id": "cand_80a4c951e441",
+      "created_at": "2026-06-16T06:16:07.582249+00:00",
+      "updated_at": "2026-06-16T06:49:14.537376+00:00",
+      "metadata": {
+        "agent_name": "conversation_agent",
+        "action": "llm_chat",
+        "intent": "general_chat"
+      }
+    },
+    {
+      "text": "From now on, I prefer short direct patch instructions",
+      "suggested_tier": "long_term",
+      "category": "general",
+      "tags": [],
+      "importance": 2,
+      "confidence": 0.82,
+      "reason": "needs review",
+      "status": "pending",
+      "source": "auto_capture",
+      "source_user": "",
+      "source_assistant": "",
+      "id": "cand_343c4b6d36f9",
+      "created_at": "2026-06-16T08:02:24.501734+00:00",
+      "updated_at": "2026-06-16T08:02:24.501734+00:00",
+      "metadata": {}
+    }
+  ]
+}

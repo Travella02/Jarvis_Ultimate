@@ -21,7 +21,7 @@ from jarvis.tools.shared.app_discovery import (
 
 class TestAppDiscoverySpeed025(unittest.TestCase):
     def test_version_and_capabilities_include_speed_polish(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.2.9")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.0")
         capabilities = set(app_shell_capabilities())
         self.assertIn("general_app_discovery_speedup", capabilities)
         self.assertIn("startup_app_index_warmup_fix", capabilities)

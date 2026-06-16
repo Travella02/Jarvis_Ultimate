@@ -4,8 +4,8 @@
 
 This repository is an active personal AI-assistant build. The goal is to create a modular assistant that can eventually control desktop apps, remember useful context over time, support voice-first workflows, connect to future vision/security systems, and run continuously as a long-lived local service.
 
-> Current milestone: **0.2.9 — Always-On Memory Tiers + Chat Archive Foundation**  
-> Next planned milestone: **0.3.0 — Memory Auto-Capture + Candidate Review**
+> Current milestone: **0.3.0 — Memory Auto-Capture + Candidate Review**  
+> Next planned milestone: **0.3.1 — Memory Candidate Review Polish / Entity Memory Foundation**
 
 ---
 
@@ -128,6 +128,10 @@ Current memory features include:
 - memory search commands,
 - chat archive search,
 - LLM-based chat archive summarization,
+- automatic memory candidate capture,
+- candidate review queue,
+- approve/promote/reject candidate memories,
+- automatic short-term memory capture for recent context,
 - handoff file that tracks project status for future development sessions.
 
 Example commands:
@@ -381,15 +385,21 @@ git push
 - short-term memory
 - daily chat archive foundation
 
-### Next: 0.3.0
+### 0.3.0 — Memory Auto-Capture + Candidate Review
+
+- automatic memory candidate capture,
+- memory candidate review queue,
+- promotion/rejection workflow,
+- automatic short-term context capture,
+- LLM-ready memory tier classification behind a safe config flag.
+
+### Next: 0.3.1
 
 Planned next milestone:
 
-- memory auto-capture,
-- memory candidate review,
-- promotion/rejection workflow,
-- better automatic memory importance scoring,
-- always-on background memory maintenance improvements.
+- memory candidate review polish,
+- high-confidence auto-promotion rules,
+- entity memory foundation for people, pets, projects, apps, places, and relationships.
 
 ---
 
@@ -397,7 +407,7 @@ Planned next milestone:
 
 Near-term roadmap:
 
-- Memory Auto-Capture + Candidate Review
+- Memory Candidate Review Polish + Auto-Promotion Rules
 - Entity Memory Foundation
 - File Agent Foundation
 - Routine Agent Foundation

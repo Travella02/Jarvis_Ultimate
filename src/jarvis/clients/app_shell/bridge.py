@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.2.9"
+APP_SHELL_VERSION = "0.3.0"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -98,6 +98,11 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "daily_chat_archive_memory",
         "crash_safe_memory_writes",
         "memory_maintenance_foundation",
+        "memory_auto_capture_candidate_review",
+        "memory_candidate_queue",
+        "memory_candidate_review_commands",
+        "auto_short_term_memory_capture",
+        "llm_ready_memory_tier_classification",
     )
 
 
@@ -158,6 +163,7 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
     short_term_facts = getattr(runtime, "short_term_facts", None)
     chat_archive = getattr(runtime, "chat_archive", None)
     memory_maintenance = getattr(runtime, "memory_maintenance", None)
+    memory_candidates = getattr(runtime, "memory_candidates", None)
 
     return {
         "started": bool(getattr(runtime, "started", False)),
@@ -176,6 +182,7 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
             "short_term_facts": short_term_facts.status() if short_term_facts is not None and hasattr(short_term_facts, "status") else {},
             "long_term": long_term_memory.status() if long_term_memory is not None and hasattr(long_term_memory, "status") else {},
             "chat_archive": chat_archive.status() if chat_archive is not None and hasattr(chat_archive, "status") else {},
+            "candidates": memory_candidates.status() if memory_candidates is not None and hasattr(memory_candidates, "status") else {},
             "maintenance": memory_maintenance.status() if memory_maintenance is not None and hasattr(memory_maintenance, "status") else {},
         },
     }

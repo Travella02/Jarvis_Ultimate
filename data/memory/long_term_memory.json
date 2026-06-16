@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "saved_at": "2026-06-15T09:14:19.872509+00:00",
+  "saved_at": "2026-06-16T06:49:14.542571+00:00",
   "records": [
     {
       "text": "my favorite test color is blue",
@@ -30,6 +30,22 @@
       "updated_at": "2026-06-15T09:14:11.647122+00:00",
       "metadata": {
         "source_command": "remember that my favorite test color"
+      }
+    },
+    {
+      "text": "From now on, I prefer short direct patch instructions",
+      "category": "general",
+      "tags": [
+        "preference"
+      ],
+      "source": "candidate_review",
+      "importance": 4,
+      "id": "mem_edd5caf45b97",
+      "created_at": "2026-06-16T06:16:32.807620+00:00",
+      "updated_at": "2026-06-16T06:49:14.542063+00:00",
+      "metadata": {
+        "candidate_id": "cand_25d3f7877295",
+        "candidate_reason": "needs review"
       }
     }
   ]

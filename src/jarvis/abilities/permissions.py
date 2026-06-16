@@ -25,11 +25,7 @@ class AbilityPermissionDecision:
 
 
 class AbilityPermissionPolicy:
-    """Small permission guardrail used before tools become more powerful.
-
-    This is intentionally conservative. Safe/read-only abilities can run. Write
-    or external actions can ask for confirmation. Dangerous actions are blocked.
-    """
+    """Small permission guardrail used before tools become more powerful."""
 
     def evaluate(self, *, ability_name: str, risk_level: str = "safe", permissions: list[str] | tuple[str, ...] = ()) -> AbilityPermissionDecision:
         risk = str(risk_level or "safe").strip().lower()

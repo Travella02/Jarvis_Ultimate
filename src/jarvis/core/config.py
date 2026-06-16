@@ -52,6 +52,14 @@ _ENV_ALIASES = {
     "memory_chat_archive_max_search_days": ("JARVIS_MEMORY_CHAT_ARCHIVE_MAX_SEARCH_DAYS", "JARVIS_CHAT_ARCHIVE_MAX_SEARCH_DAYS"),
     "memory_chat_archive_retention_days": ("JARVIS_MEMORY_CHAT_ARCHIVE_RETENTION_DAYS", "JARVIS_CHAT_ARCHIVE_RETENTION_DAYS"),
     "memory_maintenance_interval_seconds": ("JARVIS_MEMORY_MAINTENANCE_INTERVAL_SECONDS",),
+    "memory_candidate_enabled": ("JARVIS_MEMORY_CANDIDATE_ENABLED", "JARVIS_MEMORY_CANDIDATES_ENABLED"),
+    "memory_candidate_path": ("JARVIS_MEMORY_CANDIDATE_PATH", "JARVIS_MEMORY_CANDIDATES_PATH"),
+    "memory_candidate_max_records": ("JARVIS_MEMORY_CANDIDATE_MAX_RECORDS", "JARVIS_MEMORY_CANDIDATES_MAX_RECORDS"),
+    "memory_candidate_review_limit": ("JARVIS_MEMORY_CANDIDATE_REVIEW_LIMIT", "JARVIS_MEMORY_CANDIDATES_REVIEW_LIMIT"),
+    "memory_auto_capture_enabled": ("JARVIS_MEMORY_AUTO_CAPTURE_ENABLED",),
+    "memory_auto_capture_min_importance": ("JARVIS_MEMORY_AUTO_CAPTURE_MIN_IMPORTANCE",),
+    "memory_auto_capture_llm_review": ("JARVIS_MEMORY_AUTO_CAPTURE_LLM_REVIEW",),
+    "memory_auto_short_term_enabled": ("JARVIS_MEMORY_AUTO_SHORT_TERM_ENABLED",),
     "tts_enabled": ("JARVIS_TTS_ENABLED",),
     "tts_provider": ("JARVIS_TTS_PROVIDER",),
     "tts_fallback_providers": ("JARVIS_TTS_FALLBACK_PROVIDERS",),
@@ -308,6 +316,14 @@ class JarvisConfig:
     memory_chat_archive_max_search_days: int = 30
     memory_chat_archive_retention_days: int = 90
     memory_maintenance_interval_seconds: int = 300
+    memory_candidate_enabled: bool = True
+    memory_candidate_path: str = "data/memory/memory_candidates.json"
+    memory_candidate_max_records: int = 1000
+    memory_candidate_review_limit: int = 8
+    memory_auto_capture_enabled: bool = True
+    memory_auto_capture_min_importance: int = 2
+    memory_auto_capture_llm_review: bool = False
+    memory_auto_short_term_enabled: bool = True
 
     tts_enabled: bool = True
     tts_provider: str = "kokoro"
@@ -502,6 +518,34 @@ class JarvisConfig:
             ),
             memory_maintenance_interval_seconds=int(
                 _setting(_ENV_ALIASES["memory_maintenance_interval_seconds"], env_file, provider_config.get("memory_maintenance_interval_seconds", "300"))
+            ),
+            memory_candidate_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_candidate_enabled"], env_file, provider_config.get("memory_candidate_enabled", "true")),
+                default=True,
+            ),
+            memory_candidate_path=str(
+                _setting(_ENV_ALIASES["memory_candidate_path"], env_file, provider_config.get("memory_candidate_path", "data/memory/memory_candidates.json"))
+            ),
+            memory_candidate_max_records=int(
+                _setting(_ENV_ALIASES["memory_candidate_max_records"], env_file, provider_config.get("memory_candidate_max_records", "1000"))
+            ),
+            memory_candidate_review_limit=int(
+                _setting(_ENV_ALIASES["memory_candidate_review_limit"], env_file, provider_config.get("memory_candidate_review_limit", "8"))
+            ),
+            memory_auto_capture_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_auto_capture_enabled"], env_file, provider_config.get("memory_auto_capture_enabled", "true")),
+                default=True,
+            ),
+            memory_auto_capture_min_importance=int(
+                _setting(_ENV_ALIASES["memory_auto_capture_min_importance"], env_file, provider_config.get("memory_auto_capture_min_importance", "2"))
+            ),
+            memory_auto_capture_llm_review=_as_bool(
+                _setting(_ENV_ALIASES["memory_auto_capture_llm_review"], env_file, provider_config.get("memory_auto_capture_llm_review", "false")),
+                default=False,
+            ),
+            memory_auto_short_term_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_auto_short_term_enabled"], env_file, provider_config.get("memory_auto_short_term_enabled", "true")),
+                default=True,
             ),
             tts_enabled=_as_bool(_setting(_ENV_ALIASES["tts_enabled"], env_file, tts_config.get("enabled", "true")), default=True),
             tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "kokoro"))).strip().lower(),

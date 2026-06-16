@@ -319,7 +319,9 @@ class LongTermMemoryStore:
         return self._format_human_records(records)
 
     def _format_human_records(self, records: list[LongTermMemoryRecord], *, query: str = "") -> str:
-        cleaned_records = [self._human_memory_text(record.text) for record in records if str(record.text or "").strip()]
+        cleaned_records = self._dedupe_human_phrases(
+            [self._human_memory_text(record.text) for record in records if str(record.text or "").strip()]
+        )
         if not cleaned_records:
             if query:
                 return f"I do not have anything saved about {self._friendly_query(query)} yet, sir."
@@ -332,6 +334,39 @@ class LongTermMemoryStore:
         for item in cleaned_records:
             lines.append(f"- {item}")
         return "\n".join(lines)
+
+    def _dedupe_human_phrases(self, phrases: list[str]) -> list[str]:
+        """Remove repeated memories after converting them to user-facing wording.
+
+        Two raw records can differ slightly, for example "I prefer short
+        instructions" and "you prefer short instructions."  Jarvis should
+        only say that fact once.  Prefer the longest/most complete phrase while
+        preserving a stable conversational order.
+        """
+
+        selected: dict[str, tuple[int, str]] = {}
+        order = 0
+        for phrase in phrases:
+            cleaned = " ".join(str(phrase or "").strip(" .?!").split())
+            if not cleaned:
+                continue
+            key = normalize_memory_text(cleaned)
+            if not key:
+                continue
+            existing = selected.get(key)
+            if existing is None or len(cleaned) > len(existing[1]):
+                selected[key] = (existing[0] if existing else order, cleaned)
+            order += 1
+
+        # Remove partial duplicates too: keep "your favorite color is blue"
+        # instead of also saying "your favorite color."
+        kept: list[tuple[int, str, str]] = []
+        for key, (idx, phrase) in sorted(selected.items(), key=lambda item: len(item[0]), reverse=True):
+            if any(key == old_key or key in old_key or old_key in key for old_key, _, _ in kept):
+                continue
+            kept.append((key, idx, phrase))
+        kept.sort(key=lambda item: item[1])
+        return [phrase for _, _, phrase in kept]
 
     def _friendly_query(self, query: str) -> str:
         cleaned = " ".join(str(query or "").strip().strip(" .?!").split())
@@ -346,6 +381,7 @@ class LongTermMemoryStore:
         # ("my favorite color is blue"). When Jarvis repeats them back,
         # convert the most common first-person phrases so the response feels
         # like a real assistant rather than a database dump.
+        friendly = re.sub(r"^(?:from now on|going forward|for future updates?|for the future),?\s+", "", cleaned, flags=re.IGNORECASE).strip()
         replacements = [
             (r"\bmy\b", "your"),
             (r"\bmine\b", "yours"),
@@ -356,10 +392,14 @@ class LongTermMemoryStore:
             (r"\bi want\b", "you want"),
             (r"\bi need\b", "you need"),
             (r"\bi have\b", "you have"),
+            (r"\bi use\b", "you use"),
+            (r"\bme\b", "you"),
+            (r"\bi\b", "you"),
         ]
-        friendly = cleaned
         for pattern, replacement in replacements:
             friendly = re.sub(pattern, replacement, friendly, flags=re.IGNORECASE)
+        friendly = re.sub(r"\byou are prefer\b", "you prefer", friendly, flags=re.IGNORECASE)
+        friendly = re.sub(r"\s+", " ", friendly).strip(" .?!")
         friendly = friendly[:1].lower() + friendly[1:] if friendly else friendly
         return friendly
 
@@ -391,14 +431,43 @@ class LongTermMemoryStore:
             record = LongTermMemoryRecord.from_dict(item)
             if record is not None:
                 records.append(record)
-        self._records = records
+        self._records = self._dedupe_records(records)
         self._trim()
 
     def _find_duplicate(self, normalized_text: str) -> LongTermMemoryRecord | None:
+        target_key = normalize_memory_text(self._human_memory_text(normalized_text))
         for record in self._records:
             if record.normalized_text == normalized_text:
                 return record
+            if target_key and normalize_memory_text(self._human_memory_text(record.text)) == target_key:
+                return record
         return None
+
+    def _dedupe_records(self, records: list[LongTermMemoryRecord]) -> list[LongTermMemoryRecord]:
+        deduped: dict[str, LongTermMemoryRecord] = {}
+        order: list[str] = []
+        for record in records:
+            key = normalize_memory_text(self._human_memory_text(record.text)) or record.normalized_text
+            if not key:
+                continue
+            existing = deduped.get(key)
+            if existing is None:
+                deduped[key] = record
+                order.append(key)
+                continue
+            # Keep the more complete wording, but merge metadata/tags.
+            if len(record.text) > len(existing.text):
+                record.created_at = min(existing.created_at, record.created_at)
+                record.tags = sorted(set([*existing.tags, *record.tags]))
+                record.importance = max(existing.importance, record.importance)
+                record.metadata = {**existing.metadata, **record.metadata}
+                deduped[key] = record
+            else:
+                existing.tags = sorted(set([*existing.tags, *record.tags]))
+                existing.importance = max(existing.importance, record.importance)
+                existing.metadata.update(record.metadata)
+                existing.updated_at = max(existing.updated_at, record.updated_at)
+        return [deduped[key] for key in order if key in deduped]
 
     def _trim(self) -> None:
         if self.max_records <= 0:
