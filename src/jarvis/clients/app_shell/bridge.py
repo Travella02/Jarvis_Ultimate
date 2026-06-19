@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.0"
+APP_SHELL_VERSION = "0.3.1c"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -103,6 +103,12 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "memory_candidate_review_commands",
         "auto_short_term_memory_capture",
         "llm_ready_memory_tier_classification",
+        "structured_entity_memory_foundation",
+        "scalable_entity_type_registry",
+        "entity_memory_context_injection",
+        "entity_memory_humanized_responses",
+        "entity_memory_forget_cleanup_guard",
+        "entity_memory_forget_routing_guard",
     )
 
 
@@ -164,6 +170,7 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
     chat_archive = getattr(runtime, "chat_archive", None)
     memory_maintenance = getattr(runtime, "memory_maintenance", None)
     memory_candidates = getattr(runtime, "memory_candidates", None)
+    entity_memory = getattr(runtime, "entity_memory", None)
 
     return {
         "started": bool(getattr(runtime, "started", False)),
@@ -183,6 +190,7 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
             "long_term": long_term_memory.status() if long_term_memory is not None and hasattr(long_term_memory, "status") else {},
             "chat_archive": chat_archive.status() if chat_archive is not None and hasattr(chat_archive, "status") else {},
             "candidates": memory_candidates.status() if memory_candidates is not None and hasattr(memory_candidates, "status") else {},
+            "entities": entity_memory.status() if entity_memory is not None and hasattr(entity_memory, "status") else {},
             "maintenance": memory_maintenance.status() if memory_maintenance is not None and hasattr(memory_maintenance, "status") else {},
         },
     }

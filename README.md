@@ -4,8 +4,8 @@
 
 This repository is an active personal AI-assistant build. The goal is to create a modular assistant that can eventually control desktop apps, remember useful context over time, support voice-first workflows, connect to future vision/security systems, and run continuously as a long-lived local service.
 
-> Current milestone: **0.3.0 — Memory Auto-Capture + Candidate Review**  
-> Next planned milestone: **0.3.1 — Memory Candidate Review Polish / Entity Memory Foundation**
+> Current milestone: **0.3.1a — Humanized Entity Memory Responses Hotfix**  
+> Next planned milestone: **0.3.2 — Entity Memory Polish / Memory Auto-Promotion Controls**
 
 ---
 
@@ -66,6 +66,24 @@ Current LLM-related features include:
 - natural conversation fallback,
 - LLM-assisted chat archive summarization,
 - memory context injection when relevant.
+
+### Structured entity memory
+
+Jarvis now has a structured entity-memory layer beside plain long-term and short-term memories. Entity memory is built for the future SaaS version because it uses a registry-driven schema instead of hardcoded one-off records.
+
+Current default entity types include:
+
+- user,
+- person,
+- pet,
+- project,
+- app,
+- place,
+- device,
+- vehicle,
+- organization.
+
+The entity registry can add future types such as workspace, subscription, customer, ticket, team, routine, or asset without changing the core storage schema.
 
 ### Modular agent system
 
@@ -132,6 +150,8 @@ Current memory features include:
 - candidate review queue,
 - approve/promote/reject candidate memories,
 - automatic short-term memory capture for recent context,
+- structured entity memory for people/pets/projects/apps/places/devices/vehicles/organizations,
+- scalable entity type registry for future SaaS memory categories,
 - handoff file that tracks project status for future development sessions.
 
 Example commands:
@@ -142,6 +162,9 @@ Jarvis, what do you remember about my favorite color?
 Jarvis, remember this for a few days.
 Jarvis, what did we talk about memory?
 Jarvis, memory status.
+Jarvis, remember that Kenleigh is my fiancée.
+Jarvis, who is Kenleigh?
+Jarvis, list remembered pets.
 ```
 
 ---
@@ -393,13 +416,33 @@ git push
 - automatic short-term context capture,
 - LLM-ready memory tier classification behind a safe config flag.
 
-### Next: 0.3.1
+### 0.3.1 — Scalable Entity Memory Foundation
+
+- structured entity memory store,
+- registry-driven entity types,
+- default entities for user/person/pet/project/app/place/device/vehicle/organization,
+- entity search/list/status support through Memory Agent,
+- entity memory context injection into LLM conversation,
+- entity updates from explicit memories and approved memory candidates,
+- SaaS-ready fields for scope, sensitivity, metadata, and future tenant/workspace logic.
+
+### 0.3.1a — Humanized Entity Memory Responses Hotfix
+
+- natural Jarvis-style entity answers,
+- LLM-assisted response rewriting for entity memory search/list results,
+- second-person wording such as `your fiancée` instead of `the user's fiancée`,
+- multi-word relationship-name extraction,
+- plural entity type normalization for commands like `list remembered pets`.
+
+### Next: 0.3.2
 
 Planned next milestone:
 
-- memory candidate review polish,
+- entity memory polish,
+- memory preference controls,
 - high-confidence auto-promotion rules,
-- entity memory foundation for people, pets, projects, apps, places, and relationships.
+- entity edit/merge/delete commands,
+- SaaS workspace/team scoping.
 
 ---
 
@@ -407,8 +450,8 @@ Planned next milestone:
 
 Near-term roadmap:
 
+- Entity Memory Polish
 - Memory Candidate Review Polish + Auto-Promotion Rules
-- Entity Memory Foundation
 - File Agent Foundation
 - Routine Agent Foundation
 - Web/Weather Agent expansion

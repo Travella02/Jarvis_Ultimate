@@ -60,6 +60,10 @@ _ENV_ALIASES = {
     "memory_auto_capture_min_importance": ("JARVIS_MEMORY_AUTO_CAPTURE_MIN_IMPORTANCE",),
     "memory_auto_capture_llm_review": ("JARVIS_MEMORY_AUTO_CAPTURE_LLM_REVIEW",),
     "memory_auto_short_term_enabled": ("JARVIS_MEMORY_AUTO_SHORT_TERM_ENABLED",),
+    "memory_entity_enabled": ("JARVIS_MEMORY_ENTITY_ENABLED",),
+    "memory_entity_path": ("JARVIS_MEMORY_ENTITY_PATH", "JARVIS_MEMORY_ENTITIES_PATH"),
+    "memory_entity_max_records": ("JARVIS_MEMORY_ENTITY_MAX_RECORDS", "JARVIS_MEMORY_ENTITIES_MAX_RECORDS"),
+    "memory_entity_inject_limit": ("JARVIS_MEMORY_ENTITY_INJECT_LIMIT", "JARVIS_MEMORY_ENTITIES_INJECT_LIMIT"),
     "tts_enabled": ("JARVIS_TTS_ENABLED",),
     "tts_provider": ("JARVIS_TTS_PROVIDER",),
     "tts_fallback_providers": ("JARVIS_TTS_FALLBACK_PROVIDERS",),
@@ -324,6 +328,10 @@ class JarvisConfig:
     memory_auto_capture_min_importance: int = 2
     memory_auto_capture_llm_review: bool = False
     memory_auto_short_term_enabled: bool = True
+    memory_entity_enabled: bool = True
+    memory_entity_path: str = "data/memory/entities.json"
+    memory_entity_max_records: int = 2000
+    memory_entity_inject_limit: int = 5
 
     tts_enabled: bool = True
     tts_provider: str = "kokoro"
@@ -546,6 +554,19 @@ class JarvisConfig:
             memory_auto_short_term_enabled=_as_bool(
                 _setting(_ENV_ALIASES["memory_auto_short_term_enabled"], env_file, provider_config.get("memory_auto_short_term_enabled", "true")),
                 default=True,
+            ),
+            memory_entity_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_entity_enabled"], env_file, provider_config.get("memory_entity_enabled", "true")),
+                default=True,
+            ),
+            memory_entity_path=str(
+                _setting(_ENV_ALIASES["memory_entity_path"], env_file, provider_config.get("memory_entity_path", "data/memory/entities.json"))
+            ),
+            memory_entity_max_records=int(
+                _setting(_ENV_ALIASES["memory_entity_max_records"], env_file, provider_config.get("memory_entity_max_records", "2000"))
+            ),
+            memory_entity_inject_limit=int(
+                _setting(_ENV_ALIASES["memory_entity_inject_limit"], env_file, provider_config.get("memory_entity_inject_limit", "5"))
             ),
             tts_enabled=_as_bool(_setting(_ENV_ALIASES["tts_enabled"], env_file, tts_config.get("enabled", "true")), default=True),
             tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "kokoro"))).strip().lower(),

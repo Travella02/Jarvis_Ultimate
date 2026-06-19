@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any, Iterable
 from uuid import uuid4
 
+from jarvis.memory.entities import infer_entity_from_text
+
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -530,6 +532,7 @@ class MemoryAutoCaptureEngine:
         cleaned = self._clean_candidate_text(user_text)
         category = self._infer_category(cleaned)
         tags = self._infer_tags(cleaned, category=category)
+        entity = infer_entity_from_text(cleaned)
 
         if any(phrase in lowered for phrase in ["from now on", "going forward", "always ", "never ", "remember to", "i prefer", "i like", "my favorite", "i want jarvis", "for future"]):
             return {
@@ -540,6 +543,7 @@ class MemoryAutoCaptureEngine:
                 "reason": "stable preference, instruction, or Jarvis project rule",
                 "category": category,
                 "tags": tags,
+                "entity": entity,
             }
 
         if any(phrase in lowered for phrase in ["my fiance", "my fiancée", "my wife", "my brother", "my dog", "my pet", "my cat", "my car", "my name is"]):
@@ -551,6 +555,7 @@ class MemoryAutoCaptureEngine:
                 "reason": "relationship, pet, identity, or durable personal detail",
                 "category": category,
                 "tags": tags,
+                "entity": entity,
             }
 
         if any(phrase in lowered for phrase in ["i ate", "i had for", "today i", "right now", "i'm testing", "i am testing", "we are testing", "i made the commit", "we left off", "next step"]):
@@ -562,9 +567,10 @@ class MemoryAutoCaptureEngine:
                 "reason": "recent context useful for follow-up but not necessarily permanent",
                 "category": category,
                 "tags": tags,
+                "entity": entity,
             }
 
-        return {"decision": "ignore", "text": "", "importance": 1, "confidence": 0.25, "reason": "not important enough to capture automatically", "category": category, "tags": tags}
+        return {"decision": "ignore", "text": "", "importance": 1, "confidence": 0.25, "reason": "not important enough to capture automatically", "category": category, "tags": tags, "entity": entity}
 
     def _classify_with_llm(self, user_text: str, assistant: str, *, llm_provider: Any | None = None) -> dict[str, Any] | None:
         if not self.llm_review_enabled or llm_provider is None or not hasattr(llm_provider, "chat"):
@@ -602,6 +608,7 @@ class MemoryAutoCaptureEngine:
             confidence = 0.5
         tags_raw = raw.get("tags")
         tags = _normalize_tags(tags_raw if isinstance(tags_raw, list) else [])
+        entity = infer_entity_from_text(text)
         return {
             "decision": decision,
             "text": text,
@@ -610,6 +617,7 @@ class MemoryAutoCaptureEngine:
             "reason": str(raw.get("reason") or "LLM memory classifier"),
             "category": str(raw.get("category") or self._infer_category(text)).strip().lower() or "general",
             "tags": tags or self._infer_tags(text, category=str(raw.get("category") or "general")),
+            "entity": entity,
         }
 
     def _is_low_value(self, text: str) -> bool:

@@ -18,6 +18,7 @@ from jarvis.core.timing import TurnTimer, format_timing_summary
 from jarvis.memory.short_term import ShortTermMemory
 from jarvis.memory.long_term import LongTermMemoryStore
 from jarvis.memory.always_on import ChatArchiveStore, MemoryAutoCaptureEngine, MemoryCandidateStore, MemoryMaintenance, ShortTermFactStore
+from jarvis.memory.entities import EntityMemoryStore
 from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 from jarvis.providers.tts.manager import TTSManager, format_tts_result
@@ -91,6 +92,15 @@ class JarvisRuntime:
             max_records=getattr(self.config, "memory_candidate_max_records", 1000),
             review_limit=getattr(self.config, "memory_candidate_review_limit", 8),
         )
+        configured_entity_path = Path(str(getattr(self.config, "memory_entity_path", "data/memory/entities.json")))
+        if not configured_entity_path.is_absolute():
+            configured_entity_path = self.config.project_root / configured_entity_path
+        self.entity_memory = EntityMemoryStore(
+            enabled=getattr(self.config, "memory_entity_enabled", True),
+            path=configured_entity_path,
+            max_records=getattr(self.config, "memory_entity_max_records", 2000),
+            inject_limit=getattr(self.config, "memory_entity_inject_limit", 5),
+        )
         self.memory_auto_capture = MemoryAutoCaptureEngine(
             min_importance=getattr(self.config, "memory_auto_capture_min_importance", 2),
             llm_review_enabled=getattr(self.config, "memory_auto_capture_llm_review", False),
@@ -121,6 +131,7 @@ class JarvisRuntime:
             short_term_fact_memory=self.short_term_facts,
             chat_archive=self.chat_archive,
             memory_candidates=self.memory_candidates,
+            entity_memory=self.entity_memory,
             ability_registry=self.ability_registry,
         )
         self.started = True
@@ -147,6 +158,7 @@ class JarvisRuntime:
                 "long_term_memory": self.long_term_memory.status(),
                 "chat_archive": self.chat_archive.status(),
                 "memory_candidates": self.memory_candidates.status(),
+                "entity_memory": self.entity_memory.status(),
                 "memory_auto_capture": {
                     "enabled": getattr(self.config, "memory_auto_capture_enabled", True),
                     "llm_review": getattr(self.config, "memory_auto_capture_llm_review", False),
@@ -1319,7 +1331,7 @@ class JarvisRuntime:
             source="auto_capture",
             source_user=command,
             source_assistant=result.message,
-            metadata={"agent_name": result.agent_name, "action": result.action, "intent": result.data.get("intent")},
+            metadata={"agent_name": result.agent_name, "action": result.action, "intent": result.data.get("intent"), "entity_hint": decision.get("entity")},
         )
         if record is not None and timing is not None:
             timing.mark("memory.candidate_saved", candidate_id=record.id, suggested_tier=record.suggested_tier)

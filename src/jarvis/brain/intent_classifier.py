@@ -80,6 +80,23 @@ class IntentClassifier:
         if any(phrase in text for phrase in ["avatar", "body", "character", "change how you look", "visual"]):
             return IntentResult("avatar_control", 0.75, "Avatar/body phrase detected.")
 
+        # Explicit forget commands must route to the Memory Agent before the
+        # conversation fallback sees relevant context and merely *claims* it forgot.
+        # This catches natural commands like "Forget Scout." where the older
+        # phrase list only matched "forget that" or "forget memory".
+        memory_forget_prefixes = (
+            "forget ",
+            "remove remembered ",
+            "remove memory ",
+            "delete memory ",
+            "stop remembering ",
+            "do not remember ",
+            "don't remember ",
+            "dont remember ",
+        )
+        if text.startswith(memory_forget_prefixes):
+            return IntentResult("memory_write", 0.9, "Explicit memory/entity forget command detected.")
+
         memory_phrases = [
             "remember",
             "save this",
@@ -110,9 +127,15 @@ class IntentClassifier:
             "promote that",
             "reject that",
             "forget that candidate",
+            "entity memory",
+            "structured memory",
+            "remembered entities",
+            "what entities",
+            "who is",
+            "what do you know about",
         ]
         if any(phrase in text for phrase in memory_phrases):
-            if any(phrase in text for phrase in ["what do you remember", "what memories", "list memories", "show memories", "search memory", "search memories", "memory candidates", "waiting for review", "what did you learn recently", "what have you learned recently"]):
+            if any(phrase in text for phrase in ["what do you remember", "what memories", "list memories", "show memories", "search memory", "search memories", "memory candidates", "waiting for review", "what did you learn recently", "what have you learned recently", "entity memory", "structured memory", "remembered entities", "what entities", "who is", "what do you know about"]):
                 return IntentResult("memory_search", 0.86, "Memory search/list/review phrase detected.")
             return IntentResult("memory_write", 0.78, "Memory phrase detected.")
 

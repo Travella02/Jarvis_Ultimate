@@ -84,6 +84,7 @@ class Agent:
         short_term_memory = context.get("short_term_memory")
         short_term_fact_memory = context.get("short_term_fact_memory")
         long_term_memory = context.get("long_term_memory")
+        entity_memory = context.get("entity_memory")
         memory_messages = []
         if short_term_memory is not None and hasattr(short_term_memory, "to_llm_messages"):
             memory_messages = short_term_memory.to_llm_messages()
@@ -98,13 +99,19 @@ class Agent:
             long_term_context = long_term_memory.relevant_context(command.strip())
             if long_term_context:
                 memory_context_blocks.append(long_term_context)
+        entity_context = ""
+        if entity_memory is not None and hasattr(entity_memory, "relevant_context"):
+            entity_context = entity_memory.relevant_context(command.strip())
+            if entity_context:
+                memory_context_blocks.append(entity_context)
         if memory_context_blocks:
             system_prompt = (system_prompt or "").rstrip() + "\n\n" + "\n\n".join(memory_context_blocks) + "\nUse these memories only when they are relevant to the user's request."
         messages = [*memory_messages, {"role": "user", "content": command.strip()}]
         memory_turns = len(memory_messages) // 2
         short_term_facts_used = short_term_fact_context.count("\n-") if short_term_fact_context else 0
         long_term_memories_used = long_term_context.count("\n-") if long_term_context else 0
-        self._mark(timing, "conversation.memory_context_selected", turns=memory_turns, messages=len(memory_messages), short_term_facts=short_term_facts_used, long_term_memories=long_term_memories_used)
+        entity_memories_used = entity_context.count("\n-") if entity_context else 0
+        self._mark(timing, "conversation.memory_context_selected", turns=memory_turns, messages=len(memory_messages), short_term_facts=short_term_facts_used, long_term_memories=long_term_memories_used, entity_memories=entity_memories_used)
         self._mark(timing, "conversation.prompt_selected", **prompt_stats)
         self._mark(timing, "conversation.llm_chat_start", stream_callback=stream_callback is not None, message_count=len(messages))
         response = llm_provider.chat(messages, system_prompt=system_prompt, timing=timing, stream_callback=stream_callback)
@@ -134,6 +141,7 @@ class Agent:
                     "short_term_memory_turns_used": memory_turns,
                     "short_term_facts_used": short_term_facts_used,
                     "long_term_memories_used": long_term_memories_used,
+                    "entity_memories_used": entity_memories_used,
                 },
             )
 
@@ -154,6 +162,7 @@ class Agent:
                 "short_term_memory_turns_used": memory_turns,
                 "short_term_facts_used": short_term_facts_used,
                 "long_term_memories_used": long_term_memories_used,
+                "entity_memories_used": entity_memories_used,
             },
         )
 

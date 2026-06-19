@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "saved_at": "2026-06-16T06:49:14.542571+00:00",
+  "saved_at": "2026-06-19T06:50:35.960750+00:00",
   "records": [
     {
       "text": "my favorite test color is blue",
@@ -46,6 +46,66 @@
       "metadata": {
         "candidate_id": "cand_25d3f7877295",
         "candidate_reason": "needs review"
+      }
+    },
+    {
+      "text": "Ken Lee is my fiance",
+      "category": "personal",
+      "tags": [
+        "personal"
+      ],
+      "source": "user",
+      "importance": 3,
+      "id": "mem_ab96e678c036",
+      "created_at": "2026-06-18T06:32:01.476275+00:00",
+      "updated_at": "2026-06-18T07:48:13.276680+00:00",
+      "metadata": {
+        "source_command": "Remember that Ken Lee is my fiance."
+      }
+    },
+    {
+      "text": "my dog Nugget is a golden doodle",
+      "category": "personal",
+      "tags": [
+        "personal"
+      ],
+      "source": "user",
+      "importance": 3,
+      "id": "mem_53acb1a0b198",
+      "created_at": "2026-06-18T06:33:06.820742+00:00",
+      "updated_at": "2026-06-18T07:48:27.232639+00:00",
+      "metadata": {
+        "source_command": "Remember that my dog Nugget is a golden doodle."
+      }
+    },
+    {
+      "text": "Kenleigh is my fiance",
+      "category": "personal",
+      "tags": [
+        "personal"
+      ],
+      "source": "user",
+      "importance": 3,
+      "id": "mem_ea7dd7aa086f",
+      "created_at": "2026-06-18T06:33:49.785413+00:00",
+      "updated_at": "2026-06-18T06:33:49.785413+00:00",
+      "metadata": {
+        "source_command": "remember that Kenleigh is my fiance"
+      }
+    },
+    {
+      "text": "can leave my",
+      "category": "general",
+      "tags": [
+        "general"
+      ],
+      "source": "user",
+      "importance": 3,
+      "id": "mem_e5feb8634f25",
+      "created_at": "2026-06-18T07:48:06.375209+00:00",
+      "updated_at": "2026-06-18T07:48:06.375209+00:00",
+      "metadata": {
+        "source_command": "Remember that can leave my."
       }
     }
   ]

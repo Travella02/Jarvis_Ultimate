@@ -10,6 +10,13 @@ from jarvis.memory.always_on import (
     ShortTermFactRecord,
     ShortTermFactStore,
 )
+from jarvis.memory.entities import (
+    EntityMemoryStore,
+    EntityRecord,
+    EntitySearchResult,
+    EntityTypeDefinition,
+    infer_entity_from_text,
+)
 
 __all__ = [
     "ConversationTurn",
@@ -23,4 +30,9 @@ __all__ = [
     "ChatArchiveStore",
     "MemoryMaintenance",
     "MemoryMatch",
+    "EntityMemoryStore",
+    "EntityRecord",
+    "EntitySearchResult",
+    "EntityTypeDefinition",
+    "infer_entity_from_text",
 ]
