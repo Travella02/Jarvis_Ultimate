@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "saved_at": "2026-06-19T06:50:35.960750+00:00",
+  "saved_at": "2026-06-19T07:18:52.737496+00:00",
   "records": [
     {
       "text": "my favorite test color is blue",
@@ -106,6 +106,36 @@
       "updated_at": "2026-06-18T07:48:06.375209+00:00",
       "metadata": {
         "source_command": "Remember that can leave my."
+      }
+    },
+    {
+      "text": "Scout is my dog",
+      "category": "personal",
+      "tags": [
+        "personal"
+      ],
+      "source": "user",
+      "importance": 3,
+      "id": "mem_64bac4f06773",
+      "created_at": "2026-06-19T07:14:40.676737+00:00",
+      "updated_at": "2026-06-19T07:14:40.676737+00:00",
+      "metadata": {
+        "source_command": "Jarvis, remember that Scout is my dog"
+      }
+    },
+    {
+      "text": "ken lee is my fianc e",
+      "category": "general",
+      "tags": [
+        "general"
+      ],
+      "source": "user",
+      "importance": 3,
+      "id": "mem_ab5602431b47",
+      "created_at": "2026-06-19T07:18:52.737496+00:00",
+      "updated_at": "2026-06-19T07:18:52.737496+00:00",
+      "metadata": {
+        "source_command": "remember that ken lee is my fianc e"
       }
     }
   ]

@@ -53,6 +53,12 @@ class Agent:
                 data={"short_term_facts": short_term_facts.status(), "long_term_memory": long_term.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status(), "entity_memory": entity_memory.status()},
             )
 
+        entity_edit_action = self._extract_entity_edit_action(text)
+        if entity_edit_action is not None:
+            handled = self._handle_entity_edit_action(entity_memory, entity_edit_action)
+            if handled is not None:
+                return handled
+
         entity_action = self._extract_entity_action(text)
         if entity_action is not None:
             action_name, query, entity_type = entity_action
@@ -299,6 +305,87 @@ class Agent:
             data={"implemented": True, "long_term_memory": long_term.status(), "short_term_facts": short_term_facts.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status(), "entity_memory": entity_memory.status()},
         )
 
+    def _handle_entity_edit_action(self, entity_memory: EntityMemoryStore, action: dict[str, str]) -> JarvisResult | None:
+        action_name = action.get("action", "")
+        entity_type = action.get("entity_type") or None
+        if action_name == "merge":
+            source = action.get("source", "")
+            target = action.get("target", "")
+            record = entity_memory.merge(source, target, entity_type=entity_type)
+            if record is None:
+                return JarvisResult.ok(
+                    f"I could not find enough saved entity memory to merge {source} and {target}, sir.",
+                    agent_name=self.name,
+                    action="memory_entity_merge",
+                    data={"source": source, "target": target, "entity_type": entity_type, "merged": None, "entity_memory": entity_memory.status()},
+                )
+            return JarvisResult.ok(
+                f"Understood, sir. I’ll treat {source} and {record.name} as the same {self._entity_label(record.entity_type)} now.",
+                agent_name=self.name,
+                action="memory_entity_merge",
+                data={"source": source, "target": target, "entity_type": entity_type, "merged": record.to_dict(), "entity_memory": entity_memory.status()},
+            )
+
+        if action_name == "rename":
+            source = action.get("source", "")
+            target = action.get("target", "")
+            record = entity_memory.rename(source, target, entity_type=entity_type)
+            if record is None:
+                return JarvisResult.ok(
+                    f"I could not find an entity memory named {source}, sir.",
+                    agent_name=self.name,
+                    action="memory_entity_rename",
+                    data={"source": source, "target": target, "entity_type": entity_type, "renamed": None, "entity_memory": entity_memory.status()},
+                )
+            return JarvisResult.ok(
+                f"Understood, sir. I renamed {source} to {record.name} and kept the old name as an alias.",
+                agent_name=self.name,
+                action="memory_entity_rename",
+                data={"source": source, "target": target, "entity_type": entity_type, "renamed": record.to_dict(), "entity_memory": entity_memory.status()},
+            )
+
+        if action_name == "add_alias":
+            target = action.get("target", "")
+            alias = action.get("alias", "")
+            record = entity_memory.add_alias(target, alias, entity_type=entity_type)
+            if record is None:
+                return JarvisResult.ok(
+                    f"I could not find an entity memory named {target}, sir.",
+                    agent_name=self.name,
+                    action="memory_entity_alias_add",
+                    data={"target": target, "alias": alias, "entity_type": entity_type, "updated": None, "entity_memory": entity_memory.status()},
+                )
+            return JarvisResult.ok(
+                f"Understood, sir. I added {alias} as another name for {record.name}.",
+                agent_name=self.name,
+                action="memory_entity_alias_add",
+                data={"target": target, "alias": alias, "entity_type": entity_type, "updated": record.to_dict(), "entity_memory": entity_memory.status()},
+            )
+
+        if action_name == "remove_alias":
+            alias = action.get("alias", "")
+            keep = action.get("keep", "")
+            result = entity_memory.remove_alias(alias, keep_query=keep or None, entity_type=entity_type)
+            record = result.get("record") if isinstance(result, dict) else None
+            removed = result.get("removed_aliases", []) if isinstance(result, dict) else []
+            if not removed:
+                target_phrase = f" on {keep}" if keep else ""
+                return JarvisResult.ok(
+                    f"I could not find the alias {alias}{target_phrase}, sir.",
+                    agent_name=self.name,
+                    action="memory_entity_alias_remove",
+                    data={"alias": alias, "keep": keep, "entity_type": entity_type, "removed_aliases": [], "entity_memory": entity_memory.status()},
+                )
+            kept_name = getattr(record, "name", keep or "that entity")
+            return JarvisResult.ok(
+                f"Understood, sir. I removed {alias} as an alias and kept {kept_name} saved.",
+                agent_name=self.name,
+                action="memory_entity_alias_remove",
+                data={"alias": alias, "keep": keep, "entity_type": entity_type, "removed_aliases": removed, "updated": record.to_dict() if hasattr(record, "to_dict") else None, "entity_memory": entity_memory.status()},
+            )
+
+        return None
+
     def _fallback_long_term(self, config: Any | None) -> LongTermMemoryStore:
         path = getattr(config, "data_dir", None) / "memory" / "long_term_memory.json" if getattr(config, "data_dir", None) else None
         return LongTermMemoryStore(path=path)
@@ -544,6 +631,54 @@ class Agent:
             "entity memory status",
             "structured memory status",
         }
+
+    def _extract_entity_edit_action(self, text: str) -> dict[str, str] | None:
+        cleaned_text = re.sub(r"^(?:jarvis,?\s*)?(?:remember\s+that\s+)?", "", text.strip(), flags=re.IGNORECASE).strip(" .?!\"'")
+        lowered = cleaned_text.lower()
+        type_words = (
+            "person|people|dog|dogs|cat|cats|pet|pets|project|projects|app|apps|tool|tools|place|places|"
+            "device|devices|vehicle|vehicles|car|cars|organization|organizations|company|companies|team|teams"
+        )
+
+        same_match = re.search(rf"^(.+?)\s+and\s+(.+?)\s+are\s+the\s+same\s+({type_words})$", cleaned_text, flags=re.IGNORECASE)
+        if same_match:
+            source = self._clean_tail(same_match.group(1))
+            target = self._clean_tail(same_match.group(2))
+            entity_type = normalize_entity_type(same_match.group(3))
+            return {"action": "merge", "source": source, "target": target, "entity_type": entity_type}
+
+        same_as_match = re.search(rf"^(.+?)\s+is\s+the\s+same(?:\s+({type_words}))?\s+as\s+(.+)$", cleaned_text, flags=re.IGNORECASE)
+        if same_as_match:
+            source = self._clean_tail(same_as_match.group(1))
+            target = self._clean_tail(same_as_match.group(3))
+            entity_type = normalize_entity_type(same_as_match.group(2) or "") if same_as_match.group(2) else ""
+            return {"action": "merge", "source": source, "target": target, "entity_type": entity_type}
+
+        rename_match = re.search(r"^(?:rename|change)\s+(.+?)\s+to\s+(.+)$", cleaned_text, flags=re.IGNORECASE)
+        if rename_match:
+            return {"action": "rename", "source": self._clean_tail(rename_match.group(1)), "target": self._clean_tail(rename_match.group(2)), "entity_type": ""}
+
+        add_alias_match = re.search(r"^(?:add\s+)?(.+?)\s+as\s+(?:an?\s+)?(?:alias|nickname|name)\s+for\s+(.+)$", cleaned_text, flags=re.IGNORECASE)
+        if add_alias_match:
+            return {"action": "add_alias", "alias": self._clean_tail(add_alias_match.group(1)), "target": self._clean_tail(add_alias_match.group(2)), "entity_type": ""}
+
+        alias_for_match = re.search(r"^(.+?)\s+is\s+(?:an?\s+)?(?:alias|nickname|another\s+name)\s+for\s+(.+)$", cleaned_text, flags=re.IGNORECASE)
+        if alias_for_match:
+            return {"action": "add_alias", "alias": self._clean_tail(alias_for_match.group(1)), "target": self._clean_tail(alias_for_match.group(2)), "entity_type": ""}
+
+        call_match = re.search(r"^call\s+(.+?)\s+(.+)$", cleaned_text, flags=re.IGNORECASE)
+        if call_match and " app" not in lowered and " program" not in lowered and " tool" not in lowered:
+            return {"action": "add_alias", "target": self._clean_tail(call_match.group(1)), "alias": self._clean_tail(call_match.group(2)), "entity_type": ""}
+
+        remove_alias_match = re.search(r"^(?:forget|remove|delete)\s+(?:the\s+)?(?:alias|nickname|name)\s+(.+?)(?:,?\s+but\s+keep\s+(.+))?$", cleaned_text, flags=re.IGNORECASE)
+        if remove_alias_match:
+            return {"action": "remove_alias", "alias": self._clean_tail(remove_alias_match.group(1)), "keep": self._clean_tail(remove_alias_match.group(2) or ""), "entity_type": ""}
+
+        remove_from_match = re.search(r"^(?:remove|delete)\s+(.+?)\s+as\s+(?:an?\s+)?(?:alias|nickname|name)\s+(?:from|for)\s+(.+)$", cleaned_text, flags=re.IGNORECASE)
+        if remove_from_match:
+            return {"action": "remove_alias", "alias": self._clean_tail(remove_from_match.group(1)), "keep": self._clean_tail(remove_from_match.group(2)), "entity_type": ""}
+
+        return None
 
     def _extract_entity_action(self, text: str) -> tuple[str, str, str] | None:
         lowered = text.lower().strip(" ?.!)\"'")

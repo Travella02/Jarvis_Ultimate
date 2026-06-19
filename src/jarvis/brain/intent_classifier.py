@@ -28,6 +28,18 @@ class IntentClassifier:
         if text in {"status", "system status", "jarvis status"} or "are you online" in text:
             return IntentResult("status", 0.95, "Status phrase detected.")
 
+        entity_edit_type_words = ("same person", "same people", "same dog", "same cat", "same pet", "same project", "same app", "same device", "same vehicle", "same car", "same organization")
+        if any(phrase in text for phrase in entity_edit_type_words):
+            return IntentResult("memory_write", 0.92, "Entity merge/correction phrase detected.")
+        if text.startswith(("rename ", "change ")) and " to " in text:
+            return IntentResult("memory_write", 0.84, "Entity rename phrase detected.")
+        if " as an alias for " in text or " as alias for " in text or " is an alias for " in text or " is another name for " in text:
+            return IntentResult("memory_write", 0.86, "Entity alias phrase detected.")
+        if text.startswith(("forget the alias ", "remove the alias ", "delete the alias ")) and "keep" in text:
+            return IntentResult("memory_write", 0.9, "Entity alias removal phrase detected.")
+        if text.startswith("call ") and " app" not in text and " tool" not in text and " program" not in text:
+            return IntentResult("memory_write", 0.72, "Entity nickname phrase detected.")
+
         app_prefixes = ["open ", "launch ", "start app ", "start ", "run ", "open website ", "open site ", "close ", "quit ", "exit ", "switch to ", "focus ", "show "]
         app_phrases = [
             "pull up",

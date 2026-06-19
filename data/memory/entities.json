@@ -263,7 +263,9 @@
       "updated_at": "2026-06-18T06:33:49.786968+00:00"
     },
     {
-      "aliases": [],
+      "aliases": [
+        "Kenton Lee"
+      ],
       "attributes": {
         "relationship": "fianc\u00e9e"
       },
@@ -273,6 +275,9 @@
       "id": "ent_1a913d9563c5",
       "importance": 4,
       "metadata": {
+        "alias_history": [
+          "Kenton Lee"
+        ],
         "source_command": "Remember that Ken Lee is my fiance.",
         "source_text": "Ken Lee is my fiance"
       },
@@ -291,9 +296,9 @@
         "person",
         "relationship"
       ],
-      "updated_at": "2026-06-18T07:48:13.278187+00:00"
+      "updated_at": "2026-06-19T07:19:05.815030+00:00"
     }
   ],
-  "schema_version": 1,
-  "updated_at": "2026-06-19T06:50:35.961749+00:00"
+  "schema_version": 2,
+  "updated_at": "2026-06-19T07:19:05.815030+00:00"
 }

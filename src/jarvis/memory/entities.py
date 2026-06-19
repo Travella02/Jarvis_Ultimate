@@ -331,7 +331,7 @@ def normalize_entity_type(value: str) -> str:
 class EntityMemoryStore:
     """JSON-backed structured entity memory store."""
 
-    schema_version = 1
+    schema_version = 2
 
     def __init__(
         self,
@@ -551,6 +551,177 @@ class EntityMemoryStore:
             self.save()
         return removed
 
+    def resolve(self, query: str, *, entity_type: str | None = None) -> EntityRecord | None:
+        """Resolve a user-spoken name/alias to the best matching entity record.
+
+        Resolution prefers exact identity matches before falling back to scored
+        search. Keeping this in the store lets future SaaS surfaces reuse the
+        same merge/alias behavior without duplicating agent-specific logic.
+        """
+
+        if not self.enabled:
+            return None
+        normalized = normalize_text(query)
+        if not normalized:
+            return None
+        type_filter = normalize_entity_type(entity_type or "") if entity_type else ""
+        for record in self._records:
+            if type_filter and record.entity_type != type_filter:
+                continue
+            identities = {record.normalized_name, *record.normalized_aliases}
+            if normalized in identities:
+                return record
+        matches = self.search(query, entity_type=type_filter or None, limit=3)
+        if not matches:
+            return None
+        best = matches[0]
+        # Require at least a modest score so generic words do not accidentally
+        # rename or merge unrelated memories.
+        if best.score < 0.55:
+            return None
+        return best.record
+
+    def rename(self, query: str, new_name: str, *, entity_type: str | None = None) -> EntityRecord | None:
+        """Rename an entity while preserving the old name as an alias."""
+
+        record = self.resolve(query, entity_type=entity_type)
+        cleaned_name = _clean_title(new_name)
+        if record is None or not cleaned_name:
+            return None
+        old_name = record.name
+        old_normalized = normalize_text(old_name)
+        new_normalized = normalize_text(cleaned_name)
+        if old_normalized != new_normalized:
+            record.aliases = sorted({*record.aliases, old_name, query} - {""})
+            record.name = cleaned_name
+            record.summary = self._replace_identity_text(record.summary, old_name, cleaned_name)
+            record.relationships = self._replace_identity_relationships(record.relationships, old_name, cleaned_name)
+            record.metadata.setdefault("previous_names", [])
+            if isinstance(record.metadata.get("previous_names"), list):
+                previous = {str(item) for item in record.metadata.get("previous_names", []) if str(item).strip()}
+                previous.add(old_name)
+                record.metadata["previous_names"] = sorted(previous)
+        record.updated_at = utc_now_iso()
+        self.save()
+        return record
+
+    def add_alias(self, query: str, alias: str, *, entity_type: str | None = None) -> EntityRecord | None:
+        """Add an alias/nickname/STT correction to an existing entity."""
+
+        record = self.resolve(query, entity_type=entity_type)
+        cleaned_alias = _clean_title(alias)
+        if record is None or not cleaned_alias:
+            return None
+        if normalize_text(cleaned_alias) != record.normalized_name:
+            record.aliases = sorted({*record.aliases, cleaned_alias})
+            record.metadata.setdefault("alias_history", [])
+            if isinstance(record.metadata.get("alias_history"), list):
+                history = {str(item) for item in record.metadata.get("alias_history", []) if str(item).strip()}
+                history.add(cleaned_alias)
+                record.metadata["alias_history"] = sorted(history)
+        record.updated_at = utc_now_iso()
+        self.save()
+        return record
+
+    def remove_alias(self, alias: str, *, keep_query: str | None = None, entity_type: str | None = None) -> dict[str, Any]:
+        """Remove an alias while keeping the underlying entity record.
+
+        If ``keep_query`` is provided, only that resolved record is edited. If it
+        is omitted, every matching alias is removed. This supports commands like
+        "forget the alias Ken Lee, but keep Kenleigh" without deleting Kenleigh.
+        """
+
+        normalized_alias = normalize_text(alias)
+        if not self.enabled or not normalized_alias:
+            return {"record": None, "removed_aliases": [], "records_changed": 0}
+        type_filter = normalize_entity_type(entity_type or "") if entity_type else ""
+        candidates: list[EntityRecord]
+        if keep_query:
+            kept = self.resolve(keep_query, entity_type=type_filter or None)
+            candidates = [kept] if kept is not None else []
+        else:
+            candidates = list(self._records)
+        removed_aliases: list[str] = []
+        changed_records = 0
+        selected_record: EntityRecord | None = None
+        for record in candidates:
+            if type_filter and record.entity_type != type_filter:
+                continue
+            remaining: list[str] = []
+            changed = False
+            for existing_alias in record.aliases:
+                if normalize_text(existing_alias) == normalized_alias:
+                    removed_aliases.append(existing_alias)
+                    changed = True
+                else:
+                    remaining.append(existing_alias)
+            if changed:
+                record.aliases = sorted({alias for alias in remaining if alias})
+                record.updated_at = utc_now_iso()
+                selected_record = record
+                changed_records += 1
+        if changed_records:
+            self.save()
+        return {"record": selected_record, "removed_aliases": sorted(set(removed_aliases)), "records_changed": changed_records}
+
+    def merge(self, source_query: str, target_query: str, *, entity_type: str | None = None) -> EntityRecord | None:
+        """Merge two user-spoken entity identities into one canonical record.
+
+        The target side is treated as canonical. If the target record does not
+        exist but the source record does, the source is renamed to the target and
+        the old source name becomes an alias. If the target exists but the source
+        does not, the source phrase becomes an alias on the target. If both exist,
+        source details are merged into target and the source record is removed.
+        """
+
+        if not self.enabled:
+            return None
+        source_name = _clean_title(source_query)
+        target_name = _clean_title(target_query)
+        if not source_name or not target_name:
+            return None
+        normalized_type = normalize_entity_type(entity_type or "") if entity_type else ""
+        source = self.resolve(source_name, entity_type=normalized_type or None)
+        target = self.resolve(target_name, entity_type=normalized_type or None)
+
+        if source is None and target is None:
+            return None
+        if source is not None and target is source:
+            return self.add_alias(target.name, source_name, entity_type=source.entity_type)
+        if target is None and source is not None:
+            return self.rename(source.name, target_name, entity_type=source.entity_type)
+        if target is not None and source is None:
+            return self.add_alias(target.name, source_name, entity_type=target.entity_type)
+        if source is None or target is None:
+            return None
+
+        # Prefer target as canonical, but preserve every identity that used to
+        # refer to either side so STT mistakes and older names still resolve.
+        aliases = {source.name, target.name, source_query, target_query, *source.aliases, *target.aliases}
+        aliases.discard(target.name)
+        target.aliases = sorted({_clean_title(alias) for alias in aliases if _clean_title(alias) and normalize_text(alias) != target.normalized_name})
+        target.summary = self._merge_summary(
+            self._replace_identity_text(target.summary, source.name, target.name),
+            self._replace_identity_text(source.summary, source.name, target.name),
+        )
+        target.attributes = self._merge_attributes(target.attributes, source.attributes)
+        target.relationships = self._dedupe_relationships([*target.relationships, *self._replace_identity_relationships(source.relationships, source.name, target.name)])
+        target.tags = sorted({*target.tags, *source.tags})
+        target.importance = max(target.importance, source.importance)
+        target.confidence = max(target.confidence, source.confidence)
+        if target.sensitivity == "normal" and source.sensitivity != "normal":
+            target.sensitivity = source.sensitivity
+        target.metadata.update(source.metadata or {})
+        target.metadata.setdefault("merged_entity_ids", [])
+        if isinstance(target.metadata.get("merged_entity_ids"), list):
+            merged_ids = {str(item) for item in target.metadata.get("merged_entity_ids", []) if str(item).strip()}
+            merged_ids.add(source.id)
+            target.metadata["merged_entity_ids"] = sorted(merged_ids)
+        target.updated_at = utc_now_iso()
+        self._records = [record for record in self._records if record.id != source.id]
+        self.save()
+        return target
+
     def format_records(self, *, query: str = "", entity_type: str | None = None, limit: int = 8) -> str:
         if not self.enabled:
             return "Entity memory is disabled, sir."
@@ -713,6 +884,32 @@ class EntityMemoryStore:
             existing.updated_at = incoming.updated_at
         existing.metadata.update(incoming.metadata or {})
         return existing
+
+    @staticmethod
+    def _replace_identity_text(text: str, old_name: str, new_name: str) -> str:
+        cleaned = str(text or "")
+        old_clean = _clean_title(old_name)
+        new_clean = _clean_title(new_name)
+        if not cleaned or not old_clean or not new_clean:
+            return cleaned
+        pattern = re.compile(rf"\b{re.escape(old_clean)}\b", flags=re.IGNORECASE)
+        return pattern.sub(new_clean, cleaned)
+
+    def _replace_identity_relationships(self, relationships: list[dict[str, Any]], old_name: str, new_name: str) -> list[dict[str, Any]]:
+        old_clean = _clean_title(old_name)
+        new_clean = _clean_title(new_name)
+        replaced: list[dict[str, Any]] = []
+        for relationship in relationships or []:
+            if not isinstance(relationship, dict):
+                continue
+            updated: dict[str, Any] = {}
+            for key, value in relationship.items():
+                if isinstance(value, str):
+                    updated[key] = self._replace_identity_text(value, old_clean, new_clean)
+                else:
+                    updated[key] = value
+            replaced.append(updated)
+        return replaced
 
     def _trim(self) -> None:
         if self.max_records and len(self._records) > self.max_records:

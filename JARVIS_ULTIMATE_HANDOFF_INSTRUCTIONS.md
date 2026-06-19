@@ -4,11 +4,11 @@ This file exists so a future ChatGPT project chat can quickly understand the cur
 
 ## Current project status
 
-Current committed milestone before this patch: **0.3.1 — Scalable Entity Memory Foundation**
+Current committed milestone before this patch: **0.3.1c — Entity Forget Routing Guard Hotfix**
 
-Current patch milestone: **0.3.1a — Humanized Entity Memory Responses Hotfix**
+Current patch milestone: **0.3.2 — Entity Merge + Alias Correction**
 
-Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current version is `0.3.1a`. Hotfixes may use suffixes like `0.3.1a`.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current version is `0.3.2`. Hotfixes may use suffixes like `0.3.2a`.
 
 ## User patch/package preferences
 
@@ -24,6 +24,10 @@ For every Jarvis patch/update/fix package:
 - Run or validate the test suite before delivery whenever possible:
   ```powershell
   python -m unittest discover -s tests -v
+  ```
+- After the unittest command in the final instructions, include the Jarvis start command too:
+  ```powershell
+  python scripts\start_jarvis_app.py
   ```
 - Do not include `START_HERE` files in patch packages.
 - Do not include README files outside `patch_files/` in patch packages.
@@ -94,7 +98,8 @@ Current memory abilities:
 - default entity types for user/person/pet/project/app/place/device/vehicle/organization,
 - entity memory context injection,
 - entity updates from explicit memories and approved candidates,
-- humanized entity-memory replies with LLM rewriting when available and natural deterministic fallback responses.
+- humanized entity-memory replies with LLM rewriting when available and natural deterministic fallback responses,
+- entity merge/rename/alias correction commands for fixing STT/name mistakes.
 
 Memory auto-capture design:
 
@@ -114,14 +119,13 @@ Known memory design goals:
 
 ## Next recommended update
 
-Recommended next milestone: **0.3.2 Entity Memory Edit/Merge Controls + Memory Preferences** or **0.3.2 Memory Auto-Promotion Controls**.
+Recommended next milestone: **0.3.3 Relationship Memory Graph** or **0.3.3 Memory Preferences / Auto-Remember Controls**.
 
 Recommended goals:
 
-- improve entity extraction for more natural phrasings,
+- add richer relationship graph traversal between entities,
 - add commands like “remember things like this automatically” and “do not remember things like this,”
 - add user-controlled auto-promotion preferences,
-- add entity edit/merge/delete commands,
 - add SaaS-ready scopes such as personal/workspace/team,
 - keep sensitive/private memory behavior user-controlled.
 
@@ -256,3 +260,32 @@ Current status:
 Next recommended update:
 - Add explicit entity edit/merge commands such as `Ken Lee and Kenleigh are the same person`, `rename Scout to ...`, and `forget only the pet named Scout`.
 - Add memory preference controls for what Jarvis should auto-remember, ask about, or avoid remembering.
+
+
+## 0.3.2 Entity Merge + Alias Correction
+
+This update builds on the 0.3.1 entity-memory foundation and the 0.3.1a-c hotfixes by adding explicit correction controls for names, aliases, STT mistakes, and duplicate entity records.
+
+Changes:
+- Added `EntityMemoryStore.resolve()` for exact-first entity/name/alias resolution.
+- Added `EntityMemoryStore.merge()` so commands like `Ken Lee and Kenleigh are the same person` can collapse duplicate records while preserving aliases and details.
+- Added `EntityMemoryStore.rename()` so commands like `Change Lee to Kenleigh` rename the canonical entity while keeping the old name as an alias.
+- Added `EntityMemoryStore.add_alias()` and `remove_alias()` for commands like `Add Ken Lee as an alias for Kenleigh` and `Forget the alias Ken Lee, but keep Kenleigh`.
+- Memory Agent now handles entity edit actions before normal search/list/save commands.
+- Intent classifier routes entity merge, rename, alias-add, and alias-remove phrases to the Memory Agent instead of app control or general chat.
+- App shell version is now `0.3.2` and capabilities include `entity_memory_merge_alias_correction`.
+
+Manual examples:
+- `Ken Lee and Kenleigh are the same person.`
+- `Change Lee to Kenleigh.`
+- `Add Ken Lee as an alias for Kenleigh.`
+- `Forget the alias Ken Lee, but keep Kenleigh.`
+- `Who is Ken Lee?` should now resolve to the canonical saved entity.
+
+Current status:
+- Full test suite passed in the patch workspace with `PYTHONPATH=src python -m unittest discover -s tests -v`.
+- Result: `Ran 368 tests in 3.717s — OK`.
+
+Next recommended update:
+- `0.3.3 Relationship Memory Graph` so Jarvis can reason over links such as fiancée, pet owner, project contributor, device ownership, organization membership, and SaaS workspace/team scopes.
+- Or `0.3.3 Memory Preferences / Auto-Remember Controls` so users can decide what Jarvis may remember automatically, what requires approval, and what should never be saved.

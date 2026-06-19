@@ -4,8 +4,8 @@
 
 This repository is an active personal AI-assistant build. The goal is to create a modular assistant that can eventually control desktop apps, remember useful context over time, support voice-first workflows, connect to future vision/security systems, and run continuously as a long-lived local service.
 
-> Current milestone: **0.3.1a — Humanized Entity Memory Responses Hotfix**  
-> Next planned milestone: **0.3.2 — Entity Memory Polish / Memory Auto-Promotion Controls**
+> Current milestone: **0.3.2 — Entity Merge + Alias Correction**  
+> Next planned milestone: **0.3.3 — Relationship Memory Graph / Memory Preferences**
 
 ---
 
@@ -434,14 +434,21 @@ git push
 - multi-word relationship-name extraction,
 - plural entity type normalization for commands like `list remembered pets`.
 
-### Next: 0.3.2
+### 0.3.2 — Entity Merge + Alias Correction
+
+- entity merge commands for duplicate/STT-mistaken names,
+- rename commands for canonical entity names,
+- alias add/remove commands,
+- safer routing for entity corrections through the Memory Agent,
+- preserved old names as aliases so past memories still resolve.
+
+### Next: 0.3.3
 
 Planned next milestone:
 
-- entity memory polish,
+- relationship memory graph,
 - memory preference controls,
 - high-confidence auto-promotion rules,
-- entity edit/merge/delete commands,
 - SaaS workspace/team scoping.
 
 ---
@@ -450,7 +457,8 @@ Planned next milestone:
 
 Near-term roadmap:
 
-- Entity Memory Polish
+- Relationship Memory Graph
+- Memory Preferences / Auto-Remember Controls
 - Memory Candidate Review Polish + Auto-Promotion Rules
 - File Agent Foundation
 - Routine Agent Foundation
