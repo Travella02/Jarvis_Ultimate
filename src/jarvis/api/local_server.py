@@ -121,6 +121,7 @@ class LocalJarvisAPI:
         self._voice_thread: threading.Thread | None = None
         self._voice_stop_requested = threading.Event()
         self._voice_session: dict[str, Any] = self._new_voice_session()
+        self._typed_visual_hold_until = 0.0
         self._app_shell_voice_warmed = False
         self._booted = bool(getattr(self.runtime, "started", False))
         self.runtime.events.subscribe("*", self._on_runtime_event)
@@ -264,38 +265,170 @@ class LocalJarvisAPI:
         with self._lock:
             return [event.to_dict() for event in list(self.workspace.events)]
 
-    def handle_command(self, command: str) -> dict[str, Any]:
+    def handle_command(self, command: str, *, speak: bool = True, input_mode: str = "typed") -> dict[str, Any]:
+        """Handle a typed app-shell command through the same spoken path as voice.
+
+        Typed input is intentional, so it should not require a wake word.  It
+        still needs to behave like a real Jarvis turn: route through the normal
+        brain/agent pipeline, stream text into the orb caption, speak the answer
+        through TTS when available, and then hand the UI back to the existing
+        microphone sleep/wake session instead of making Jarvis look idle/offline.
+        """
+
         command = str(command or "").strip()
         if not command:
             return api_error("Command cannot be empty.", status=400)
 
         self.boot()
+        speak = bool(speak)
+        input_mode = str(input_mode or "typed").strip() or "typed"
+        with self._voice_lock:
+            voice_active_before = bool(self._voice_thread is not None and self._voice_thread.is_alive())
+            voice_mode_before = str(self._voice_session.get("mode") or "idle")
+            voice_status_before = str(self._voice_session.get("last_status") or "")
+        self._set_typed_visual_hold(300.0)
         with self._lock:
+            avatar_state_before = str(getattr(self.workspace.avatar, "state", "idle") or "idle")
             self.workspace.add_chat_message("user", command)
-            self.workspace.avatar.set_state("thinking", expression="focused", message="Routing command from app shell...")
+            self.workspace.avatar.set_state("thinking", expression="focused", message="Thinking about typed command...")
+        self._update_voice_session(
+            typed_turn_active=True,
+            last_command=command,
+            last_input_mode=input_mode,
+            last_response="",
+            live_response_text="",
+            live_response_started_at="",
+        )
 
         chunks: list[str] = []
 
         def on_chunk(chunk: str) -> None:
             chunks.append(chunk)
+            live_text = "".join(chunks).strip()
+            self._update_voice_session(
+                live_response_text=live_text,
+                last_response=live_text,
+                live_response_started_at=self._voice_session.get("live_response_started_at") or _utc_now_iso(),
+            )
             with self._lock:
-                self.workspace.avatar.set_state("speaking", expression="active", message="Streaming response to app shell...")
+                self.workspace.avatar.set_state("speaking", expression="active", message="Jarvis is speaking...")
+
+        spoken_stream = None
+        callback: Any = on_chunk
+        tts_enabled = bool(speak and getattr(self.runtime.tts_manager, "enabled", False))
+        if tts_enabled:
+            spoken_stream = self.runtime.spoken_pipeline.create_stream_adapter(on_chunk, enabled=True)
+            callback = spoken_stream
 
         try:
-            result = self.runtime.handle_command(command, stream_callback=on_chunk)
-            response_text = "".join(chunks).strip() or result.message
+            result = self.runtime.handle_command(command, stream_callback=callback)
+            early_response_text = "".join(chunks).strip() or result.message
+            if early_response_text and tts_enabled and result.action != "llm_chat" and not chunks:
+                self._stage_live_speech_caption(early_response_text, lead_seconds=0.22)
+
+            spoken_chunks = 0
+            if spoken_stream is not None:
+                with self._lock:
+                    self.workspace.avatar.set_state("speaking", expression="active", message="Jarvis is finishing speech playback...")
+                spoken_chunks = self.runtime._finish_spoken_result(
+                    result,
+                    spoken_stream=spoken_stream,
+                    wait_timeout=120.0,
+                    wait_message="Waiting for typed app-shell response playback to finish before returning to microphone listening.",
+                )
+
+            response_text = "".join(chunks).strip() or early_response_text
+            if response_text and tts_enabled and result.action != "llm_chat" and spoken_chunks <= 0:
+                self._stage_live_speech_caption(response_text)
+                try:
+                    self.runtime.tts_manager.say(response_text, play_audio=True)
+                    spoken_chunks = 1
+                except Exception as exc:  # pragma: no cover - defensive TTS fallback
+                    self.runtime.events.emit(
+                        "voice.app_shell_typed_tts_failed",
+                        source="app_shell",
+                        message=str(exc),
+                        data={"command": command, "response": response_text},
+                    )
+
+            with self._voice_lock:
+                typed_turns = int(self._voice_session.get("typed_turns_handled", 0) or 0) + 1
+            self._update_voice_session(
+                typed_turns_handled=typed_turns,
+                typed_turn_active=False,
+                last_command=command,
+                last_input_mode=input_mode,
+                last_response=response_text,
+                live_response_text=response_text,
+                live_response_started_at=self._voice_session.get("live_response_started_at") or _utc_now_iso(),
+                last_status="Typed command finished. Voice listening is still available.",
+            )
+
             with self._lock:
                 self.workspace.add_chat_message("jarvis", response_text)
-                next_state = "idle" if result.success else "error"
-                expression = "neutral" if result.success else "alert"
-                message = "Ready, sir." if result.success else result.message
-                self.workspace.avatar.set_state(next_state, expression=expression, message=message)
-            return api_ok({"result": result.to_dict(), "response_text": response_text, "state": self.snapshot()}, message=result.message)
+                if result.success:
+                    self._set_typed_visual_hold(1.6)
+                    if voice_active_before:
+                        resume_state = self._typed_resume_visual_state(avatar_state_before, voice_status_before, voice_mode_before)
+                        expression = "calm" if resume_state == "sleeping" else "focused"
+                        message = "Typed command finished. Voice sleep/wake is still running, sir."
+                        self.workspace.avatar.set_state(resume_state, expression=expression, message=message)
+                    else:
+                        self.workspace.avatar.set_state("idle", expression="neutral", message="Ready, sir.")
+                else:
+                    self._set_typed_visual_hold(1.6)
+                    self.workspace.avatar.set_state("error", expression="alert", message=result.message)
+            self.runtime.events.emit(
+                "voice.app_shell_typed_turn_finished",
+                source="app_shell",
+                message="Typed app-shell command finished with voice-parity handling.",
+                data={
+                    "command": command,
+                    "input_mode": input_mode,
+                    "spoken_chunks": spoken_chunks,
+                    "voice_active_before": voice_active_before,
+                    "voice_mode_before": voice_mode_before,
+                    "success": result.success,
+                },
+            )
+            return api_ok(
+                {
+                    "result": result.to_dict(),
+                    "response_text": response_text,
+                    "spoken_chunks": spoken_chunks,
+                    "voice_active_before": voice_active_before,
+                    "state": self.snapshot(),
+                },
+                message=result.message,
+            )
         except Exception as exc:  # pragma: no cover - defensive API boundary
+            self._update_voice_session(typed_turn_active=False)
+            self._set_typed_visual_hold(1.6)
             with self._lock:
                 self.workspace.avatar.set_state("error", expression="alert", message=str(exc))
                 self.workspace.add_chat_message("jarvis", f"App-shell API error, sir: {exc}")
             return api_error(f"Jarvis API command failed: {exc}", status=500, data={"state": self.snapshot()})
+
+    @staticmethod
+    def _typed_resume_visual_state(previous_avatar_state: str, previous_voice_status: str, previous_voice_mode: str) -> str:
+        """Choose the visual state to restore after a typed turn finishes.
+
+        The exact microphone loop state lives inside the background voice thread,
+        so this deliberately uses conservative UI hints instead of trying to take
+        over the loop.  The important behavior is that typed commands do not make
+        a running voice session look stopped.
+        """
+
+        previous_avatar_state = str(previous_avatar_state or "").strip().lower()
+        previous_voice_status = str(previous_voice_status or "").strip().lower()
+        previous_voice_mode = str(previous_voice_mode or "").strip().lower()
+        if previous_avatar_state in {"sleeping", "wake_listening"}:
+            return "sleeping"
+        if previous_avatar_state in {"listening", "transcribing"}:
+            return "listening"
+        if "sleep" in previous_voice_status or previous_voice_mode == "sleep_wake":
+            return "sleeping" if "sleep" in previous_voice_status and "awake" not in previous_voice_status else "listening"
+        return "listening"
 
     def voice_session_snapshot(self) -> dict[str, Any]:
         with self._voice_lock:
@@ -376,9 +509,12 @@ class LocalJarvisAPI:
             "turns_heard": 0,
             "turns_handled": 0,
             "turns_ignored": 0,
+            "typed_turns_handled": 0,
+            "typed_turn_active": False,
             "failures": 0,
             "last_transcript": "",
             "last_command": "",
+            "last_input_mode": "",
             "last_response": "",
             "live_response_text": "",
             "live_response_started_at": "",
@@ -394,6 +530,26 @@ class LocalJarvisAPI:
     def _update_voice_session(self, **updates: Any) -> None:
         with self._voice_lock:
             self._voice_session.update(updates)
+
+    def _set_typed_visual_hold(self, seconds: float) -> None:
+        """Temporarily keep the typed-command visual state from being overwritten.
+
+        Sleep/wake listening runs in a background thread. While a typed command
+        is being spoken, that thread may legitimately continue polling the mic
+        and attempt to set the orb back to sleeping/listening. The hold only
+        suppresses those background visual updates; it does not stop the mic loop.
+        """
+
+        try:
+            hold_seconds = max(0.0, float(seconds))
+        except (TypeError, ValueError):
+            hold_seconds = 0.0
+        with self._voice_lock:
+            self._typed_visual_hold_until = time.monotonic() + hold_seconds if hold_seconds else 0.0
+
+    def _typed_visual_hold_active(self) -> bool:
+        with self._voice_lock:
+            return bool(self._typed_visual_hold_until and time.monotonic() < self._typed_visual_hold_until)
 
     def _finish_voice_session(self, *, final_state: str = "idle", status: str = "Voice session finished.", error: str = "") -> None:
         with self._voice_lock:
@@ -413,8 +569,11 @@ class LocalJarvisAPI:
             self.workspace.avatar.set_state(state, expression=expression, message=error or status)
             self.workspace.add_notice(status if not error else error)
 
-    def _set_voice_visual(self, status_message: str, *, state: str | None = None, expression: str | None = None) -> None:
+    def _set_voice_visual(self, status_message: str, *, state: str | None = None, expression: str | None = None, allow_during_typed: bool = False) -> None:
         visual_state = state or classify_voice_status(status_message)
+        if self._typed_visual_hold_active() and not allow_during_typed:
+            self._update_voice_session(background_last_status=status_message)
+            return
         with self._lock:
             self.workspace.avatar.set_state(visual_state, expression=expression, message=status_message)
         self._update_voice_session(last_status=status_message)
@@ -435,7 +594,7 @@ class LocalJarvisAPI:
             last_response=response,
             live_response_started_at=_utc_now_iso(),
         )
-        self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+        self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active", allow_during_typed=True)
         if lead_seconds > 0:
             time.sleep(lead_seconds)
 
@@ -458,7 +617,7 @@ class LocalJarvisAPI:
                 last_response=live_text,
                 live_response_started_at=self._voice_session.get("live_response_started_at") or _utc_now_iso(),
             )
-            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active", allow_during_typed=True)
 
         try:
             self._update_voice_session(live_response_text="", live_response_started_at="")
@@ -575,7 +734,7 @@ class LocalJarvisAPI:
                         prompt = self.runtime.wake_word_manager.empty_response
                         if speak and self.runtime.tts_manager.enabled:
                             self._update_voice_session(live_response_text=prompt, last_response=prompt, live_response_started_at=_utc_now_iso())
-                            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+                            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active", allow_during_typed=True)
                             self.runtime.tts_manager.say(prompt, play_audio=True)
                         self._update_voice_session(last_command="", last_response=prompt, live_response_text=prompt)
                         with self._lock:
@@ -587,7 +746,7 @@ class LocalJarvisAPI:
                         sleep_reply = _natural_sleep_reply_for_phrase(normalized_transcript)
                         if sleep_reply and speak and self.runtime.tts_manager.enabled:
                             self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
-                            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+                            self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active", allow_during_typed=True)
                             self.runtime.tts_manager.say(sleep_reply, play_audio=True)
                         elif sleep_reply:
                             self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
@@ -605,7 +764,7 @@ class LocalJarvisAPI:
                     sleep_reply = _natural_sleep_reply_for_phrase(natural_sleep_source)
                     if sleep_reply and speak and self.runtime.tts_manager.enabled:
                         self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
-                        self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+                        self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active", allow_during_typed=True)
                         self.runtime.tts_manager.say(sleep_reply, play_audio=True)
                     elif sleep_reply:
                         self._update_voice_session(live_response_text=sleep_reply, last_response=sleep_reply, live_response_started_at=_utc_now_iso())
@@ -630,7 +789,7 @@ class LocalJarvisAPI:
                         last_response=live_text,
                         live_response_started_at=self._voice_session.get("live_response_started_at") or _utc_now_iso(),
                     )
-                    self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active")
+                    self._set_voice_visual("Jarvis is speaking...", state="speaking", expression="active", allow_during_typed=True)
 
                 spoken_stream = None
                 callback: Any = on_chunk
@@ -823,7 +982,9 @@ def make_handler(api: LocalJarvisAPI) -> type[BaseHTTPRequestHandler]:
 
             if path == "/api/command":
                 command = str(payload.get("command", "")).strip() if isinstance(payload, dict) else ""
-                response = api.handle_command(command)
+                speak = _safe_bool(payload.get("speak"), True) if isinstance(payload, dict) else True
+                input_mode = str(payload.get("input_mode") or "typed").strip() if isinstance(payload, dict) else "typed"
+                response = api.handle_command(command, speak=speak, input_mode=input_mode)
                 self._send(response, status=int(response.get("status", 200) if not response.get("success", True) else 200))
                 return
             if path == "/api/voice/once":

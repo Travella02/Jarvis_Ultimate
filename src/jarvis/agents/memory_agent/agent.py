@@ -240,7 +240,14 @@ class Agent:
             short_matches = short_term_facts.search(list_query, limit=5) if list_query else []
             entity_matches = entity_memory.search(list_query, limit=5) if list_query else []
             if list_query:
-                message = self._format_combined_search(list_query, long_matches=long_matches, short_matches=short_matches, entity_matches=entity_matches)
+                message = self._format_combined_search(
+                    list_query,
+                    long_matches=long_matches,
+                    short_matches=short_matches,
+                    entity_matches=entity_matches,
+                    llm_provider=context.get("llm_provider"),
+                    timing=context.get("timing"),
+                )
             else:
                 message = "\n\n".join([long_term.format_records(limit=7), short_term_facts.format_records(limit=7), entity_memory.format_records(limit=7)])
             return JarvisResult.ok(
@@ -451,7 +458,7 @@ class Agent:
             return sentence
         lines = ["Here is what I have saved, sir:"]
         for record in records:
-            lines.append(f"- {getattr(record, 'name', 'Unknown')}: {self._entity_brief(record)}")
+            lines.append(f"- {self._display_entity_name(record)}: {self._entity_brief(record)}")
         return "\n".join(lines)
 
     def _humanize_entity_response_with_llm(
@@ -528,7 +535,7 @@ class Agent:
     def _entity_facts_for_prompt(self, records: list[Any]) -> str:
         lines: list[str] = []
         for record in records:
-            name = getattr(record, "name", "")
+            name = self._display_entity_name(record)
             entity_type = getattr(record, "entity_type", "entity")
             summary = self._second_person_summary(getattr(record, "summary", ""))
             attributes = getattr(record, "attributes", {}) if isinstance(getattr(record, "attributes", {}), dict) else {}
@@ -542,7 +549,7 @@ class Agent:
         return "\n".join(lines)
 
     def _single_entity_sentence(self, record: Any) -> str:
-        name = getattr(record, "name", "that")
+        name = self._display_entity_name(record)
         entity_type = getattr(record, "entity_type", "entity")
         attributes = getattr(record, "attributes", {}) if isinstance(getattr(record, "attributes", {}), dict) else {}
         relation = attributes.get("relationship")
@@ -571,6 +578,13 @@ class Agent:
         elif sentence.lower().endswith(" sir."):
             sentence = sentence[:-5] + "."
         return sentence
+
+    def _display_entity_name(self, record: Any) -> str:
+        name = " ".join(str(getattr(record, "name", "") or "that").strip().split())
+        entity_type = normalize_entity_type(str(getattr(record, "entity_type", "entity") or "entity"))
+        if entity_type in {"person", "pet"} and name and name == name.lower():
+            return name.title()
+        return name or "that"
 
     def _entity_label(self, entity_type: str) -> str:
         label = normalize_entity_type(entity_type or "entity").replace("_", " ").strip()
@@ -910,23 +924,37 @@ class Agent:
             # Entity memory should never break the core memory command.
             return None
 
-    def _format_combined_search(self, query: str, *, long_matches: list[Any], short_matches: list[Any], entity_matches: list[Any] | None = None) -> str:
+    def _format_combined_search(
+        self,
+        query: str,
+        *,
+        long_matches: list[Any],
+        short_matches: list[Any],
+        entity_matches: list[Any] | None = None,
+        llm_provider: Any | None = None,
+        timing: Any | None = None,
+    ) -> str:
         entity_matches = entity_matches or []
-        if not long_matches and not short_matches and not entity_matches:
+        entity_records = [item.record for item in entity_matches if getattr(item, "record", None) is not None]
+        if not long_matches and not short_matches and not entity_records:
             return f"I do not have any saved memories about {query}, sir."
 
         permanent = [self._for_user(item.record.text) for item in long_matches if getattr(item, "record", None) is not None]
         temporary = [self._for_user(item.record.text) for item in short_matches if getattr(item, "record", None) is not None]
-        entities = []
-        for item in entity_matches:
-            record = getattr(item, "record", None)
-            if record is None:
-                continue
-            summary = getattr(record, "summary", "") or f"{record.name} is remembered as {record.entity_type}"
-            entities.append(f"{record.name} ({record.entity_type}): {summary}")
+        entities = [self._entity_brief(record) for record in entity_records]
         permanent = self._dedupe_phrases(permanent)
         temporary = self._dedupe_phrases(temporary)
         entities = self._dedupe_phrases(entities)
+
+        if entity_records and not permanent and not temporary:
+            fallback = self._format_entity_records_naturally(entity_records, query=query, action_name="search")
+            return self._humanize_entity_response_with_llm(
+                command=f"What do you remember about {query}?",
+                records=entity_records,
+                fallback_message=fallback,
+                llm_provider=llm_provider,
+                timing=timing,
+            )
 
         parts: list[str] = []
         if permanent:
@@ -934,15 +962,83 @@ class Agent:
         if temporary:
             parts.append(f"for now, {self._join_memory_phrases(temporary)}")
         if entities:
-            parts.append(f"as structured entity memory, {self._join_memory_phrases(entities)}")
+            parts.append(f"about {query}, {self._join_memory_phrases(entities)}")
 
         if len(parts) == 1:
             if permanent:
-                return f"I remember that {self._join_memory_phrases(permanent)}, sir."
-            if temporary:
-                return f"For now, I remember that {self._join_memory_phrases(temporary)}, sir."
-            return f"I have this structured entity memory, sir: {self._join_memory_phrases(entities)}."
-        return "I remember a couple things, sir: " + "; and ".join(parts) + "."
+                fallback = f"I remember that {self._join_memory_phrases(permanent)}, sir."
+            elif temporary:
+                fallback = f"For now, I remember that {self._join_memory_phrases(temporary)}, sir."
+            else:
+                fallback = f"I remember that {self._join_memory_phrases(entities)}, sir."
+        else:
+            fallback = "I remember a couple things, sir: " + "; and ".join(parts) + "."
+
+        return self._humanize_memory_search_response_with_llm(
+            command=f"What do you remember about {query}?",
+            query=query,
+            permanent=permanent,
+            temporary=temporary,
+            entity_records=entity_records,
+            fallback_message=fallback,
+            llm_provider=llm_provider,
+            timing=timing,
+        )
+
+    def _humanize_memory_search_response_with_llm(
+        self,
+        *,
+        command: str,
+        query: str,
+        permanent: list[str],
+        temporary: list[str],
+        entity_records: list[Any],
+        fallback_message: str,
+        llm_provider: Any | None,
+        timing: Any | None = None,
+    ) -> str:
+        if llm_provider is None or not hasattr(llm_provider, "chat"):
+            return fallback_message
+        fact_lines: list[str] = []
+        fact_lines.extend(f"- permanent memory: {item}" for item in permanent)
+        fact_lines.extend(f"- temporary memory: {item}" for item in temporary)
+        entity_facts = self._entity_facts_for_prompt(entity_records)
+        if entity_facts:
+            fact_lines.append(entity_facts)
+        system_prompt = (
+            "You are Jarvis, a natural personal assistant. Rewrite the memory answer as a short, "
+            "normal conversational reply to the user. Do not mention structured entity memory, records, "
+            "database fields, schemas, search results, or internal tiers unless the user asks for diagnostics. "
+            "Use second-person wording like 'your fiancée', 'your dog', and 'your project'. "
+            "Only use the provided facts and do not invent details. End naturally with 'sir' when it fits."
+        )
+        facts_text = "\n".join(fact_lines) if fact_lines else "(none)"
+        user_prompt = (
+            f"User asked: {command}\n\n"
+            f"Search query: {query}\n\n"
+            f"Remembered facts:\n{facts_text}\n\n"
+            f"Fallback answer:\n{fallback_message}\n\n"
+            "Return only the natural Jarvis answer."
+        )
+        try:
+            response = llm_provider.chat(
+                [{"role": "user", "content": user_prompt}],
+                system_prompt=system_prompt,
+                temperature=0.2,
+                max_tokens=220,
+                timing=timing,
+                stream=False,
+            )
+        except Exception:
+            return fallback_message
+        if getattr(response, "success", False) is True:
+            content = getattr(response, "content", "")
+            if isinstance(content, str) and content.strip():
+                cleaned = " ".join(content.strip().split())
+                forbidden = ("structured entity", "database", "schema", "search result", "internal tier")
+                if cleaned and not any(term in cleaned.lower() for term in forbidden):
+                    return cleaned
+        return fallback_message
 
     def _join_memory_phrases(self, phrases: list[str]) -> str:
         cleaned = [phrase.strip(" .?!") for phrase in phrases if phrase.strip()]

@@ -25,7 +25,7 @@ from jarvis.tools.shared.process_tools import LaunchResult
 
 class TestAppAgentLaunchVerification026(unittest.TestCase):
     def test_version_and_capabilities_include_launch_verification(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.2")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.3a")
         capabilities = set(app_shell_capabilities())
         self.assertIn("verified_app_launches", capabilities)
         self.assertIn("verified_app_closes", capabilities)
@@ -37,6 +37,8 @@ class TestAppAgentLaunchVerification026(unittest.TestCase):
         match = AppMatch(candidate, score=1.0, source="test", query="discord")
         with TemporaryDirectory() as tmp, patch.dict("os.environ", {"JARVIS_ALLOW_OS_LAUNCH_DURING_TESTS": "1"}), patch(
             "jarvis.tools.shared.app_discovery.platform.system", return_value="Windows"
+        ), patch(
+            "jarvis.tools.shared.app_discovery._candidate_is_running", return_value=False
         ), patch(
             "jarvis.tools.shared.app_discovery._launch_path",
             return_value=LaunchResult(True, "Opening Discord, sir.", target="Discord", launch_type="path", command="C:/Discord/Discord.exe"),
@@ -52,12 +54,14 @@ class TestAppAgentLaunchVerification026(unittest.TestCase):
         self.assertIn("Discord.exe", wait_for_processes.call_args.args[0])
 
     def test_stale_launcher_retries_refreshed_real_app_path(self) -> None:
-        stale = AppCandidate(name="discord", path="C:/Users/Tanner/AppData/Local/Discord/Update.exe", launch_type="path", aliases=["discord"], process_names=["Discord.exe"])
-        real = AppCandidate(name="discord", path="C:/Users/Tanner/AppData/Local/Discord/app-1.0.999/Discord.exe", launch_type="path", aliases=["discord"], process_names=["Discord.exe"])
+        stale = AppCandidate(name="discord", path="C:/Users/JarvisTest/AppData/Local/Discord/Update.exe", launch_type="path", aliases=["discord"], process_names=["Discord.exe"])
+        real = AppCandidate(name="discord", path="C:/Users/JarvisTest/AppData/Local/Discord/app-1.0.999/Discord.exe", launch_type="path", aliases=["discord"], process_names=["Discord.exe"])
         match = AppMatch(stale, score=1.0, source="learned_alias", query="discord", learned=True)
 
         with TemporaryDirectory() as tmp, patch.dict("os.environ", {"JARVIS_ALLOW_OS_LAUNCH_DURING_TESTS": "1"}), patch(
             "jarvis.tools.shared.app_discovery.platform.system", return_value="Windows"
+        ), patch(
+            "jarvis.tools.shared.app_discovery._candidate_is_running", return_value=False
         ), patch(
             "jarvis.tools.shared.app_discovery._launch_path",
             side_effect=[

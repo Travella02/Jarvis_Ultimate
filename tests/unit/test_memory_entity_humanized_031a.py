@@ -78,6 +78,42 @@ class EntityMemoryHumanized031aTests(unittest.TestCase):
             self.assertIn("your dog", result.message)
             self.assertNotIn("I do not have", result.message)
 
+    def test_what_do_you_remember_about_entity_is_not_structured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            entity_memory = EntityMemoryStore(path=Path(tmp) / "entities.json")
+            long_term = LongTermMemoryStore(path=Path(tmp) / "long.json")
+            agent = MemoryAgent()
+            agent.handle(
+                "Jarvis, remember that ken lee is my fiance",
+                context={"long_term_memory": long_term, "entity_memory": entity_memory},
+            )
+            result = agent.handle(
+                "What do you remember about Ken Lee?",
+                context={"long_term_memory": LongTermMemoryStore(path=Path(tmp) / "other_long.json"), "entity_memory": entity_memory},
+            )
+
+        self.assertTrue(result.success)
+        self.assertIn("Ken Lee", result.message)
+        self.assertIn("your fiancée", result.message)
+        self.assertNotIn("structured entity", result.message.lower())
+        self.assertNotIn("records", result.message.lower())
+
+    def test_what_do_you_remember_about_entity_uses_llm_humanizer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            entity_memory = EntityMemoryStore(path=Path(tmp) / "entities.json")
+            entity_memory.upsert("Kenleigh", entity_type="person", summary="Kenleigh is your fiancée.", attributes={"relationship": "fiancée"})
+            llm = FakeEntityLLM("Kenleigh is your fiancée, sir.")
+            result = MemoryAgent().handle(
+                "What do you remember about Kenleigh?",
+                context={"entity_memory": entity_memory, "llm_provider": llm},
+            )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.message, "Kenleigh is your fiancée, sir.")
+        self.assertEqual(len(llm.calls), 1)
+        prompt = llm.calls[0]["messages"][0]["content"]
+        self.assertIn("What do you remember about Kenleigh", prompt or "")
+
 
 if __name__ == "__main__":
     unittest.main()

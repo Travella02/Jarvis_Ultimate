@@ -423,10 +423,31 @@ class JarvisDesktopApp:
                 self.workspace.avatar.set_state("speaking", expression="active", message="Streaming response...")
                 self._schedule_refresh()
 
-            result = self.runtime.handle_command(command, stream_callback=on_chunk)
+            spoken_stream = None
+            callback = on_chunk
+            tts_enabled = bool(getattr(self.runtime.tts_manager, "enabled", False))
+            if tts_enabled:
+                spoken_stream = self.runtime.spoken_pipeline.create_stream_adapter(on_chunk, enabled=True)
+                callback = spoken_stream
+
+            result = self.runtime.handle_command(command, stream_callback=callback)
+            spoken_chunks = 0
+            if spoken_stream is not None:
+                self.workspace.avatar.set_state("speaking", expression="active", message="Jarvis is finishing speech playback...")
+                spoken_chunks = self.runtime._finish_spoken_result(
+                    result,
+                    spoken_stream=spoken_stream,
+                    wait_timeout=120.0,
+                    wait_message="Waiting for typed desktop response playback to finish before returning to microphone listening.",
+                )
             response_text = "".join(chunks).strip() or result.message
+            if response_text and tts_enabled and result.action != "llm_chat" and spoken_chunks <= 0:
+                self.runtime.tts_manager.say(response_text, play_audio=True)
             self.workspace.add_chat_message("jarvis", response_text)
-            self.workspace.avatar.set_state("idle", expression="neutral", message="Ready, sir.")
+            if self.voice_runtime_running():
+                self.workspace.avatar.set_state("wake_listening", expression="focused", message="Typed command finished. Voice runtime is still running, sir.")
+            else:
+                self.workspace.avatar.set_state("idle", expression="neutral", message="Ready, sir.")
         except Exception as exc:  # pragma: no cover - defensive UI boundary
             self.workspace.avatar.set_state("error", expression="alert", message=str(exc))
             self.workspace.add_chat_message("jarvis", f"I ran into a desktop UI error, sir: {exc}")

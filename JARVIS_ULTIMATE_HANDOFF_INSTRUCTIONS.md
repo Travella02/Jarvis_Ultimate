@@ -4,11 +4,11 @@ This file exists so a future ChatGPT project chat can quickly understand the cur
 
 ## Current project status
 
-Current committed milestone before this patch: **0.3.1c — Entity Forget Routing Guard Hotfix**
+Current committed milestone before this patch: **0.3.2 — Entity Merge + Alias Correction**
 
-Current patch milestone: **0.3.2 — Entity Merge + Alias Correction**
+Current patch milestone: **0.3.3a — Typed Memory Response Hotfix + App Agent Test-Isolation Hotfix**
 
-Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current version is `0.3.2`. Hotfixes may use suffixes like `0.3.2a`.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.3a`. Hotfixes may use suffixes like `0.3.2a`.
 
 ## User patch/package preferences
 
@@ -289,3 +289,82 @@ Current status:
 Next recommended update:
 - `0.3.3 Relationship Memory Graph` so Jarvis can reason over links such as fiancée, pet owner, project contributor, device ownership, organization membership, and SaaS workspace/team scopes.
 - Or `0.3.3 Memory Preferences / Auto-Remember Controls` so users can decide what Jarvis may remember automatically, what requires approval, and what should never be saved.
+
+
+## 0.3.3 Typed Input Voice Parity
+
+This update pauses the memory pipeline briefly to fix a core interaction issue: typed commands in the Jarvis interface should behave like intentional voice commands, not like a separate silent chat path.
+
+Changes:
+- `/api/command` now treats typed app-shell commands as intentional Jarvis turns and does not require a wake word.
+- Typed app-shell commands now route through the normal runtime brain/agent pipeline and can use memory, tools, and agents exactly like voice commands.
+- Typed responses now use the spoken response pipeline, so Jarvis reads answers aloud when TTS is available.
+- Complete non-streamed tool/agent replies still get pre-speech caption staging so short responses appear under the orb before/while Jarvis says them.
+- Running sleep/wake voice sessions are preserved after a typed turn; typed commands should no longer make Jarvis look idle or stop listening.
+- The app-shell renderer now sends `speak: true` and `input_mode: typed` for normal typed commands.
+- The desktop/Tk fallback typed command path also uses spoken playback and returns to the voice-running visual state when the desktop voice runtime is active.
+- App shell version is now `0.3.3` and capabilities include `typed_input_voice_parity`.
+
+Manual examples:
+- Start Jarvis with `python scripts\start_jarvis_app.py`.
+- Let sleep/wake mode start.
+- Type `Who is Kenleigh?` without saying a wake word.
+- Jarvis should answer aloud and still keep voice sleep/wake available afterward.
+- Then say `Hey Jarvis, what do you remember about Kenleigh?` to verify voice still works.
+
+Current status:
+- Full test suite passed in the patch workspace with `PYTHONPATH=src python -m unittest discover -s tests -v`.
+- Result: `Ran 371 tests in 3.564s — OK`.
+
+Next recommended update:
+- Return to the memory pipeline with `0.3.4 Relationship Memory Graph`, or add `0.3.4 Memory Preferences / Auto-Remember Controls` if user control over automatic memory should come first.
+
+
+## 0.3.3a Typed Input Stabilization + Natural Memory Search Hotfix
+
+This hotfix should be applied before committing 0.3.3. It keeps the 0.3.3 typed-input voice parity work intact and fixes two manual-testing issues found in the Jarvis app shell.
+
+Root causes:
+- `What do you remember about Kenleigh?` used the combined memory-search formatter, which still had database-style wording such as `structured entity memory` even though direct entity questions were already humanized.
+- While a typed response was being spoken, the background sleep/wake voice thread could keep polling the mic and overwrite the orb state back to sleeping/listening, causing fast state flicker during typed replies.
+
+Changes:
+- Combined memory search now humanizes entity-only and mixed memory answers.
+- Entity memory names are displayed more naturally for person/pet records when STT stores lower-case names.
+- LLM humanization is now used for `what do you remember about...` memory-search responses when an LLM provider is available, with deterministic natural fallback when it is not.
+- App-shell typed turns now hold the visible speaking/thinking state while background sleep/wake continues running.
+- Background sleep/wake visual updates are suppressed during typed response playback, without stopping the microphone loop.
+- App shell version is now `0.3.3a` and capabilities include `typed_input_visual_hold` and `humanized_memory_search_responses`.
+
+Manual examples:
+- Type `What do you remember about Kenleigh?` and Jarvis should answer naturally, such as `Kenleigh is your fiancée, sir.`
+- Type a command while sleep/wake is running; Jarvis should speak the response without flickering rapidly between speaking and sleeping.
+- After the typed turn, voice sleep/wake should still be available.
+
+Current status:
+- Full test suite passed in the patch workspace with `PYTHONPATH=src python -m unittest discover -s tests -v`.
+- Result: `Ran 374 tests in 4.984s — OK`.
+
+Next recommended update:
+- Commit `0.3.3a` after manual testing succeeds.
+- Then return to the memory pipeline with `0.3.4 Relationship Memory Graph` or `0.3.4 Memory Preferences / Auto-Remember Controls`.
+
+
+## 0.3.3a App Agent Test-Isolation Hotfix
+
+This small follow-up hotfix keeps the 0.3.3a typed-memory response changes intact and only fixes test isolation.
+
+Changes:
+- Updated `tests/unit/test_app_agent_launch_verification_026.py` so App Agent launch-verification tests do not inspect the real machine's currently running Discord process.
+- Patched `_candidate_is_running` to `False` inside the two launch-verification tests that expect mocked launch behavior.
+- Replaced the hardcoded real-user Discord path fixture with a neutral `JarvisTest` path.
+- No runtime behavior changed.
+- No app-shell version bump; the active runtime remains `0.3.3a`.
+
+Current status:
+- Full test suite passed in the patch workspace with `PYTHONPATH=src python -m unittest discover -s tests -v`.
+- Result: `Ran 374 tests in 4.280s — OK`.
+- After this test-isolation fix, Tanner should retest 0.3.3a typed input manually, then commit the 0.3.3/0.3.3a typed-input work.
+
+Next recommended update after commit:
+- Resume the memory roadmap with Relationship Memory Graph or Memory Preferences / Auto-Remember Controls.

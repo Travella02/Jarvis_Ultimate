@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-06-19T07:14:40.764110+00:00",
+  "updated_at": "2026-06-22T04:58:46.509110+00:00",
   "records": [
     {
       "text": "From now on, I prefer short direct patch instructions",
@@ -39,8 +39,51 @@
       "source_assistant": "",
       "id": "cand_343c4b6d36f9",
       "created_at": "2026-06-16T08:02:24.501734+00:00",
-      "updated_at": "2026-06-19T07:14:40.764110+00:00",
+      "updated_at": "2026-06-22T04:58:46.509110+00:00",
       "metadata": {}
+    },
+    {
+      "text": "Kenleigh is my fiance",
+      "suggested_tier": "long_term",
+      "category": "personal",
+      "tags": [
+        "personal"
+      ],
+      "importance": 4,
+      "confidence": 0.78,
+      "reason": "relationship, pet, identity, or durable personal detail",
+      "status": "pending",
+      "source": "auto_capture",
+      "source_user": "Kenleigh is my fiance",
+      "source_assistant": "Understood, sir. I have updated my records to reflect that Kenleigh is your fianc\u00e9e. Is there anything else you would like me to note?",
+      "id": "cand_431e4333df5a",
+      "created_at": "2026-06-19T07:38:05.449805+00:00",
+      "updated_at": "2026-06-19T07:38:05.449805+00:00",
+      "metadata": {
+        "agent_name": "conversation_agent",
+        "action": "llm_chat",
+        "intent": "general_chat",
+        "entity_hint": {
+          "name": "Kenleigh",
+          "entity_type": "person",
+          "summary": "Kenleigh is your fianc\u00e9e.",
+          "attributes": {
+            "relationship": "fianc\u00e9e"
+          },
+          "relationships": [
+            {
+              "type": "fianc\u00e9e",
+              "to": "user"
+            }
+          ],
+          "tags": [
+            "person",
+            "relationship"
+          ],
+          "importance": 4,
+          "confidence": 0.84
+        }
+      }
     }
   ]
 }

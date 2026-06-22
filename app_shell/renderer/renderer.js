@@ -512,8 +512,9 @@ async function sendCommand(command) {
   try {
     const payload = await fetchJson('/api/command', {
       method: 'POST',
-      body: JSON.stringify({ command })
+      body: JSON.stringify({ command, speak: true, input_mode: 'typed' })
     });
+    setTimeout(refreshState, 75);
     renderState(payload.data.state || payload.data);
   } catch (error) {
     renderState({

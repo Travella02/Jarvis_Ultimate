@@ -26,7 +26,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "chrome",
-      "learned_at": 1781853201.0807552,
+      "learned_at": 1782104241.2501073,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "",
@@ -46,7 +46,7 @@
       ],
       "launch_type": "path",
       "learned_alias": "could you open google chrome for me",
-      "learned_at": 1781853280.8209774,
+      "learned_at": 1782104326.5887425,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -91,6 +91,39 @@
       ],
       "source": "known_path"
     },
+    "minecraft": {
+      "aliases": [
+        "minecraft",
+        "Calculator"
+      ],
+      "launch_type": "path",
+      "learned_alias": "minecraft",
+      "learned_at": 1781855178.7110503,
+      "learned_source": "verified_fallback_success",
+      "name": "Calculator",
+      "path": "explorer.exe",
+      "process_names": [
+        "CalculatorApp.exe",
+        "calc.exe"
+      ],
+      "source": "verified_fallback_success"
+    },
+    "minecraft launcher": {
+      "aliases": [
+        "Minecraft Launcher",
+        "Launcher"
+      ],
+      "launch_type": "path",
+      "learned_alias": "minecraft launcher",
+      "learned_at": 1781855028.4049277,
+      "learned_source": "verified_fallback_success",
+      "name": "Launcher",
+      "path": "C:\\Program Files\\Epic Games\\rocketleague\\Binaries\\Win64\\Launcher.exe",
+      "process_names": [
+        "Program.exe"
+      ],
+      "source": "verified_fallback_success"
+    },
     "music": {
       "aliases": [
         "Spotify",
@@ -113,7 +146,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "notepad",
-      "learned_at": 1781853279.3795302,
+      "learned_at": 1782104324.403107,
       "learned_source": "verified_launch_success",
       "name": "notepad",
       "path": "",
@@ -143,7 +176,7 @@
       ],
       "launch_type": "aumid",
       "learned_alias": "snipping tool",
-      "learned_at": 1781324378.9727511,
+      "learned_at": 1782104440.3783507,
       "learned_source": "close_success",
       "name": "Snipping Tool",
       "path": "Microsoft.ScreenSketch_8wekyb3d8bbwe!App",
@@ -168,6 +201,6 @@
     }
   },
   "roles": {},
-  "updated_at": 1781853280.8209774,
+  "updated_at": 1782104440.3783507,
   "version": 2
 }

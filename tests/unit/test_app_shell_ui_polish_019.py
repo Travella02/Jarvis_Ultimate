@@ -12,7 +12,7 @@ class TestAppShellUIPolish019(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_app_shell_version_and_capabilities_include_main_interface_polish(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.2")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.3a")
         capabilities = app_shell_capabilities()
         self.assertIn("cinematic_main_interface_layout", capabilities)
         self.assertIn("collapsible_diagnostics_drawer", capabilities)
