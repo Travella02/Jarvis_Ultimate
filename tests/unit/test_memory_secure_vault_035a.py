@@ -1,4 +1,4 @@
-"""Tests for 0.3.5a sensitive memory secure-vault routing."""
+"""Tests for 0.3.6 sensitive memory secure-vault routing."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from jarvis.memory.secure_vault import SecureVaultStore, classify_vault_category
 
 class SecureVaultMemory035aTests(unittest.TestCase):
     def test_version_and_capabilities_include_secure_vault_routing(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.5a")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.6")
         capabilities = set(app_shell_capabilities())
         self.assertIn("sensitive_memory_secure_vault_routing", capabilities)
         self.assertIn("password_manager_agent_foundation", capabilities)

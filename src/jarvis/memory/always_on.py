@@ -19,6 +19,7 @@ from typing import Any, Iterable
 from uuid import uuid4
 
 from jarvis.memory.entities import infer_entity_from_text
+from jarvis.memory.secure_vault import redact_sensitive_payload, redact_sensitive_text, redaction_happened
 
 
 def utc_now() -> datetime:
@@ -194,7 +195,7 @@ class MemoryCandidateRecord:
         tags_raw = item.get("tags")
         return cls(
             id=str(item.get("id") or f"cand_{uuid4().hex[:12]}"),
-            text=" ".join(text.split()),
+            text=redact_sensitive_text(" ".join(text.split()), max_chars=max(len(text), 120)),
             suggested_tier=str(item.get("suggested_tier") or "review").strip().lower() or "review",
             category=str(item.get("category") or "general").strip().lower() or "general",
             tags=_normalize_tags(tags_raw if isinstance(tags_raw, list) else []),
@@ -203,8 +204,8 @@ class MemoryCandidateRecord:
             reason=str(item.get("reason") or "needs review"),
             status=str(item.get("status") or "pending").strip().lower() or "pending",
             source=str(item.get("source") or "auto_capture"),
-            source_user=str(item.get("source_user") or ""),
-            source_assistant=str(item.get("source_assistant") or ""),
+            source_user=redact_sensitive_text(str(item.get("source_user") or ""), max_chars=max(len(str(item.get("source_user") or "")), 120)),
+            source_assistant=redact_sensitive_text(str(item.get("source_assistant") or ""), max_chars=max(len(str(item.get("source_assistant") or "")), 120)),
             created_at=str(item.get("created_at") or utc_now_iso()),
             updated_at=str(item.get("updated_at") or item.get("created_at") or utc_now_iso()),
             metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
@@ -255,11 +256,15 @@ class MemoryCandidateStore:
         cleaned = " ".join(str(text or "").strip().split())
         if not cleaned:
             return None
-        normalized = normalize_text(cleaned)
-        existing = self._find_duplicate(normalized, friendly_key=self._friendly_key(cleaned))
+        redacted_cleaned = str(redact_sensitive_text(cleaned, max_chars=max(len(cleaned), 120)))
+        redacted_source_user = str(redact_sensitive_text(source_user, max_chars=max(len(str(source_user or "")), 120)))
+        redacted_source_assistant = str(redact_sensitive_text(source_assistant, max_chars=max(len(str(source_assistant or "")), 120)))
+        redacted_metadata = redact_sensitive_payload(metadata or {}) if metadata else {}
+        normalized = normalize_text(redacted_cleaned)
+        existing = self._find_duplicate(normalized, friendly_key=self._friendly_key(redacted_cleaned))
         now = utc_now_iso()
         if existing is not None:
-            existing.text = cleaned
+            existing.text = redacted_cleaned
             existing.suggested_tier = suggested_tier
             existing.category = category
             existing.tags = sorted(set([*existing.tags, *_normalize_tags(tags or [])]))
@@ -267,12 +272,14 @@ class MemoryCandidateStore:
             existing.confidence = max(existing.confidence, max(0.0, min(1.0, float(confidence))))
             existing.reason = reason or existing.reason
             existing.status = "pending"
+            existing.source_user = redacted_source_user
+            existing.source_assistant = redacted_source_assistant
             existing.updated_at = now
-            existing.metadata.update(metadata or {})
+            existing.metadata.update(redacted_metadata or {})
             self.save()
             return existing
         record = MemoryCandidateRecord(
-            text=cleaned,
+            text=redacted_cleaned,
             suggested_tier=str(suggested_tier or "review").strip().lower() or "review",
             category=str(category or "general").strip().lower() or "general",
             tags=_normalize_tags(tags or []),
@@ -280,9 +287,9 @@ class MemoryCandidateStore:
             confidence=max(0.0, min(1.0, float(confidence))),
             reason=reason or "needs review",
             source=source,
-            source_user=str(source_user or ""),
-            source_assistant=str(source_assistant or ""),
-            metadata=dict(metadata or {}),
+            source_user=redacted_source_user,
+            source_assistant=redacted_source_assistant,
+            metadata=dict(redacted_metadata or {}),
         )
         self._records.append(record)
         self._trim()
@@ -705,6 +712,8 @@ class ShortTermFactStore:
         cleaned_text = " ".join(str(text or "").strip().split())
         if not cleaned_text:
             return None
+        cleaned_text = redact_sensitive_text(cleaned_text, max_chars=max(len(cleaned_text), 120))
+        redacted_metadata = redact_sensitive_payload(metadata or {}) if metadata else {}
         self.expire_old(save=False)
         normalized = normalize_text(cleaned_text)
         tag_list = _normalize_tags(tags or [])
@@ -722,7 +731,7 @@ class ShortTermFactStore:
             existing.importance = max(existing.importance, max(1, min(5, int(importance))))
             existing.expires_at = expires_at
             existing.updated_at = now
-            existing.metadata.update(metadata or {})
+            existing.metadata.update(redacted_metadata or {})
             self.save()
             return existing
         record = ShortTermFactRecord(
@@ -732,7 +741,7 @@ class ShortTermFactStore:
             source=source,
             importance=max(1, min(5, int(importance))),
             expires_at=expires_at,
-            metadata=dict(metadata or {}),
+            metadata=dict(redacted_metadata or {}),
         )
         self._records.append(record)
         self._trim()
@@ -1000,8 +1009,8 @@ class ChatArchiveRecord:
 
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "ChatArchiveRecord | None":
-        user = str(item.get("user") or "").strip()
-        assistant = str(item.get("assistant") or "").strip()
+        user = redact_sensitive_text(str(item.get("user") or "").strip(), max_chars=max(len(str(item.get("user") or "")), 120))
+        assistant = redact_sensitive_text(str(item.get("assistant") or "").strip(), max_chars=max(len(str(item.get("assistant") or "")), 120))
         if not user and not assistant:
             return None
         return cls(
@@ -1053,10 +1062,15 @@ class ChatArchiveStore:
     ) -> ChatArchiveRecord | None:
         if not self.enabled:
             return None
-        user_text = " ".join(str(user or "").strip().split())
-        assistant_text = " ".join(str(assistant or "").strip().split())
+        raw_user_text = " ".join(str(user or "").strip().split())
+        raw_assistant_text = " ".join(str(assistant or "").strip().split())
+        user_text = redact_sensitive_text(raw_user_text, max_chars=max(len(raw_user_text), 120))
+        assistant_text = redact_sensitive_text(raw_assistant_text, max_chars=max(len(raw_assistant_text), 120))
         if not user_text and not assistant_text:
             return None
+        archive_metadata = redact_sensitive_payload(dict(metadata or {}))
+        if redaction_happened(raw_user_text, user_text) or redaction_happened(raw_assistant_text, assistant_text) or redaction_happened(metadata or {}, archive_metadata):
+            archive_metadata["sensitive_redacted"] = True
         record = ChatArchiveRecord(
             user=user_text,
             assistant=assistant_text,
@@ -1064,7 +1078,7 @@ class ChatArchiveStore:
             agent_name=agent_name,
             action=action,
             success=bool(success),
-            metadata=dict(metadata or {}),
+            metadata=dict(archive_metadata or {}),
         )
         path = self._path_for_timestamp(record.timestamp)
         path.parent.mkdir(parents=True, exist_ok=True)

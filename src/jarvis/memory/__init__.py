@@ -22,7 +22,10 @@ from jarvis.memory.secure_vault import (
     classify_vault_category,
     is_vault_like,
     redact_sensitive_text,
+    redact_sensitive_payload,
+    redaction_happened,
 )
+from jarvis.memory.hygiene import RedactionHygieneResult, redact_sensitive_runtime_files
 from jarvis.memory.entities import (
     EntityMemoryStore,
     EntityRecord,
@@ -52,6 +55,10 @@ __all__ = [
     "classify_vault_category",
     "is_vault_like",
     "redact_sensitive_text",
+    "redact_sensitive_payload",
+    "redaction_happened",
+    "RedactionHygieneResult",
+    "redact_sensitive_runtime_files",
     "EntityMemoryStore",
     "EntityRecord",
     "EntitySearchResult",

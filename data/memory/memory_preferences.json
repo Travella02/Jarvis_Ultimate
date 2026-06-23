@@ -18,7 +18,7 @@
     "projects": "auto",
     "relationships": "ask",
     "screen_context": "ask",
-    "secrets": "never",
+    "secrets": "[redacted]",
     "vehicles": "ask",
     "work": "ask"
   },

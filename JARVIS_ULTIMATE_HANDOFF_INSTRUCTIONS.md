@@ -489,3 +489,41 @@ Validation:
 Next recommended update:
 - Commit 0.3.5 + 0.3.5a together after manual testing.
 - Then continue with `0.3.6 Memory Review Dashboard / Cleanup Commands`, or start a dedicated `Secure Vault Agent` milestone if password-manager behavior becomes the priority.
+
+## 0.3.6 Sensitive Chat Redaction + Memory Log Hygiene
+
+This milestone follows the committed 0.3.5/0.3.5a memory preference and secure-vault routing work. It closes the security gap found during live testing: sensitive values were blocked from normal memory, but the raw command text could still be written into local chat archive files and logs.
+
+Changes:
+- Added stronger sensitive text redaction in `src/jarvis/memory/secure_vault.py`.
+- Added recursive payload redaction for JSON-like data before it reaches logs, chat archives, UI snapshots, or memory-candidate metadata.
+- Added `src/jarvis/memory/hygiene.py` with `redact_sensitive_runtime_files(...)` for upgrade-time cleanup of already-written local runtime files.
+- Chat archive writes now redact sensitive values before writing JSONL records.
+- Chat archive reads also sanitize old records in memory before search/summarization.
+- Memory candidate text, source user text, source assistant text, and metadata are redacted before saving.
+- Short-term fact metadata is redacted defensively before saving.
+- UI workspace chat messages redact sensitive values so typed/voice secrets do not linger in the app-shell chat panel state.
+- Jarvis JSONL event/result logs redact sensitive strings recursively before writing.
+- App-shell voice session status redacts sensitive command/transcript/status fields before exposing them in API snapshots.
+- App shell version is now `0.3.6`.
+- App shell capabilities now include `sensitive_chat_archive_redaction`, `sensitive_ui_history_redaction`, and `memory_log_hygiene_redaction`.
+- The patch installer runs a one-time local hygiene pass after copying files so existing `data/memory/chat_archive`, `data/memory/*.json`, `data/conversations`, and `logs` files are redacted in place.
+
+Manual examples:
+- `Remember that my password is Hunter 2.` should still route to the secure vault path, but the chat archive should store `password [redacted]` rather than the raw value.
+- `Remember that my bank account number is 123456789.` should not leave the raw number in chat archives, memory candidates, or JSONL logs.
+- Safe phrases like `Secure vault status` or `I cannot save passwords in normal memory` should remain readable and should not be corrupted by redaction.
+
+Current status after 0.3.6:
+- Normal memory has preference controls.
+- Sensitive save attempts route away from normal memory.
+- Chat archives, UI chat state, memory candidate metadata, and logs now redact sensitive values.
+- Full encrypted Secure Vault / Password Manager Agent storage is still a future dedicated feature.
+
+Validation:
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 413 tests in 6.873s — OK`
+
+Next recommended update:
+- Commit 0.3.6 after manual testing.
+- Then continue with `0.3.7 Memory Review / Edit / Cleanup Commands`, or start the dedicated Secure Vault / Password Manager Agent if encrypted local storage becomes the priority.

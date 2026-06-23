@@ -21,6 +21,7 @@ from jarvis.api.schemas import api_error, api_ok
 from jarvis.clients.app_shell.bridge import DEFAULT_API_URL, build_app_shell_snapshot
 from jarvis.core.lifecycle import JarvisRuntime
 from jarvis.core.result import JarvisResult
+from jarvis.memory.secure_vault import redact_sensitive_payload, redact_sensitive_text
 from jarvis.providers.tts.base import TTSResult
 from jarvis.ui.visual_state import classify_voice_status
 from jarvis.tools.shared.app_discovery import start_app_index_warmup
@@ -529,7 +530,7 @@ class LocalJarvisAPI:
 
     def _update_voice_session(self, **updates: Any) -> None:
         with self._voice_lock:
-            self._voice_session.update(updates)
+            self._voice_session.update(redact_sensitive_payload(updates))
 
     def _set_typed_visual_hold(self, seconds: float) -> None:
         """Temporarily keep the typed-command visual state from being overwritten.
@@ -572,11 +573,11 @@ class LocalJarvisAPI:
     def _set_voice_visual(self, status_message: str, *, state: str | None = None, expression: str | None = None, allow_during_typed: bool = False) -> None:
         visual_state = state or classify_voice_status(status_message)
         if self._typed_visual_hold_active() and not allow_during_typed:
-            self._update_voice_session(background_last_status=status_message)
+            self._update_voice_session(background_last_status=redact_sensitive_text(status_message, max_chars=max(len(str(status_message or "")), 120)))
             return
         with self._lock:
             self.workspace.avatar.set_state(visual_state, expression=expression, message=status_message)
-        self._update_voice_session(last_status=status_message)
+        self._update_voice_session(last_status=redact_sensitive_text(status_message, max_chars=max(len(str(status_message or "")), 120)))
 
     def _stage_live_speech_caption(self, text: str, *, lead_seconds: float = 0.16) -> None:
         """Expose short non-streamed responses to the app shell before audio starts.

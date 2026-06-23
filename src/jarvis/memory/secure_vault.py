@@ -188,21 +188,59 @@ def vault_category_label(vault_category: str) -> str:
 
 
 def redact_sensitive_text(text: str, *, max_chars: int = 120) -> str:
-    """Return a short preview that avoids echoing likely secret values."""
+    """Return a short preview that avoids echoing likely secret values.
+
+    This function is intentionally conservative about labels like "password"
+    without a value.  Jarvis is allowed to say "password vault" or "I cannot
+    save passwords in normal memory" without the hygiene layer corrupting that
+    sentence.  Redaction happens when a likely value is attached to the label,
+    when a long token appears, or when a financial/account-looking number is
+    present.
+    """
 
     value = " ".join(str(text or "").split())
     if not value:
         return ""
+
     replacements: Iterable[tuple[str, str]] = (
-        (r"(?i)(password|passcode|pin)\s*(?:is|=|:)?\s*\S+", r"\1 [redacted]"),
-        (r"(?i)(api\s*key|secret\s*key|client\s*secret|access\s*token|auth\s*token)\s*(?:is|=|:)?\s*\S+", r"\1 [redacted]"),
-        (r"(?i)(account\s+number|routing\s+number|card\s+number|credit\s+card|cvv)\s*(?:is|=|:)?\s*[\w\- ]+", r"\1 [redacted]"),
-        (r"(?i)(recovery\s+code|backup\s+code|seed\s+phrase|private\s+key)\s*(?:is|=|:)?\s*.+", r"\1 [redacted]"),
-        (r"\b\d{12,19}\b", "[redacted-number]"),
-        (r"\b[A-Za-z0-9_\-]{20,}\b", "[redacted-secret]"),
+        (r"(?is)-----BEGIN\s+(?:RSA\s+|OPENSSH\s+|EC\s+)?PRIVATE\s+KEY-----.*?-----END\s+(?:RSA\s+|OPENSSH\s+|EC\s+)?PRIVATE\s+KEY-----", "[redacted-private-key]"),
+        (r"(?i)\b(password|passcode|pin)\b\s*(?:is|=|:)\s*[^,;\n\r]+", r"\1 [redacted]"),
+        (r"(?i)\b(api\s*key|secret\s*key|client\s*secret|access\s*token|auth\s*token|bearer\s+token)\b\s*(?:is|=|:)\s*[^,;\n\r]+", r"\1 [redacted]"),
+        (r"(?i)\b(recovery\s+code|backup\s+code|seed\s+phrase|mnemonic|private\s+key)\b\s*(?:is|=|:)\s*[^,;\n\r]+", r"\1 [redacted]"),
+        (r"(?i)\b(wi\s*fi\s+password|wifi\s+password|wireless\s+password)\b\s*(?:is|=|:)\s*[^,;\n\r]+", r"\1 [redacted]"),
+        (r"(?i)\b(account\s+number|routing\s+number|card\s+number|credit\s+card|debit\s+card|cvv|bank\s+account\s+number)\b\s*(?:is|=|:)\s*[\w\- ]+", r"\1 [redacted]"),
+        (r"\b\d{3}-\d{2}-\d{4}\b", "[redacted-ssn]"),
+        (r"\b(?:\d[ -]*?){12,19}\b", "[redacted-number]"),
+        (r"\b(?:sk|pk|ghp|gho|ghu|ghs|glpat|xoxb|xoxp|ya29)[-_][A-Za-z0-9_\-]{12,}\b", "[redacted-secret]"),
+        (r"\b[A-Za-z0-9_\-]{32,}\b", "[redacted-secret]"),
     )
     for pattern, replacement in replacements:
         value = re.sub(pattern, replacement, value)
     if len(value) > max_chars:
         value = value[: max_chars - 3].rstrip() + "..."
     return value
+
+
+def redact_sensitive_payload(payload: Any) -> Any:
+    """Recursively redact sensitive-looking strings inside JSON-like payloads."""
+
+    if isinstance(payload, str):
+        return redact_sensitive_text(payload, max_chars=max(len(payload), 120))
+    if isinstance(payload, list):
+        return [redact_sensitive_payload(item) for item in payload]
+    if isinstance(payload, tuple):
+        return tuple(redact_sensitive_payload(item) for item in payload)
+    if isinstance(payload, dict):
+        redacted: dict[Any, Any] = {}
+        for key, value in payload.items():
+            key_text = str(key).lower()
+            if any(marker in key_text for marker in ("password", "passcode", "token", "secret", "api_key", "apikey", "private_key", "account_number", "card_number", "cvv", "pin")):
+                redacted[key] = "[redacted]" if value not in (None, "") else value
+            else:
+                redacted[key] = redact_sensitive_payload(value)
+        return redacted
+    return payload
+
+
+def redaction_happened(original: Any, redacted: Any) -> bool:
+    return original != redacted

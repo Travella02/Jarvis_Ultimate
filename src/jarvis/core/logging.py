@@ -7,13 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.core.result import utc_now_iso
+from jarvis.memory.secure_vault import redact_sensitive_payload
 
 
 def append_jsonl(path: str | Path, payload: dict[str, Any]) -> None:
     """Append a JSON line to a log file, creating folders if needed."""
     log_path = Path(path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    entry = {"timestamp": utc_now_iso(), **payload}
+    entry = {"timestamp": utc_now_iso(), **redact_sensitive_payload(payload)}
     with log_path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
 
@@ -37,4 +38,4 @@ class JarvisLogger:
 
     def log_result(self, result: Any) -> None:
         payload = result.to_dict() if hasattr(result, "to_dict") else {"result": str(result)}
-        append_jsonl(self.logs_dir / "brain" / "results.jsonl", payload)
+        append_jsonl(self.logs_dir / "brain" / "results.jsonl", redact_sensitive_payload(payload))

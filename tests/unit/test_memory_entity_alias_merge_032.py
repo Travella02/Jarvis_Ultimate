@@ -17,7 +17,7 @@ from jarvis.memory.long_term import LongTermMemoryStore
 
 class EntityMemoryAliasMerge032Tests(unittest.TestCase):
     def test_version_and_capability_include_entity_alias_merge(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.5a")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.6")
         self.assertIn("entity_memory_merge_alias_correction", set(app_shell_capabilities()))
 
     def test_store_merges_two_existing_entities_and_preserves_aliases(self) -> None:

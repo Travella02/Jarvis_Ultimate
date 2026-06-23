@@ -1,0 +1,2 @@
+Applied 0.3.6_sensitive_chat_redaction at 2026-06-23T01:55:43.902107
+Backups only include files that already existed before this patch.

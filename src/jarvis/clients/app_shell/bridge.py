@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.5a"
+APP_SHELL_VERSION = "0.3.6"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -125,6 +125,9 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "sensitive_memory_secure_vault_routing",
         "password_manager_agent_foundation",
         "normal_memory_secret_blocking",
+        "sensitive_chat_archive_redaction",
+        "sensitive_ui_history_redaction",
+        "memory_log_hygiene_redaction",
     )
 
 

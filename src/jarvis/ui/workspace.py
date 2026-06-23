@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from jarvis.core.result import JarvisEvent
+from jarvis.memory.secure_vault import redact_sensitive_text
 from jarvis.ui.avatar_state import AvatarState
 from jarvis.ui.panels import UIPanelRegistry, create_default_panel_registry
 from jarvis.ui.ui_events import avatar_state_from_event
@@ -61,7 +62,8 @@ class UIWorkspaceState:
             )
 
     def add_chat_message(self, role: str, text: str) -> None:
-        self.chat_messages.append({"role": role, "text": text})
+        safe_text = redact_sensitive_text(str(text or ""), max_chars=max(len(str(text or "")), 120))
+        self.chat_messages.append({"role": role, "text": safe_text})
 
     def add_notice(self, message: str) -> None:
         if message:
