@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,8 +32,15 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     tmp_path.replace(path)
 
 
+def _ascii_fold(value: str) -> str:
+    """Return an ASCII matching form without changing display text."""
+
+    text = str(value or "")
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
 def normalize_text(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9\s]", " ", str(value or "").lower())
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", _ascii_fold(value).lower())
     return " ".join(cleaned.split())
 
 
@@ -57,6 +65,80 @@ def _token_variants(tokens: Iterable[str]) -> set[str]:
 def _clean_title(value: str) -> str:
     cleaned = " ".join(str(value or "").strip().strip(" .?!,;:\"'").split())
     return cleaned
+
+
+def _display_name_from_normalized(value: str) -> str:
+    value = " ".join(str(value or "").split())
+    if not value:
+        return ""
+    if " " in value:
+        return " ".join(part[:1].upper() + part[1:] for part in value.split() if part)
+    return value[:1].upper() + value[1:]
+
+
+def phonetic_name_aliases(name: str) -> list[str]:
+    """Generate conservative speech-to-text aliases for proper names.
+
+    This handles common STT splits like ``Kenleigh`` -> ``Ken Lee`` without
+    hardcoding one user's data. The aliases are used for matching and merging;
+    Jarvis still stores the user's chosen spelling as the canonical name.
+    """
+
+    cleaned = _clean_title(name)
+    normalized = normalize_text(cleaned)
+    if not normalized:
+        return []
+
+    aliases: set[str] = set()
+    tokens = normalized.split()
+
+    def add(raw: str) -> None:
+        alias = _display_name_from_normalized(raw)
+        if alias and normalize_text(alias) != normalized:
+            aliases.add(alias)
+
+    if len(tokens) == 1:
+        token = tokens[0]
+        if token.endswith("leigh") and len(token) > 5:
+            root = token[:-5]
+            add(f"{root} lee")
+            add(f"{root} leigh")
+            add(f"{root}ley")
+        elif token.endswith("ley") and len(token) > 3:
+            root = token[:-3]
+            add(f"{root} lee")
+            add(f"{root} leigh")
+            add(f"{root}leigh")
+        elif token.endswith("lee") and len(token) > 3:
+            root = token[:-3]
+            add(f"{root} lee")
+            add(f"{root} leigh")
+            add(f"{root}leigh")
+            add(f"{root}ley")
+    elif len(tokens) == 2 and tokens[1] in {"lee", "leigh", "ley"}:
+        root = tokens[0]
+        add(f"{root}leigh")
+        add(f"{root}ley")
+        add(f"{root} lee")
+        add(f"{root} leigh")
+
+    return sorted(aliases, key=lambda item: normalize_text(item))
+
+
+def _prefer_canonical_name(current_name: str, incoming_name: str, entity_type: str) -> bool:
+    if normalize_entity_type(entity_type) != "person":
+        return False
+    current = normalize_text(current_name)
+    incoming = normalize_text(incoming_name)
+    if not current or not incoming or current == incoming:
+        return False
+    incoming_aliases = {normalize_text(alias) for alias in phonetic_name_aliases(incoming_name)}
+    current_aliases = {normalize_text(alias) for alias in phonetic_name_aliases(current_name)}
+    if current in incoming_aliases:
+        return True
+    if incoming in current_aliases and " " in current and " " not in incoming:
+        return True
+    return False
 
 
 @dataclass(slots=True)
@@ -414,7 +496,17 @@ class EntityMemoryStore:
         if not cleaned_name:
             return None
         normalized_type = normalize_entity_type(entity_type) or "general"
-        alias_list = sorted({_clean_title(alias) for alias in aliases or [] if _clean_title(alias) and normalize_text(alias) != normalize_text(cleaned_name)})
+        raw_aliases = {_clean_title(alias) for alias in aliases or [] if _clean_title(alias)}
+        if normalized_type == "person":
+            raw_aliases.update(phonetic_name_aliases(cleaned_name))
+        alias_list = sorted({alias for alias in raw_aliases if normalize_text(alias) != normalize_text(cleaned_name)})
+        attribute_payload = dict(attributes or {})
+        if "relationship" in attribute_payload:
+            normalized_relation = _normalize_relationship_label(attribute_payload.get("relationship"))
+            if normalized_relation:
+                attribute_payload["relationship"] = normalized_relation
+            else:
+                attribute_payload.pop("relationship", None)
         tag_list = _normalize_tags([*(tags or []), normalized_type])
         now = utc_now_iso()
         existing = self._find_duplicate(cleaned_name, normalized_type, aliases=alias_list)
@@ -424,7 +516,7 @@ class EntityMemoryStore:
                 entity_type=normalized_type,
                 summary=" ".join(str(summary or "").split()),
                 aliases=alias_list,
-                attributes=dict(attributes or {}),
+                attributes=attribute_payload,
                 relationships=self._dedupe_relationships(list(relationships or [])),
                 tags=tag_list,
                 source=source,
@@ -439,9 +531,20 @@ class EntityMemoryStore:
             self.save()
             return record
 
+        if _prefer_canonical_name(existing.name, cleaned_name, normalized_type):
+            previous_name = existing.name
+            existing.aliases = sorted({*existing.aliases, previous_name, *alias_list})
+            existing.name = cleaned_name
+            existing.summary = self._replace_identity_text(existing.summary, previous_name, cleaned_name)
+            existing.relationships = self._replace_identity_relationships(existing.relationships, previous_name, cleaned_name)
+            existing.metadata.setdefault("previous_names", [])
+            if isinstance(existing.metadata.get("previous_names"), list):
+                previous = {str(item) for item in existing.metadata.get("previous_names", []) if str(item).strip()}
+                previous.add(previous_name)
+                existing.metadata["previous_names"] = sorted(previous)
         existing.summary = self._merge_summary(existing.summary, summary)
         existing.aliases = sorted({*existing.aliases, *alias_list})
-        existing.attributes = self._merge_attributes(existing.attributes, attributes or {})
+        existing.attributes = self._merge_attributes(existing.attributes, attribute_payload)
         existing.relationships = self._dedupe_relationships([*existing.relationships, *(relationships or [])])
         existing.tags = sorted({*existing.tags, *tag_list})
         existing.source = source or existing.source
@@ -499,6 +602,160 @@ class EntityMemoryStore:
                 results.append(EntitySearchResult(record=record, score=round(score, 3), reason=reason))
         results.sort(key=lambda item: (item.score, item.record.updated_at), reverse=True)
         return results[: max(1, int(limit))]
+
+    def relationship_edges(
+        self,
+        *,
+        query: str = "",
+        relation_type: str = "",
+        target_query: str = "",
+        entity_type: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return normalized relationship-graph edges from entity records.
+
+        Relationships are stored on entity records, but this helper exposes them
+        as graph edges so future SaaS workspaces can query people, pets,
+        projects, devices, teams, and custom entity types with the same shape.
+        """
+
+        if not self.enabled:
+            return []
+        normalized_relation = _normalize_relationship_label(relation_type) if relation_type else ""
+        normalized_query = normalize_text(query)
+        normalized_type = normalize_entity_type(entity_type or "") if entity_type else ""
+        edges: list[dict[str, Any]] = []
+        for record in self._records:
+            if normalized_type and record.entity_type != normalized_type:
+                continue
+            if normalized_query:
+                identity = {record.normalized_name, *record.normalized_aliases}
+                if normalized_query not in identity and normalized_query not in record.search_blob:
+                    continue
+            for edge in self._edges_for_record(record):
+                relation = _normalize_relationship_label(str(edge.get("type") or edge.get("relation") or ""))
+                target = str(edge.get("to") or edge.get("target") or edge.get("target_name") or "")
+                if normalized_relation and relation != normalized_relation:
+                    continue
+                if target_query and not _relationship_matches_target(target, target_query):
+                    continue
+                edges.append({
+                    "source_id": record.id,
+                    "source_name": record.name,
+                    "source_type": record.entity_type,
+                    "relation": relation,
+                    "target": target or "user",
+                    "summary": _relationship_subject_phrase(record.name, relation, target or "user"),
+                    "scope": record.scope,
+                    "confidence": record.confidence,
+                    "raw": dict(edge),
+                })
+        edges.sort(key=lambda item: (float(item.get("confidence", 0.0)), str(item.get("source_name", ""))), reverse=True)
+        return edges[: max(1, int(limit))]
+
+    def find_by_relationship(
+        self,
+        relation_type: str,
+        *,
+        target_query: str = "user",
+        entity_type: str | None = None,
+        limit: int = 8,
+    ) -> list[EntityRecord]:
+        """Find records connected to a target by a relationship label."""
+
+        edges = self.relationship_edges(
+            relation_type=relation_type,
+            target_query=target_query,
+            entity_type=entity_type,
+            limit=limit,
+        )
+        by_id = {record.id: record for record in self._records}
+        records: list[EntityRecord] = []
+        seen: set[str] = set()
+        for edge in edges:
+            record = by_id.get(str(edge.get("source_id") or ""))
+            if record is not None and record.id not in seen:
+                records.append(record)
+                seen.add(record.id)
+        return records
+
+    def related_to(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
+        """Return relationship edges involving the resolved entity or target."""
+
+        resolved = self.resolve(query)
+        edges: list[dict[str, Any]] = []
+        if resolved is not None:
+            edges.extend(self.relationship_edges(query=resolved.name, limit=limit))
+            target_names = {resolved.name, *resolved.aliases}
+        else:
+            target_names = {query}
+        for target_name in target_names:
+            for edge in self.relationship_edges(target_query=target_name, limit=limit):
+                if edge not in edges:
+                    edges.append(edge)
+        return edges[: max(1, int(limit))]
+
+    def add_relationship(
+        self,
+        source_name: str,
+        relation_type: str,
+        target_name: str = "user",
+        *,
+        source_entity_type: str = "person",
+        target_entity_type: str = "general",
+        source_summary: str = "",
+        target_summary: str = "",
+        confidence: float = 0.78,
+        metadata: dict[str, Any] | None = None,
+    ) -> EntityRecord | None:
+        """Create or update a graph relationship between two entities."""
+
+        relation = _normalize_relationship_label(relation_type)
+        source = _clean_title(source_name)
+        target = _clean_title(target_name) or "user"
+        if not source or not relation:
+            return None
+        if normalize_text(target) not in {"user", "me", "you", "your", "tanner", "owner"}:
+            self.upsert(
+                target,
+                entity_type=target_entity_type or "general",
+                summary=target_summary or f"{target} is remembered as {target_entity_type or 'an entity'}.",
+                confidence=confidence,
+                metadata=metadata or {},
+            )
+        edge = {"type": relation, "to": "user" if _relationship_matches_target(target, "user") else target}
+        summary = source_summary or (_relationship_subject_phrase(source, relation, edge["to"]) + ".")
+        return self.upsert(
+            source,
+            entity_type=source_entity_type or "general",
+            summary=summary,
+            relationships=[edge],
+            tags=["relationship", relation],
+            confidence=confidence,
+            metadata=metadata or {},
+        )
+
+    def _edges_for_record(self, record: EntityRecord) -> list[dict[str, Any]]:
+        edges: list[dict[str, Any]] = []
+        for relationship in record.relationships or []:
+            if isinstance(relationship, dict):
+                relation = relationship.get("type") or relationship.get("relation") or relationship.get("relationship")
+                target = relationship.get("to") or relationship.get("target") or relationship.get("target_name")
+                if relation:
+                    edge = dict(relationship)
+                    edge["type"] = _normalize_relationship_label(relation)
+                    edge["to"] = str(target or "user")
+                    edges.append(edge)
+        attributes = record.attributes if isinstance(record.attributes, dict) else {}
+        relation_attr = attributes.get("relationship")
+        if relation_attr:
+            edges.append({"type": _normalize_relationship_label(str(relation_attr)), "to": "user", "source": "attribute"})
+        if record.entity_type == "pet":
+            species = str(attributes.get("species") or "pet")
+            edges.append({"type": _normalize_relationship_label(species), "to": "user", "source": "entity_type"})
+        if record.entity_type == "project" and ("jarvis" in record.search_blob or "project" in record.tags):
+            edges.append({"type": "project", "to": "user", "source": "entity_type"})
+        return self._dedupe_relationships(edges)
 
     def relevant_context(self, query: str, *, limit: int | None = None) -> str:
         selected_limit = self.inject_limit if limit is None else int(limit)
@@ -687,6 +944,11 @@ class EntityMemoryStore:
         if source is None and target is None:
             return None
         if source is not None and target is source:
+            # If the target phrase is a cleaner/corrected spelling of the same
+            # resolved record, make it canonical instead of only adding another
+            # alias. This fixes STT variants like Ken Lee -> Kenleigh.
+            if normalize_text(source.name) != normalize_text(target_name):
+                return self.rename(source.name, target_name, entity_type=source.entity_type)
             return self.add_alias(target.name, source_name, entity_type=source.entity_type)
         if target is None and source is not None:
             return self.rename(source.name, target_name, entity_type=source.entity_type)
@@ -802,7 +1064,40 @@ class EntityMemoryStore:
                     record = EntityRecord.from_dict(raw)
                     if record is not None:
                         records.append(record)
-        self._records = self._dedupe_loaded_records(records)
+        self._records = self._dedupe_loaded_records([self._normalize_loaded_record(record) for record in records])
+
+    def _normalize_loaded_record(self, record: EntityRecord) -> EntityRecord:
+        """Backfill relationship and phonetic-alias normalization for older records."""
+
+        if record.entity_type == "person":
+            aliases = {*record.aliases, *phonetic_name_aliases(record.name)}
+            record.aliases = sorted({alias for alias in aliases if normalize_text(alias) != record.normalized_name})
+
+        if isinstance(record.attributes, dict):
+            relation = record.attributes.get("relationship")
+            if relation:
+                record.attributes["relationship"] = _normalize_relationship_label(relation)
+
+        normalized_relationships: list[dict[str, Any]] = []
+        for relationship in record.relationships or []:
+            if not isinstance(relationship, dict):
+                continue
+            edge = dict(relationship)
+            relation = edge.get("type") or edge.get("relation") or edge.get("relationship")
+            if relation:
+                edge["type"] = _normalize_relationship_label(relation)
+            target = edge.get("to") or edge.get("target") or edge.get("target_name")
+            edge["to"] = str(target or "user")
+            normalized_relationships.append(edge)
+
+        if record.entity_type == "person" and isinstance(record.attributes, dict):
+            relation = record.attributes.get("relationship")
+            if relation:
+                normalized_relationships.append({"type": _normalize_relationship_label(relation), "to": "user", "source": "attribute_backfill"})
+
+        record.relationships = self._dedupe_relationships(normalized_relationships)
+        return record
+
 
     def _score(self, record: EntityRecord, normalized_query: str, query_tokens: set[str]) -> tuple[float, str]:
         score = 0.0
@@ -956,6 +1251,18 @@ class EntityMemoryStore:
             clean_key = normalize_text(str(key)).replace(" ", "_")
             if not clean_key or value in (None, "", [], {}):
                 continue
+            if clean_key == "relationship":
+                normalized_value = _normalize_relationship_label(value)
+                if not normalized_value:
+                    continue
+                existing = _normalize_relationship_label(merged.get(clean_key))
+                if not existing or existing in (None, "", [], {}):
+                    merged[clean_key] = normalized_value
+                elif existing == normalized_value:
+                    merged[clean_key] = normalized_value
+                else:
+                    merged[clean_key] = sorted({existing, normalized_value})
+                continue
             existing = merged.get(clean_key)
             if existing in (None, "", [], {}):
                 merged[clean_key] = value
@@ -988,16 +1295,105 @@ class EntityMemoryStore:
 _PERSON_NAME_PATTERN = r"([A-Z][A-Za-z0-9_\-']{1,40}(?:\s+[A-Z][A-Za-z0-9_\-']{1,40}){0,3})"
 
 
-def _normalize_relationship_label(value: str) -> str:
-    relation = _clean_title(str(value or "").lower())
+def _normalize_relationship_label(value: Any) -> str:
+    """Return one human-safe relationship label.
+
+    Older 0.3.4a records can contain relationship attributes such as
+    ``["fiance fiancee", "fiancée"]`` after multiple spellings were merged.
+    The memory layer should keep a single display value, not leak Python list
+    formatting into Jarvis responses.
+    """
+
     aliases = {
+        "fianc": "fiancée",
         "fiance": "fiancée",
         "fiancee": "fiancée",
+        "fiancees": "fiancée",
         "fiancée": "fiancée",
+        "fiancé": "fiancée",
         "mom": "mother",
         "dad": "father",
+        "dog": "dog",
+        "dogs": "dog",
+        "cat": "cat",
+        "cats": "cat",
+        "pet": "pet",
+        "pets": "pet",
+        "owner": "owned by",
+        "belongs to": "owned by",
+        "work on": "works on",
+        "works with": "works with",
+        "developer for": "developer for",
+        "lead developer for": "lead developer for",
+        "project": "project",
+        "assistant project": "assistant project",
     }
-    return aliases.get(relation, relation)
+
+    def normalize_one(raw: Any) -> str:
+        relation = normalize_text(str(raw or ""))
+        if not relation:
+            return ""
+        direct = aliases.get(relation)
+        if direct:
+            return direct
+        # Handle merged/list-derived strings like "fiance fiancee" by
+        # normalizing each token. If all meaningful tokens collapse to one
+        # relationship, use that one label.
+        token_labels = [aliases.get(token, token) for token in relation.split() if token]
+        token_labels = [label for label in token_labels if label]
+        unique = sorted(set(token_labels))
+        if len(unique) == 1:
+            return unique[0]
+        if "fiancée" in unique:
+            return "fiancée"
+        return relation
+
+    if isinstance(value, (list, tuple, set)):
+        labels = [normalize_one(item) for item in value]
+        labels = [label for label in labels if label]
+        unique = sorted(set(labels))
+        if not unique:
+            return ""
+        if len(unique) == 1:
+            return unique[0]
+        if "fiancée" in unique:
+            return "fiancée"
+        return unique[0]
+
+    return normalize_one(value)
+
+
+def _relationship_target_aliases(value: str) -> set[str]:
+    normalized = normalize_text(value)
+    aliases = {normalized} if normalized else set()
+    if normalized in {"me", "my", "mine", "tanner", "user", "the user", "owner", "sir"}:
+        aliases.update({"user", "me", "you", "your", "tanner", "owner"})
+    return aliases
+
+
+def _relationship_matches_target(value: str, target_query: str) -> bool:
+    target_aliases = _relationship_target_aliases(target_query)
+    value_aliases = _relationship_target_aliases(value)
+    return bool(target_aliases and value_aliases and target_aliases & value_aliases)
+
+
+def _relationship_subject_phrase(record_name: str, relation: str, target: str) -> str:
+    relation = _normalize_relationship_label(relation)
+    target_norm = normalize_text(target)
+    if target_norm in {"user", "me", "you", "your", "tanner", "owner"}:
+        if relation in {"fiancée", "wife", "girlfriend", "brother", "sister", "mother", "father", "friend", "coworker", "teammate", "developer", "lead developer"}:
+            return f"{record_name} is your {relation}"
+        if relation in {"dog", "cat", "pet"}:
+            return f"{record_name} is your {relation}"
+        if relation in {"project", "assistant project"}:
+            return f"{record_name} is your {relation}"
+        if relation == "owned by":
+            return f"{record_name} belongs to you"
+    if target:
+        if relation.startswith(("works", "developer", "lead developer")):
+            return f"{record_name} {relation} {target}"
+        return f"{record_name} is connected to {target} as {relation}"
+    return f"{record_name} is connected as {relation}"
 
 
 def _second_person_summary(summary: str) -> str:
@@ -1057,6 +1453,7 @@ def infer_entity_from_text(text: str) -> dict[str, Any] | None:
             "name": name,
             "entity_type": "person",
             "summary": f"{name} is your {relation}.",
+            "aliases": phonetic_name_aliases(name),
             "attributes": {"relationship": relation},
             "relationships": [{"type": relation, "to": "user"}],
             "tags": ["person", "relationship"],
@@ -1071,11 +1468,30 @@ def infer_entity_from_text(text: str) -> dict[str, Any] | None:
             "name": name,
             "entity_type": "person",
             "summary": f"{name} is your {relation}.",
+            "aliases": phonetic_name_aliases(name),
             "attributes": {"relationship": relation},
             "relationships": [{"type": relation, "to": "user"}],
             "tags": ["person", "relationship"],
             "importance": 4,
             "confidence": 0.84,
+        }
+
+    # Cross-entity work/project relationships: "Kenleigh works on Jarvis".
+    match = re.search(rf"\b{_PERSON_NAME_PATTERN}\s+(works\s+on|works\s+with|is\s+(?:the\s+)?lead\s+developer\s+for|is\s+(?:a\s+)?developer\s+for)\s+([A-Z][A-Za-z0-9_\-' ]{{1,60}})\b", cleaned, flags=re.IGNORECASE)
+    if match:
+        name = _clean_title(match.group(1))
+        relation = _normalize_relationship_label(re.sub(r"^is\s+", "", match.group(2), flags=re.IGNORECASE))
+        target = _clean_title(match.group(3))
+        return {
+            "name": name,
+            "entity_type": "person",
+            "summary": f"{name} {relation} {target}.",
+            "aliases": phonetic_name_aliases(name),
+            "attributes": {"relationship": relation, "related_project": target},
+            "relationships": [{"type": relation, "to": target}],
+            "tags": ["person", "relationship", "project"],
+            "importance": 4,
+            "confidence": 0.8,
         }
 
     # Pets: "my dog Scout is a golden doodle" or "Scout is my dog".
@@ -1092,7 +1508,8 @@ def infer_entity_from_text(text: str) -> dict[str, Any] | None:
             "entity_type": "pet",
             "summary": f"{name} is your {species}." + (f" {breed_or_note}." if breed_or_note else ""),
             "attributes": attributes,
-            "tags": ["pet", species],
+            "relationships": [{"type": species, "to": "user"}],
+            "tags": ["pet", species, "relationship"],
             "importance": 4,
             "confidence": 0.83,
         }
@@ -1105,7 +1522,8 @@ def infer_entity_from_text(text: str) -> dict[str, Any] | None:
             "entity_type": "pet",
             "summary": f"{name} is your {species}.",
             "attributes": {"species": species},
-            "tags": ["pet", species],
+            "relationships": [{"type": species, "to": "user"}],
+            "tags": ["pet", species, "relationship"],
             "importance": 4,
             "confidence": 0.83,
         }
@@ -1120,7 +1538,8 @@ def infer_entity_from_text(text: str) -> dict[str, Any] | None:
             "summary": cleaned,
             "aliases": ["Jarvis"] if "jarvis" in name.lower() and name.lower() != "jarvis" else [],
             "attributes": {},
-            "tags": ["project", "jarvis" if "jarvis" in lowered else "product"],
+            "relationships": [{"type": "project", "to": "user"}],
+            "tags": ["project", "jarvis" if "jarvis" in lowered else "product", "relationship"],
             "importance": 5 if "jarvis" in lowered else 3,
             "confidence": 0.78,
         }
@@ -1131,7 +1550,8 @@ def infer_entity_from_text(text: str) -> dict[str, Any] | None:
             "summary": cleaned,
             "aliases": ["Jarvis"],
             "attributes": {},
-            "tags": ["project", "jarvis"],
+            "relationships": [{"type": "project", "to": "user"}],
+            "tags": ["project", "jarvis", "relationship"],
             "importance": 5,
             "confidence": 0.8,
         }

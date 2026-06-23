@@ -12,7 +12,7 @@ class TestAppShellInterfaceControls019a(unittest.TestCase):
         self.renderer_js = (self.root / "app_shell" / "renderer" / "renderer.js").read_text(encoding="utf-8")
 
     def test_version_and_capabilities_include_019a_controls(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.3a")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.4")
         capabilities = app_shell_capabilities()
         self.assertIn("panel_visibility_controls", capabilities)
         self.assertIn("orb_only_focus_mode", capabilities)

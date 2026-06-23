@@ -176,37 +176,6 @@
     {
       "aliases": [],
       "attributes": {
-        "relationship": "fiance"
-      },
-      "confidence": 0.9,
-      "created_at": "2026-06-18T06:32:01.479310+00:00",
-      "entity_type": "person",
-      "id": "ent_d94094337689",
-      "importance": 4,
-      "metadata": {
-        "source_command": "Remember that Ken Lee is my fiance.",
-        "source_text": "Ken Lee is my fiance"
-      },
-      "name": "Lee",
-      "relationships": [
-        {
-          "to": "user",
-          "type": "fiance"
-        }
-      ],
-      "scope": "personal",
-      "sensitivity": "normal",
-      "source": "user",
-      "summary": "Lee is the user's fiance.",
-      "tags": [
-        "person",
-        "relationship"
-      ],
-      "updated_at": "2026-06-18T06:33:39.988664+00:00"
-    },
-    {
-      "aliases": [],
-      "attributes": {
         "breed_or_note": "golden doodle",
         "species": "dog"
       },
@@ -220,21 +189,31 @@
         "source_text": "my dog Nugget is a golden doodle"
       },
       "name": "Nugget",
-      "relationships": [],
+      "relationships": [
+        {
+          "to": "user",
+          "type": "dog"
+        }
+      ],
       "scope": "personal",
       "sensitivity": "normal",
       "source": "user",
       "summary": "Nugget is the user's dog. golden doodle.; Nugget is your dog. golden doodle.",
       "tags": [
         "dog",
-        "pet"
+        "pet",
+        "relationship"
       ],
-      "updated_at": "2026-06-18T07:48:27.235122+00:00"
+      "updated_at": "2026-06-22T05:19:37.375709+00:00"
     },
     {
-      "aliases": [],
+      "aliases": [
+        "Ken Lee",
+        "Ken Leigh",
+        "Kenley"
+      ],
       "attributes": {
-        "relationship": "fiance"
+        "relationship": "fianc\u00e9e"
       },
       "confidence": 0.9,
       "created_at": "2026-06-18T06:33:49.786968+00:00",
@@ -242,50 +221,17 @@
       "id": "ent_9fac94df9d19",
       "importance": 4,
       "metadata": {
-        "source_command": "remember that Kenleigh is my fiance",
+        "source_command": "Remember that Kenleigh is my fiance",
         "source_text": "Kenleigh is my fiance"
       },
       "name": "Kenleigh",
       "relationships": [
         {
           "to": "user",
-          "type": "fiance"
-        }
-      ],
-      "scope": "personal",
-      "sensitivity": "normal",
-      "source": "user",
-      "summary": "Kenleigh is the user's fiance.",
-      "tags": [
-        "person",
-        "relationship"
-      ],
-      "updated_at": "2026-06-18T06:33:49.786968+00:00"
-    },
-    {
-      "aliases": [
-        "Kenton Lee",
-        "kenley"
-      ],
-      "attributes": {
-        "relationship": "fianc\u00e9e"
-      },
-      "confidence": 0.9,
-      "created_at": "2026-06-18T07:47:40.801831+00:00",
-      "entity_type": "person",
-      "id": "ent_1a913d9563c5",
-      "importance": 4,
-      "metadata": {
-        "alias_history": [
-          "Kenton Lee",
-          "kenley"
-        ],
-        "source_command": "Remember that Ken Lee is my fiance.",
-        "source_text": "Ken Lee is my fiance"
-      },
-      "name": "ken lee",
-      "relationships": [
+          "type": "fianc\u00e9e"
+        },
         {
+          "source": "attribute_backfill",
           "to": "user",
           "type": "fianc\u00e9e"
         }
@@ -293,14 +239,14 @@
       "scope": "personal",
       "sensitivity": "normal",
       "source": "user",
-      "summary": "ken lee is your fianc\u00e9e.",
+      "summary": "Kenleigh is the user's fiance.; Kenleigh is your fianc\u00e9e.",
       "tags": [
         "person",
         "relationship"
       ],
-      "updated_at": "2026-06-19T07:38:42.531249+00:00"
+      "updated_at": "2026-06-23T06:03:37.251473+00:00"
     }
   ],
   "schema_version": 2,
-  "updated_at": "2026-06-22T04:58:46.189875+00:00"
+  "updated_at": "2026-06-23T06:16:38.076948+00:00"
 }

@@ -28,6 +28,27 @@ class IntentClassifier:
         if text in {"status", "system status", "jarvis status"} or "are you online" in text:
             return IntentResult("status", 0.95, "Status phrase detected.")
 
+        relationship_phrases = (
+            "related to me",
+            "relationship to me",
+            "what relationships",
+            "list relationships",
+            "show relationships",
+            "relationship memory",
+            "relationship graph",
+            "connected to",
+            "who works on",
+            "works on jarvis",
+            "who is my",
+            "who are my",
+            "what pets do i have",
+            "which pets do i have",
+            "what dogs do i have",
+            "which dogs do i have",
+        )
+        if any(phrase in text for phrase in relationship_phrases):
+            return IntentResult("memory_search", 0.88, "Relationship memory phrase detected.")
+
         entity_edit_type_words = ("same person", "same people", "same dog", "same cat", "same pet", "same project", "same app", "same device", "same vehicle", "same car", "same organization")
         if any(phrase in text for phrase in entity_edit_type_words):
             return IntentResult("memory_write", 0.92, "Entity merge/correction phrase detected.")

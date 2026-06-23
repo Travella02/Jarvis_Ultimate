@@ -87,7 +87,7 @@ class TestAppShellTypedVoiceParity033(unittest.TestCase):
         )
 
     def test_version_and_capability_include_typed_input_voice_parity(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.3a")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.4")
         capabilities = app_shell_capabilities()
         self.assertIn("typed_input_voice_parity", capabilities)
         self.assertIn("typed_input_visual_hold", capabilities)

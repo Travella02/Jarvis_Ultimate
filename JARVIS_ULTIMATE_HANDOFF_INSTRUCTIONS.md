@@ -4,11 +4,11 @@ This file exists so a future ChatGPT project chat can quickly understand the cur
 
 ## Current project status
 
-Current committed milestone before this patch: **0.3.2 — Entity Merge + Alias Correction**
+Current committed milestone before this patch: **0.3.3a — Typed Input Voice Parity + Natural Memory Response Hotfix**
 
-Current patch milestone: **0.3.3a — Typed Memory Response Hotfix + App Agent Test-Isolation Hotfix**
+Current patch milestone: **0.3.4 — Relationship Memory Graph**
 
-Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.3a`. Hotfixes may use suffixes like `0.3.2a`.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.4`. Hotfixes may use suffixes like `0.3.2a`.
 
 ## User patch/package preferences
 
@@ -50,7 +50,8 @@ Jarvis Ultimate is a local-first AI assistant with:
 - Memory Agent,
 - early File Agent foundation,
 - always-on memory foundation,
-- structured Entity Memory foundation.
+- structured Entity Memory foundation,
+- relationship memory graph for people/pets/projects/devices and future SaaS workspaces.
 
 ## App Agent current state
 
@@ -368,3 +369,74 @@ Current status:
 
 Next recommended update after commit:
 - Resume the memory roadmap with Relationship Memory Graph or Memory Preferences / Auto-Remember Controls.
+
+## 0.3.4 Relationship Memory Graph
+
+This milestone builds on 0.3.1–0.3.3a entity memory and adds a scalable relationship layer inside entity memory.
+
+Changes:
+- Entity records can now be queried as relationship-graph edges instead of only isolated facts.
+- Relationship edges support source entity, relationship type, target entity/user, scope, confidence, and raw metadata.
+- Existing person relationships such as “Kenleigh is my fiancée” become graph edges to the user.
+- Pet memories such as “my dog Nugget is a golden doodle” become relationship edges to the user.
+- Project memories such as Jarvis project references can be represented as user/project relationships.
+- Cross-entity project relationships such as “Kenleigh works on Jarvis” can be queried.
+- Memory Agent now answers natural relationship questions without exposing structured/database wording.
+- Intent classifier routes relationship questions to memory instead of general chat.
+- App shell version is now `0.3.4` and capabilities include `relationship_memory_graph`, `relationship_memory_queries`, and `saas_ready_entity_relationship_edges`.
+
+Manual examples:
+- “Who is my fiancée?”
+- “How is Kenleigh related to me?”
+- “What dogs do I have?”
+- “What relationships do you remember?”
+- “Who works on Jarvis?”
+
+Current status after 0.3.4:
+- Memory has long-term facts, short-term facts, chat archive, memory candidates, scalable entity records, aliases/merge corrections, and relationship graph queries.
+- Typed interface parity from 0.3.3a should remain intact.
+
+Recommended next milestone:
+- `0.3.5 Memory Preferences / Auto-Remember Controls`, allowing users/SaaS tenants to control what Jarvis may remember automatically, what requires approval, and what should never be stored.
+
+## 0.3.4a Entity Phonetic Alias + Relationship Label Hotfix
+
+This hotfix follows 0.3.4 Relationship Memory Graph.
+
+Live testing showed that Jarvis could miss relationship lookups when the saved memory used one spelling of fiancé/fiancée and the query used another. It also showed that STT often hears `Kenleigh` as `Ken Lee`.
+
+Changes:
+- Normalized relationship labels across `fiance`, `fiancee`, `fiancé`, and `fiancée` to canonical `fiancée`.
+- Added conservative phonetic aliases for person names, including patterns like `Kenleigh`, `Ken Lee`, `Ken Leigh`, and `Kenley`.
+- Person records now automatically get those aliases for matching/search.
+- Existing loaded person records are backfilled with phonetic aliases and normalized relationship edges.
+- Entity merge now makes the target phrase canonical even when it resolves to the same record via alias, so `Ken Lee and Kenleigh are the same person` correctly displays `Kenleigh` afterward.
+- Added regression tests in `tests/unit/test_memory_entity_phonetic_relationship_034a.py`.
+
+Validation:
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 386 tests in 5.319s — OK`
+
+Notes:
+- App-shell version remains `0.3.4` to keep existing version-pinned tests stable, while the patch package itself is `0.3.4a`.
+- This is not a full STT custom vocabulary feature. It makes memory tolerant after STT produces common variants. A future voice/STT update can add custom vocabulary/name biasing.
+
+Next recommended options:
+- Commit 0.3.4a after manual testing.
+- Then continue memory with auto-remember controls, or do a dedicated STT custom vocabulary/name-bias patch to improve recognition before routing.
+
+## 0.3.4b Relationship Display Cleanup Hotfix
+
+This hotfix keeps the 0.3.4 relationship graph and 0.3.4a phonetic alias work intact, and only fixes relationship display/normalization issues discovered during live testing.
+
+Changes:
+- Relationship attributes that were accidentally merged into list-like values such as `["fiance fiancee", "fiancée"]` are normalized back into one clean display label.
+- Jarvis should no longer say bracket/list formatting in natural memory answers, such as `your ['fiance fiancee', 'fiancée']`.
+- `fiance`, `fiancee`, `fiancé`, `fiancée`, and merged strings like `fiance fiancee` normalize to `fiancée` before display.
+- Existing loaded entity memories are cleaned in memory at load time so old records display naturally after restart.
+- Entity prompt facts also sanitize relationship values before they are sent to the LLM humanizer.
+
+Current status:
+- Entity phonetic aliases are working for Kenleigh / Ken Lee style STT mistakes.
+- Relationship graph queries are working, but continue testing real-world speech variants before expanding further.
+- Next recommended memory update: memory preferences and auto-remember controls, or STT vocabulary/name biasing for frequently misheard personal names.

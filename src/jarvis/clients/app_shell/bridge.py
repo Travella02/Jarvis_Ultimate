@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.3a"
+APP_SHELL_VERSION = "0.3.4"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -113,6 +113,12 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "typed_input_voice_parity",
         "typed_input_visual_hold",
         "humanized_memory_search_responses",
+        "relationship_memory_graph",
+        "relationship_memory_queries",
+        "entity_phonetic_aliases",
+        "relationship_label_normalization",
+        "relationship_display_cleanup",
+        "saas_ready_entity_relationship_edges",
     )
 
 

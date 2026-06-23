@@ -15,7 +15,7 @@ from typing import Any
 from jarvis.core.result import JarvisResult
 from jarvis.memory.always_on import ChatArchiveStore, MemoryCandidateStore, ShortTermFactStore
 from jarvis.memory.long_term import LongTermMemoryStore
-from jarvis.memory.entities import EntityMemoryStore, normalize_entity_type
+from jarvis.memory.entities import EntityMemoryStore, normalize_entity_type, normalize_text
 
 
 class Agent:
@@ -56,6 +56,12 @@ class Agent:
         entity_edit_action = self._extract_entity_edit_action(text)
         if entity_edit_action is not None:
             handled = self._handle_entity_edit_action(entity_memory, entity_edit_action)
+            if handled is not None:
+                return handled
+
+        relationship_action = self._extract_relationship_action(text)
+        if relationship_action is not None:
+            handled = self._handle_relationship_action(entity_memory, relationship_action)
             if handled is not None:
                 return handled
 
@@ -312,6 +318,168 @@ class Agent:
             data={"implemented": True, "long_term_memory": long_term.status(), "short_term_facts": short_term_facts.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status(), "entity_memory": entity_memory.status()},
         )
 
+    def _handle_relationship_action(self, entity_memory: EntityMemoryStore, action: dict[str, str]) -> JarvisResult | None:
+        action_name = action.get("action", "")
+        if action_name == "list":
+            edges = entity_memory.relationship_edges(limit=12) if hasattr(entity_memory, "relationship_edges") else []
+            message = self._format_relationship_edges_naturally(edges)
+            return JarvisResult.ok(
+                message,
+                agent_name=self.name,
+                action="memory_relationship_list",
+                data={"relationships": edges, "entity_memory": entity_memory.status()},
+            )
+
+        if action_name == "who_relation":
+            relation = action.get("relation", "")
+            entity_type = action.get("entity_type") or None
+            records = entity_memory.find_by_relationship(relation, target_query="user", entity_type=entity_type, limit=8) if hasattr(entity_memory, "find_by_relationship") else []
+            edges = entity_memory.relationship_edges(relation_type=relation, target_query="user", entity_type=entity_type, limit=8) if hasattr(entity_memory, "relationship_edges") else []
+            message = self._format_relationship_records_naturally(records, relation=relation, edges=edges)
+            return JarvisResult.ok(
+                message,
+                agent_name=self.name,
+                action="memory_relationship_search",
+                data={"relation": relation, "records": [record.to_dict() for record in records if hasattr(record, "to_dict")], "relationships": edges, "entity_memory": entity_memory.status()},
+            )
+
+        if action_name in {"related_to_user", "related_to"}:
+            query = action.get("query", "")
+            if action_name == "related_to_user" and hasattr(entity_memory, "relationship_edges"):
+                edges = entity_memory.relationship_edges(query=query, target_query="user", limit=8)
+                if not edges and hasattr(entity_memory, "related_to"):
+                    edges = [edge for edge in entity_memory.related_to(query, limit=8) if self._edge_targets_user(edge)]
+            elif hasattr(entity_memory, "related_to"):
+                edges = entity_memory.related_to(query, limit=10)
+            else:
+                edges = []
+            message = self._format_relationship_edges_naturally(edges, query=query)
+            return JarvisResult.ok(
+                message,
+                agent_name=self.name,
+                action="memory_relationship_lookup",
+                data={"query": query, "relationships": edges, "entity_memory": entity_memory.status()},
+            )
+
+        return None
+
+    def _format_relationship_records_naturally(self, records: list[Any], *, relation: str, edges: list[dict[str, Any]] | None = None) -> str:
+        edges = edges or []
+        relation_label = self._relationship_display_label(relation)
+        if not records and not edges:
+            return f"I do not have anyone saved as your {relation_label} yet, sir."
+        if len(records) == 1:
+            record = records[0]
+            return self._ensure_sir(self._relationship_sentence(getattr(record, "name", "that"), relation_label, "user"))
+        names = [self._display_entity_name(record) for record in records]
+        if not names:
+            names = [str(edge.get("source_name") or "that") for edge in edges if edge.get("source_name")]
+        names = self._dedupe_phrases(names)
+        plural = self._plural_relationship_label(relation_label)
+        if len(names) == 1:
+            return self._ensure_sir(self._relationship_sentence(names[0], relation_label, "user"))
+        return f"You have {len(names)} {plural}: {self._join_names(names)}, sir."
+
+    def _format_relationship_edges_naturally(self, edges: list[dict[str, Any]], *, query: str = "") -> str:
+        if not edges:
+            if query:
+                return f"I do not have any saved relationship details for {query}, sir."
+            return "I do not have any relationship memories saved yet, sir."
+        sentences = []
+        for edge in edges:
+            source = str(edge.get("source_name") or "that")
+            relation = self._relationship_display_label(str(edge.get("relation") or "relationship"))
+            target = str(edge.get("target") or "user")
+            sentences.append(self._relationship_sentence(source, relation, target))
+        sentences = self._dedupe_phrases(sentences)
+        if len(sentences) == 1:
+            return self._ensure_sir(sentences[0])
+        shown = sentences[:5]
+        return "I remember these relationships, sir: " + "; ".join(phrase.strip(" .") for phrase in shown) + "."
+
+    def _relationship_sentence(self, source: str, relation: str, target: str) -> str:
+        source = " ".join(str(source or "that").split())
+        target = " ".join(str(target or "user").split())
+        relation = self._relationship_display_label(relation)
+        target_norm = re.sub(r"[^a-z0-9\s]", " ", target.lower())
+        target_norm = " ".join(target_norm.split())
+        if target_norm in {"user", "me", "you", "your", "tanner", "owner"}:
+            if relation in {"dog", "cat", "pet", "fiancée", "wife", "girlfriend", "brother", "sister", "mother", "father", "friend", "coworker", "teammate", "developer", "lead developer", "project", "assistant project"}:
+                return f"{source} is your {relation}"
+            if relation == "owned by":
+                return f"{source} belongs to you"
+            return f"{source} is connected to you as {relation}"
+        if relation.startswith(("works", "developer", "lead developer")):
+            return f"{source} {relation} {target}"
+        return f"{source} is connected to {target} as {relation}"
+
+    def _relationship_display_label(self, relation: Any) -> str:
+        aliases = {
+            "fianc": "fiancée",
+            "fiance": "fiancée",
+            "fiancee": "fiancée",
+            "fiancees": "fiancée",
+            "fiancée": "fiancée",
+            "fiancé": "fiancée",
+            "pets": "pet",
+            "dogs": "dog",
+            "cats": "cat",
+        }
+
+        def normalize_one(raw: Any) -> str:
+            cleaned = normalize_text(str(raw or ""))
+            if not cleaned:
+                return ""
+            direct = aliases.get(cleaned)
+            if direct:
+                return direct
+            token_labels = [aliases.get(token, token) for token in cleaned.split() if token]
+            token_labels = [label for label in token_labels if label]
+            unique = sorted(set(token_labels))
+            if len(unique) == 1:
+                return unique[0]
+            if "fiancée" in unique:
+                return "fiancée"
+            return cleaned
+
+        if isinstance(relation, (list, tuple, set)):
+            labels = [normalize_one(item) for item in relation]
+            labels = [label for label in labels if label]
+            unique = sorted(set(labels))
+            if not unique:
+                return ""
+            if len(unique) == 1:
+                return unique[0]
+            if "fiancée" in unique:
+                return "fiancée"
+            return unique[0]
+
+        return normalize_one(relation)
+
+    def _plural_relationship_label(self, relation: str) -> str:
+        relation = self._relationship_display_label(relation)
+        irregular = {"fiancée": "fiancées", "wife": "wives", "person": "people"}
+        if relation in irregular:
+            return irregular[relation]
+        if relation.endswith("s"):
+            return relation
+        return relation + "s"
+
+    def _join_names(self, names: list[str]) -> str:
+        cleaned = [name for name in names if name]
+        if not cleaned:
+            return "them"
+        if len(cleaned) == 1:
+            return cleaned[0]
+        if len(cleaned) == 2:
+            return f"{cleaned[0]} and {cleaned[1]}"
+        return ", ".join(cleaned[:-1]) + f", and {cleaned[-1]}"
+
+    def _edge_targets_user(self, edge: dict[str, Any]) -> bool:
+        target = re.sub(r"[^a-z0-9\s]", " ", str(edge.get("target") or "").lower())
+        target = " ".join(target.split())
+        return target in {"user", "me", "you", "your", "tanner", "owner"}
+
     def _handle_entity_edit_action(self, entity_memory: EntityMemoryStore, action: dict[str, str]) -> JarvisResult | None:
         action_name = action.get("action", "")
         entity_type = action.get("entity_type") or None
@@ -539,7 +707,14 @@ class Agent:
             entity_type = getattr(record, "entity_type", "entity")
             summary = self._second_person_summary(getattr(record, "summary", ""))
             attributes = getattr(record, "attributes", {}) if isinstance(getattr(record, "attributes", {}), dict) else {}
-            attr_parts = [f"{key}: {value}" for key, value in sorted(attributes.items()) if value not in (None, "", [], {})]
+            attr_parts = []
+            for key, value in sorted(attributes.items()):
+                if value in (None, "", [], {}):
+                    continue
+                display_value = self._relationship_display_label(value) if str(key) == "relationship" else value
+                if display_value in (None, "", [], {}):
+                    continue
+                attr_parts.append(f"{key}: {display_value}")
             parts = [f"name: {name}", f"type: {entity_type}"]
             if summary:
                 parts.append(f"summary: {summary}")
@@ -552,7 +727,7 @@ class Agent:
         name = self._display_entity_name(record)
         entity_type = getattr(record, "entity_type", "entity")
         attributes = getattr(record, "attributes", {}) if isinstance(getattr(record, "attributes", {}), dict) else {}
-        relation = attributes.get("relationship")
+        relation = self._relationship_display_label(attributes.get("relationship"))
         if entity_type == "person" and relation:
             return f"{name} is your {relation}, sir."
         species = attributes.get("species")
@@ -645,6 +820,47 @@ class Agent:
             "entity memory status",
             "structured memory status",
         }
+
+    def _extract_relationship_action(self, text: str) -> dict[str, str] | None:
+        cleaned = " ".join(str(text or "").strip().split()).strip(" .?!\"'")
+        lowered = cleaned.lower()
+        if not cleaned:
+            return None
+
+        if any(phrase in lowered for phrase in ["what relationships do you remember", "list relationships", "show relationships", "relationship memory", "relationship graph"]):
+            return {"action": "list"}
+
+        related_match = re.search(r"^(?:jarvis,?\s*)?how\s+is\s+(.+?)\s+related\s+to\s+(?:me|myself|you|the\s+user)$", cleaned, flags=re.IGNORECASE)
+        if related_match:
+            return {"action": "related_to_user", "query": self._clean_tail(related_match.group(1))}
+
+        relationship_match = re.search(r"^(?:jarvis,?\s*)?what\s+is\s+(.+?)(?:'s|s)?\s+relationship\s+to\s+(?:me|myself|you|the\s+user)$", cleaned, flags=re.IGNORECASE)
+        if relationship_match:
+            return {"action": "related_to_user", "query": self._clean_tail(relationship_match.group(1))}
+
+        connected_match = re.search(r"^(?:jarvis,?\s*)?(?:what|who)\s+(?:is\s+)?(?:connected|related)\s+to\s+(.+)$", cleaned, flags=re.IGNORECASE)
+        if connected_match:
+            return {"action": "related_to", "query": self._clean_tail(connected_match.group(1))}
+
+        works_match = re.search(r"^(?:jarvis,?\s*)?who\s+(?:works\s+on|works\s+with|is\s+(?:the\s+)?developer\s+for|is\s+(?:the\s+)?lead\s+developer\s+for)\s+(.+)$", cleaned, flags=re.IGNORECASE)
+        if works_match:
+            return {"action": "related_to", "query": self._clean_tail(works_match.group(1))}
+
+        # Relationship lookup: "Who is my fiancée?", "Who are my dogs?",
+        # "Which pets do I have?"
+        who_my_match = re.search(r"^(?:jarvis,?\s*)?(?:who\s+(?:is|are)|which)\s+my\s+(.+?)(?:\s+do\s+i\s+have)?$", cleaned, flags=re.IGNORECASE)
+        if who_my_match:
+            relation = self._clean_tail(who_my_match.group(1))
+            relation = re.sub(r"^(?:remembered\s+)?", "", relation, flags=re.IGNORECASE).strip()
+            entity_type = "pet" if relation.lower() in {"pet", "pets", "dog", "dogs", "cat", "cats"} else "person"
+            return {"action": "who_relation", "relation": self._relationship_display_label(relation), "entity_type": entity_type}
+
+        have_pet_match = re.search(r"^(?:jarvis,?\s*)?(?:what|which)\s+(pets|dogs|cats)\s+do\s+i\s+have$", cleaned, flags=re.IGNORECASE)
+        if have_pet_match:
+            relation = self._relationship_display_label(have_pet_match.group(1))
+            return {"action": "who_relation", "relation": relation, "entity_type": "pet"}
+
+        return None
 
     def _extract_entity_edit_action(self, text: str) -> dict[str, str] | None:
         cleaned_text = re.sub(r"^(?:jarvis,?\s*)?(?:remember\s+that\s+)?", "", text.strip(), flags=re.IGNORECASE).strip(" .?!\"'")
