@@ -85,6 +85,7 @@ def create_default_panel_registry() -> UIPanelRegistry:
         UIPanelSpec("file_results", "Files", "file_list", "Files Jarvis found or created.", "▤", False, region="workspace", order=80),
         UIPanelSpec("screen_context", "Screen Context", "screen", "Screen capture, active window, and OCR context.", "▣", False, region="workspace", order=90),
         UIPanelSpec("agent_dashboard", "Agent Dashboard", "agents", "Detailed agent activity and routing state.", "☷", False, region="workspace", order=100),
+        UIPanelSpec("memory_review", "Memory Review", "memory_review", "Ranked memory review bullets for a person, pet, project, app, or topic.", "◇", False, region="workspace", order=110),
     ]:
         registry.register(spec)
     return registry

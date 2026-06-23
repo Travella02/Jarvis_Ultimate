@@ -106,6 +106,25 @@ class IntentClassifier:
                 return IntentResult("memory_search", 0.9, "Memory preference status phrase detected.")
             return IntentResult("memory_write", 0.9, "Memory preference control phrase detected.")
 
+        memory_review_phrases = (
+            "show everything you remember about",
+            "show all you remember about",
+            "show everything you know about",
+            "show all you know about",
+            "show everything you have saved about",
+            "show all you have saved about",
+            "display everything you remember about",
+            "pull up everything you remember about",
+            "open memory review",
+            "show memory review",
+            "show my full memory",
+            "tell me everything you remember about",
+            "read everything you remember about",
+            "speak everything you remember about",
+        )
+        if any(phrase in text for phrase in memory_review_phrases):
+            return IntentResult("memory_search", 0.9, "Detailed memory review phrase detected.")
+
         app_prefixes = ["open ", "launch ", "start app ", "start ", "run ", "open website ", "open site ", "close ", "quit ", "exit ", "switch to ", "focus ", "show "]
         app_phrases = [
             "pull up",

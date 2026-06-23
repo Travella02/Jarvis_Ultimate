@@ -492,38 +492,59 @@ Next recommended update:
 
 ## 0.3.6 Sensitive Chat Redaction + Memory Log Hygiene
 
-This milestone follows the committed 0.3.5/0.3.5a memory preference and secure-vault routing work. It closes the security gap found during live testing: sensitive values were blocked from normal memory, but the raw command text could still be written into local chat archive files and logs.
+This milestone closed the security gap where fake sensitive values could still appear in local chat/log files after secure-vault routing rejected them from normal memory.
 
 Changes:
-- Added stronger sensitive text redaction in `src/jarvis/memory/secure_vault.py`.
-- Added recursive payload redaction for JSON-like data before it reaches logs, chat archives, UI snapshots, or memory-candidate metadata.
-- Added `src/jarvis/memory/hygiene.py` with `redact_sensitive_runtime_files(...)` for upgrade-time cleanup of already-written local runtime files.
-- Chat archive writes now redact sensitive values before writing JSONL records.
-- Chat archive reads also sanitize old records in memory before search/summarization.
-- Memory candidate text, source user text, source assistant text, and metadata are redacted before saving.
-- Short-term fact metadata is redacted defensively before saving.
-- UI workspace chat messages redact sensitive values so typed/voice secrets do not linger in the app-shell chat panel state.
-- Jarvis JSONL event/result logs redact sensitive strings recursively before writing.
-- App-shell voice session status redacts sensitive command/transcript/status fields before exposing them in API snapshots.
-- App shell version is now `0.3.6`.
-- App shell capabilities now include `sensitive_chat_archive_redaction`, `sensitive_ui_history_redaction`, and `memory_log_hygiene_redaction`.
-- The patch installer runs a one-time local hygiene pass after copying files so existing `data/memory/chat_archive`, `data/memory/*.json`, `data/conversations`, and `logs` files are redacted in place.
-
-Manual examples:
-- `Remember that my password is Hunter 2.` should still route to the secure vault path, but the chat archive should store `password [redacted]` rather than the raw value.
-- `Remember that my bank account number is 123456789.` should not leave the raw number in chat archives, memory candidates, or JSONL logs.
-- Safe phrases like `Secure vault status` or `I cannot save passwords in normal memory` should remain readable and should not be corrupted by redaction.
-
-Current status after 0.3.6:
-- Normal memory has preference controls.
-- Sensitive save attempts route away from normal memory.
-- Chat archives, UI chat state, memory candidate metadata, and logs now redact sensitive values.
-- Full encrypted Secure Vault / Password Manager Agent storage is still a future dedicated feature.
+- Added sensitive redaction before writing normal chat archives, memory candidates, short-term metadata, app-shell UI history, voice session snapshots, and JSONL logs.
+- Added installer cleanup for existing local files under `data/memory/chat_archive`, `data/memory/*.json`, `data/conversations`, and `logs`.
+- Passwords, PINs, API keys, tokens, recovery codes, private keys, Wi-Fi passwords, bank/account/card numbers, and similar values should be replaced with redacted placeholders in normal files.
+- Secure values still route to the future secure-vault path and are not saved to normal memory.
 
 Validation:
 - `PYTHONPATH=src python -m unittest discover -s tests -v`
 - Result: `Ran 413 tests in 6.873s — OK`
 
+Current status after 0.3.6:
+- Memory preferences and secure-vault routing are committed.
+- Sensitive values are no longer left raw in normal local chat/log surfaces.
+- Future secure vault/password-manager work should remain separate from normal memory.
+
+## 0.3.7 Memory Review Panel + Spoken Summary Control
+
+This milestone adds a visual memory-review layer. When the user asks Jarvis to show everything he remembers about someone or something, Jarvis now gives a short spoken response and opens a Memory Review card/panel with ranked bullet points.
+
+Changes:
+- Added `src/jarvis/memory/review.py` for ranked memory review payloads.
+- Added a `memory_review` panel type to the UI panel registry.
+- Added app-shell renderer support for Memory Review cards with ranked bullet lists.
+- Added Memory Agent routing for commands like `Show everything you remember about Kenleigh` and `Open memory review for Jarvis`.
+- Detailed reviews combine entity memory, relationship graph data, long-term memory, and short-term facts.
+- Jarvis only speaks the short confirmation by default: `Here is everything I know about Kenleigh, sir.`
+- Jarvis only reads the full review aloud if the user asks to `speak`, `read`, or `tell` everything.
+- Memory review payloads preserve sensitive redaction.
+- App shell version is now `0.3.7`.
+
+Validation:
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 419 tests in 6.452s — OK`
+
 Next recommended update:
-- Commit 0.3.6 after manual testing.
-- Then continue with `0.3.7 Memory Review / Edit / Cleanup Commands`, or start the dedicated Secure Vault / Password Manager Agent if encrypted local storage becomes the priority.
+- After committing 0.3.7, continue with memory edit/cleanup commands: edit a specific memory, forget everything about an entity/topic, clean duplicate memories, and show recent memory changes.
+
+
+## 0.3.8 — Dockable Workspace Panels
+
+Changes:
+- Added draggable and resizable app-shell panels.
+- Added local persistent panel layout storage.
+- Added layout lock/unlock, layout reset, and layout presets for Gaming/Coding/Music/Minimal.
+- Added panel command input for opening panels quickly.
+- Added first panel popout support for moving panels to another monitor.
+- Kept memory review cleanup from 0.3.7a.
+
+Status:
+- UI workspace is ready for Tanner to manually test.
+- Known future improvement: make popout windows fully interactive and backed by dedicated Electron BrowserWindows instead of first-pass mirrored popouts.
+
+Next recommended step:
+- After testing/commit, continue UI polish with dedicated Electron popout window management or return to memory review edit/delete commands.

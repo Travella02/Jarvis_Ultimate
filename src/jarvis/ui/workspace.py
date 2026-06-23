@@ -133,6 +133,7 @@ class UIWorkspaceState:
             self.open_panel(
                 str(event.data.get("panel_id", "workspace")),
                 title=event.data.get("title"),
+                panel_type=str(event.data.get("panel_type") or "text"),
                 payload=event.data.get("payload") if isinstance(event.data.get("payload"), dict) else {},
             )
         elif event.event_type == "ui.update_panel":

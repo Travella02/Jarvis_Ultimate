@@ -21,7 +21,7 @@ from jarvis.memory.preferences import MemoryPreferenceStore, infer_memory_catego
 
 class MemoryPreferences035Tests(unittest.TestCase):
     def test_version_and_capabilities_include_memory_preferences(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.6")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8")
         capabilities = set(app_shell_capabilities())
         self.assertIn("memory_preferences_auto_remember_controls", capabilities)
         self.assertIn("memory_policy_privacy_controls", capabilities)

@@ -13,7 +13,7 @@ from jarvis.memory.entities import EntityMemoryStore, infer_entity_from_text, ph
 
 class EntityPhoneticRelationship034aTests(unittest.TestCase):
     def test_version_and_capabilities(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.6")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8")
         capabilities = set(app_shell_capabilities())
         self.assertIn("entity_phonetic_aliases", capabilities)
         self.assertIn("relationship_label_normalization", capabilities)

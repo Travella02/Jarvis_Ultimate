@@ -819,3 +819,135 @@ body.state-thinking .orb-sphere {
     inset 16px 18px 34px rgba(255,255,255,.18),
     inset 0 0 48px rgba(176, 76, 255, .24);
 }
+
+.memory-review-card { border-color: rgba(var(--state-rgb), .42); }
+.memory-review-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.memory-review-list li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.055); }
+.memory-review-rank { width: 24px; height: 24px; border: 1px solid rgba(var(--state-rgb), .34); border-radius: 999px; display: grid; place-items: center; color: var(--state); font-size: .68rem; font-weight: 950; background: rgba(var(--state-rgb), .035); }
+.memory-review-body { min-width: 0; }
+.memory-review-body strong { color: var(--text); font-size: .78rem; line-height: 1.35; overflow-wrap: anywhere; }
+.memory-review-body em { color: var(--muted); font-size: .68rem; line-height: 1.25; margin-top: 3px; }
+.memory-review-empty { color: var(--muted); margin: 9px 0 0; font-size: .78rem; line-height: 1.35; }
+
+/* 0.3.8: dockable, resizable, pop-out workspace panels with persisted layouts. */
+.layout-preset-select,
+.panel-command-input {
+  border: 1px solid var(--line);
+  background: rgba(45, 169, 255, .018);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  outline: none;
+}
+.layout-preset-select { max-width: 118px; text-transform: uppercase; }
+.panel-command-input { width: 150px; text-transform: none; letter-spacing: .02em; }
+.panel-command-input::placeholder { color: var(--muted-soft); }
+body.layout-locked .layout-lock-toggle { color: var(--muted); border-color: rgba(96,230,255,.22); }
+body.layout-unlocked .layout-lock-toggle { color: var(--success); border-color: rgba(53,255,182,.52); }
+.dockable-panel { position: relative; min-width: 240px; min-height: 96px; }
+.dockable-panel .panel-heading { user-select: none; }
+body.layout-unlocked .dockable-panel .panel-heading { cursor: grab; }
+body.layout-unlocked .dockable-panel.is-dragging .panel-heading { cursor: grabbing; }
+.dockable-panel.layout-floating {
+  position: fixed !important;
+  z-index: 40;
+  margin: 0 !important;
+  display: grid;
+  max-width: calc(100vw - 22px);
+  max-height: calc(100vh - 22px);
+  resize: none;
+}
+.dockable-panel.layout-floating.is-dragging,
+.dockable-panel.layout-floating.is-resizing { z-index: 90; }
+.dockable-panel.layout-floating::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(var(--state-rgb), .08), 0 0 44px rgba(var(--state-rgb), .08);
+}
+.panel-layout-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+.panel-layout-button {
+  padding: 5px 7px;
+  min-width: 29px;
+  border-radius: 10px;
+  font-size: .62rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(45, 169, 255, .014);
+}
+.panel-layout-button:hover { color: var(--state); }
+.panel-resize-handle {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 18px;
+  height: 18px;
+  border-right: 2px solid rgba(var(--state-rgb), .55);
+  border-bottom: 2px solid rgba(var(--state-rgb), .55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+body.layout-unlocked .dockable-panel .panel-resize-handle {
+  opacity: .72;
+  pointer-events: auto;
+  cursor: nwse-resize;
+}
+.dockable-panel.panel-minimized {
+  overflow: hidden !important;
+  min-height: 58px !important;
+  height: 58px !important;
+}
+.dockable-panel.panel-minimized > :not(.panel-heading):not(.panel-resize-handle) { display: none !important; }
+.dockable-panel.panel-popped { opacity: .62; }
+.dockable-panel.panel-popped::after {
+  content: 'Popped out';
+  position: absolute;
+  right: 42px;
+  bottom: 10px;
+  color: var(--muted);
+  font-size: .64rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.layout-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 120;
+  border: 1px solid var(--line);
+  background: rgba(0, 8, 18, .88);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: .78rem;
+  box-shadow: 0 14px 52px rgba(0,0,0,.58), 0 0 24px rgba(var(--state-rgb), .12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.layout-toast.visible { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+.popout-body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background: #000;
+  font-family: Inter, Segoe UI, system-ui, -apple-system, sans-serif;
+  padding: 14px;
+}
+.popout-body .popout-shell { min-height: calc(100vh - 28px); }
+@media (max-width: 1280px) {
+  .dockable-panel.layout-floating { position: relative !important; left: auto !important; top: auto !important; width: auto !important; height: auto !important; }
+}

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src http://127.0.0.1:*; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+  <title>Jarvis Ultimate</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="state-sleeping diagnostics-collapsed">
+  <main class="app-shell">
+    <header class="top-bar glass-panel">
+      <div class="brand-block">
+        <p class="eyebrow">Native App Shell</p>
+        <h1>JARVIS ULTIMATE</h1>
+      </div>
+      <div class="top-controls" aria-label="Interface controls">
+        <div class="view-toggle-row" aria-label="Panel visibility controls">
+          <button type="button" class="view-toggle" data-panel-toggle="runtime" aria-pressed="true">Runtime</button>
+          <button type="button" class="view-toggle" data-panel-toggle="voice" aria-pressed="true">Voice</button>
+          <button type="button" class="view-toggle" data-panel-toggle="workspace" aria-pressed="true">Workspace</button>
+          <button type="button" class="view-toggle" data-panel-toggle="conversation" aria-pressed="true">Chat</button>
+          <button type="button" class="view-toggle" data-panel-toggle="diagnostics" aria-pressed="false">Diagnostics</button>
+          <button type="button" class="view-toggle focus-toggle" id="orbFocusButton" aria-pressed="false">Orb Only</button>
+        </div>
+        <div class="top-status-row" aria-label="Bridge and voice readiness">
+          <button type="button" class="mini-status auto-wake-toggle" id="autoWakeToggle" aria-pressed="true">Auto Wake: On</button>
+          <div class="mini-status" id="warmupPill">Voice Warmup: warming</div>
+          <div class="status-pill" id="bridgeStatus">Bridge Offline</div>
+        </div>
+      </div>
+    </header>
+
+    <section class="interface-grid" id="interfaceGrid">
+      <aside class="left-rail" id="leftRail">
+        <section class="system-card glass-panel" data-panel="runtime">
+          <div class="panel-heading compact">
+            <div>
+              <p class="panel-kicker">Runtime</p>
+              <h2>Core Systems</h2>
+            </div>
+            <button type="button" class="panel-close" data-panel-close="runtime" title="Hide runtime panel">Hide</button>
+          </div>
+          <dl class="metric-list">
+            <div><dt>LLM</dt><dd id="llmStatus">unknown</dd></div>
+            <div><dt>STT</dt><dd id="sttStatus">unknown</dd></div>
+            <div><dt>TTS</dt><dd id="ttsStatus">unknown</dd></div>
+            <div><dt>Agents</dt><dd id="agentStatus">0</dd></div>
+          </dl>
+        </section>
+
+        <section class="voice-card glass-panel" data-panel="voice" aria-label="Jarvis voice controls">
+          <div class="panel-heading compact">
+            <div>
+              <p class="panel-kicker">Voice</p>
+              <h2>Conversation Control</h2>
+            </div>
+            <div class="panel-actions">
+              <span class="voice-chip" id="voiceMode">idle</span>
+              <button type="button" class="panel-close" data-panel-close="voice" title="Hide voice panel">Hide</button>
+            </div>
+          </div>
+          <div class="voice-control-panel">
+            <button id="voiceOnceButton" class="primary-action">Listen Once</button>
+            <button id="sleepWakeButton">Start Sleep/Wake</button>
+            <button id="stopVoiceButton" class="danger-action">Stop Voice</button>
+          </div>
+          <div class="voice-status-card">
+            <span><strong>Status</strong><em id="voiceStatus">Ready.</em></span>
+            <span><strong>Heard</strong><em id="voiceTranscript">none yet</em></span>
+            <span><strong>Warmup</strong><em id="voiceWarmup">warming</em></span>
+          </div>
+        </section>
+
+        <section class="workspace-card glass-panel" data-panel="workspace">
+          <div class="panel-heading compact">
+            <div>
+              <p class="panel-kicker">Workspace</p>
+              <h2>Available Panels</h2>
+            </div>
+            <button type="button" class="panel-close" data-panel-close="workspace" title="Hide workspace panel">Hide</button>
+          </div>
+          <ul class="panel-list" id="panelList"></ul>
+          <div class="action-card-list" id="actionCardList" aria-live="polite"></div>
+        </section>
+      </aside>
+
+      <section class="core-stage glass-panel" aria-label="Jarvis core interface">
+        <div class="stage-background">
+          <div class="grid-scan"></div>
+          <div class="radar-sweep"></div>
+        </div>
+        <div class="orb-wrap" aria-label="Jarvis orb visual state">
+          <div class="orb-halo halo-a"></div>
+          <div class="orb-halo halo-b"></div>
+          <div class="orb-halo halo-c"></div>
+          <div class="orb-ring ring-a"></div>
+          <div class="orb-ring ring-b"></div>
+          <div class="orb-ring ring-c"></div>
+          <div class="voice-wave wave-a"></div>
+          <div class="voice-wave wave-b"></div>
+          <div class="particle-field" id="particleField"></div>
+          <div class="orb-core">
+            <div class="orb-shadow"></div>
+            <div class="orb-sphere">
+              <div class="orb-glass"></div>
+              <div class="orb-light"></div>
+              <div class="orb-inner"></div>
+            </div>
+          </div>
+        </div>
+        <div class="orb-speech-caption" id="orbSpeechCaption" aria-live="polite">
+          <p class="caption-text" id="orbCaptionText"></p>
+        </div>
+        <div class="state-readout">
+          <p class="state-label" id="stateLabel">Sleep Mode</p>
+          <p class="state-message" id="stateMessage">Waiting for wake phrase.</p>
+        </div>
+        <div class="system-strip" aria-label="Current live status">
+          <span id="stripBridge">bridge: offline</span>
+          <span id="stripVoice">voice: idle</span>
+          <span id="stripWarmup">warmup: warming</span>
+        </div>
+      </section>
+
+      <aside class="conversation-dock glass-panel" data-panel="conversation">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Conversation</p>
+            <h2>Talk to Jarvis</h2>
+          </div>
+          <div class="panel-actions">
+            <button id="refreshButton" class="ghost-action">Refresh</button>
+            <button type="button" class="panel-close" data-panel-close="conversation" title="Hide conversation panel">Hide</button>
+          </div>
+        </div>
+        <div class="chat-log" id="chatLog" aria-live="polite"></div>
+        <form class="command-form" id="commandForm">
+          <input id="commandInput" type="text" placeholder="Type a command to Jarvis..." autocomplete="off">
+          <button type="submit">Send</button>
+        </form>
+      </aside>
+    </section>
+
+    <section class="diagnostics-drawer glass-panel" data-panel="diagnostics" aria-label="Diagnostics and live event hooks">
+      <button id="diagnosticsToggle" class="drawer-toggle" type="button">Show Diagnostics</button>
+      <div class="diagnostics-content">
+        <div class="panel-heading compact">
+          <div>
+            <p class="panel-kicker">Diagnostics</p>
+            <h2>Live Event Stream</h2>
+          </div>
+          <div class="panel-actions">
+            <p class="muted small">Debug hooks stay out of the main interface until you need them.</p>
+            <button type="button" class="panel-close" data-panel-close="diagnostics" title="Hide diagnostics panel">Hide</button>
+          </div>
+        </div>
+        <div class="events-log" id="eventsLog"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.6"
+APP_SHELL_VERSION = "0.3.8"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -127,7 +127,20 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "normal_memory_secret_blocking",
         "sensitive_chat_archive_redaction",
         "sensitive_ui_history_redaction",
+        "memory_review_panel",
+        "ranked_memory_review_bullets",
+        "spoken_memory_review_summary_control",
         "memory_log_hygiene_redaction",
+        "memory_review_internal_label_cleanup",
+        "memory_review_duplicate_relationship_cleanup",
+        "dockable_workspace_panels",
+        "resizable_workspace_panels",
+        "persistent_panel_layouts",
+        "floating_panel_popouts",
+        "saved_workspace_layout_presets",
+        "panel_lock_mode",
+        "panel_command_palette",
+        "multi_monitor_panel_popouts",
     )
 
 

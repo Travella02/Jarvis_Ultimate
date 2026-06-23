@@ -9,6 +9,8 @@ const DEFAULT_STATE = {
 const PANEL_KEYS = ['runtime', 'voice', 'workspace', 'conversation', 'diagnostics'];
 const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v021';
 const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v021';
+const PANEL_LAYOUT_STORAGE_KEY = 'jarvis.appShell.panelLayout.v038';
+const PANEL_LAYOUT_LOCK_STORAGE_KEY = 'jarvis.appShell.panelLayoutLocked.v038';
 
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
@@ -21,6 +23,10 @@ let manualVoiceStopRequested = false;
 let refreshTimer = null;
 let refreshInFlight = false;
 let panelVisibility = loadPanelVisibility();
+let panelLayout = loadPanelLayout();
+let layoutLocked = loadLayoutLocked();
+const poppedPanelWindows = new Map();
+let layoutToastTimer = null;
 let stateFadeTimer = null;
 let activeVisualState = normalizeState(DEFAULT_STATE.avatar.state);
 let orbCaptionTarget = '';
@@ -86,6 +92,10 @@ const els = {
   voiceWarmup: document.getElementById('voiceWarmup'),
   autoWakeToggle: document.getElementById('autoWakeToggle'),
   orbFocusButton: document.getElementById('orbFocusButton'),
+  layoutLockButton: document.getElementById('layoutLockButton'),
+  layoutResetButton: document.getElementById('layoutResetButton'),
+  layoutPresetSelect: document.getElementById('layoutPresetSelect'),
+  panelCommandInput: document.getElementById('panelCommandInput'),
   panelToggleButtons: Array.from(document.querySelectorAll('[data-panel-toggle]')),
   panelCloseButtons: Array.from(document.querySelectorAll('[data-panel-close]'))
 };
@@ -297,6 +307,7 @@ function renderBodyClasses(nextState = lastState.avatar?.state || DEFAULT_STATE.
   if (wasFading) classes.push('state-fading');
   classes.push(diagnosticsOpen ? 'diagnostics-open' : 'diagnostics-collapsed');
   if (orbFocus) classes.push('orb-focus');
+  classes.push(layoutLocked ? 'layout-locked' : 'layout-unlocked');
   if (leftRailEmpty()) classes.push('left-rail-empty');
   for (const key of PANEL_KEYS) {
     if (!panelVisibility[key]) classes.push(`panel-${key}-hidden`);
@@ -318,7 +329,12 @@ function updatePanelControls() {
     els.autoWakeToggle.setAttribute('aria-pressed', String(autoSleepWakeEnabled));
     els.autoWakeToggle.textContent = `Auto Wake: ${autoSleepWakeEnabled ? 'On' : 'Off'}`;
   }
+  if (els.layoutLockButton) {
+    els.layoutLockButton.setAttribute('aria-pressed', String(layoutLocked));
+    els.layoutLockButton.textContent = `Layout: ${layoutLocked ? 'Locked' : 'Unlocked'}`;
+  }
 }
+
 
 function setVisualState(state, message, label) {
   const next = normalizeState(state);
@@ -355,12 +371,44 @@ function renderVoice(voice) {
 }
 
 
+function renderMemoryReviewCard(card) {
+  const payload = card.payload || {};
+  const items = payload.items || [];
+  const status = payload.status || 'ready';
+  const subject = payload.display_subject || payload.subject || '';
+  const emptyMessage = payload.empty_message || 'No memory review items found yet.';
+  const listHtml = items.length
+    ? `<ol class="memory-review-list">${items.map((item, index) => {
+        const source = item.source ? readable(item.source) : 'Memory';
+        const category = item.category ? readable(item.category) : '';
+        const importance = item.importance ? `Importance ${escapeHtml(String(item.importance))}` : '';
+        const meta = [source, category, importance].filter(Boolean).join(' · ');
+        return `<li>`
+          + `<span class="memory-review-rank">${index + 1}</span>`
+          + `<div class="memory-review-body">`
+          + `<strong>${escapeHtml(item.text || '')}</strong>`
+          + `${meta ? `<em>${escapeHtml(meta)}</em>` : ''}`
+          + `</div>`
+          + `</li>`;
+      }).join('')}</ol>`
+    : `<p class="memory-review-empty">${escapeHtml(emptyMessage)}</p>`;
+  return `<article class="ability-action-card memory-review-card status-${escapeHtml(status)}">`
+    + `<span class="action-kicker">Memory Review</span>`
+    + `<strong>${escapeHtml(card.title || 'Memory Review')}</strong>`
+    + `${subject ? `<em>${escapeHtml(subject)}</em>` : ''}`
+    + listHtml
+    + `</article>`;
+}
+
 function renderActionCards(cards) {
   if (!els.actionCardList) return;
   const recentCards = (cards || []).slice(-5).reverse();
   els.actionCardList.innerHTML = recentCards.length
     ? recentCards.map(card => {
         const payload = card.payload || {};
+        if ((card.type || payload.panel_type) === 'memory_review') {
+          return renderMemoryReviewCard(card);
+        }
         const status = payload.status || 'ready';
         const target = payload.target || '';
         const message = payload.message || '';
@@ -436,6 +484,8 @@ function renderState(snapshot) {
     : '<li>No panels registered yet.</li>';
 
   renderActionCards(workspace.workspace_cards || []);
+  applyPanelLayout();
+  refreshAllPopouts();
 
   const chatShouldAutoScroll = !isChatScrollLocked() && isNearScrollBottom(els.chatLog);
   const chatPreviousScrollTop = els.chatLog ? els.chatLog.scrollTop : 0;
@@ -613,6 +663,398 @@ function toggleAutoSleepWake() {
   maybeAutoStartSleepWake(lastState);
 }
 
+
+function loadPanelLayout() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PANEL_LAYOUT_STORAGE_KEY) || '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function savePanelLayout() {
+  localStorage.setItem(PANEL_LAYOUT_STORAGE_KEY, JSON.stringify(panelLayout));
+}
+
+function loadLayoutLocked() {
+  const saved = localStorage.getItem(PANEL_LAYOUT_LOCK_STORAGE_KEY);
+  return saved === null ? false : saved === 'true';
+}
+
+function saveLayoutLocked() {
+  localStorage.setItem(PANEL_LAYOUT_LOCK_STORAGE_KEY, String(layoutLocked));
+}
+
+function layoutPanels() {
+  return Array.from(document.querySelectorAll('[data-layout-panel]'));
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function panelKeyFromElement(element) {
+  return element?.dataset?.layoutPanel || '';
+}
+
+function findLayoutPanel(key) {
+  return document.querySelector(`[data-layout-panel="${CSS.escape(key)}"]`);
+}
+
+function ensurePanelLayoutChrome(panel) {
+  if (!panel || panel.dataset.layoutReady === 'true') return;
+  panel.dataset.layoutReady = 'true';
+  panel.classList.add('dockable-panel');
+  const key = panelKeyFromElement(panel);
+  const heading = panel.querySelector('.panel-heading') || panel;
+  heading.classList.add('panel-drag-handle');
+  let actions = heading.querySelector('.panel-actions');
+  if (!actions) {
+    actions = document.createElement('div');
+    actions.className = 'panel-actions';
+    heading.appendChild(actions);
+  }
+  const layoutActions = document.createElement('span');
+  layoutActions.className = 'panel-layout-actions';
+  layoutActions.innerHTML = [
+    `<button type="button" class="panel-layout-button" data-layout-action="minimize" data-layout-target="${escapeHtml(key)}" title="Minimize or restore this panel">Min</button>`,
+    `<button type="button" class="panel-layout-button" data-layout-action="dock" data-layout-target="${escapeHtml(key)}" title="Dock this panel back into the main layout">Dock</button>`,
+    `<button type="button" class="panel-layout-button" data-layout-action="popout" data-layout-target="${escapeHtml(key)}" title="Pop this panel into its own window">Pop</button>`
+  ].join('');
+  actions.appendChild(layoutActions);
+  const resize = document.createElement('span');
+  resize.className = 'panel-resize-handle';
+  resize.setAttribute('aria-hidden', 'true');
+  panel.appendChild(resize);
+}
+
+function sanitizeLayoutRecord(record) {
+  const width = clamp(Number(record?.width || 340), 240, Math.max(260, window.innerWidth - 20));
+  const height = clamp(Number(record?.height || 240), 58, Math.max(120, window.innerHeight - 20));
+  return {
+    mode: record?.mode === 'floating' ? 'floating' : 'docked',
+    x: clamp(Number(record?.x || 16), 8, Math.max(8, window.innerWidth - width - 8)),
+    y: clamp(Number(record?.y || 96), 8, Math.max(8, window.innerHeight - height - 8)),
+    width,
+    height,
+    minimized: Boolean(record?.minimized),
+    popped: Boolean(record?.popped)
+  };
+}
+
+function applyPanelLayout() {
+  for (const panel of layoutPanels()) {
+    ensurePanelLayoutChrome(panel);
+    const key = panelKeyFromElement(panel);
+    const record = sanitizeLayoutRecord(panelLayout[key] || {});
+    panel.classList.toggle('panel-minimized', record.minimized);
+    panel.classList.toggle('panel-popped', record.popped && poppedPanelWindows.has(key));
+    if (record.mode === 'floating') {
+      panel.classList.add('layout-floating');
+      panel.style.left = `${record.x}px`;
+      panel.style.top = `${record.y}px`;
+      panel.style.width = `${record.width}px`;
+      panel.style.height = `${record.height}px`;
+    } else {
+      panel.classList.remove('layout-floating');
+      panel.style.left = '';
+      panel.style.top = '';
+      panel.style.width = '';
+      panel.style.height = '';
+    }
+  }
+  updatePanelControls();
+}
+
+function showLayoutToast(message) {
+  let toast = document.querySelector('.layout-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'layout-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('visible');
+  window.clearTimeout(layoutToastTimer);
+  layoutToastTimer = window.setTimeout(() => toast.classList.remove('visible'), 2200);
+}
+
+function setPanelFloating(panel, rect = panel.getBoundingClientRect()) {
+  const key = panelKeyFromElement(panel);
+  if (!key) return;
+  panelLayout[key] = sanitizeLayoutRecord({
+    ...(panelLayout[key] || {}),
+    mode: 'floating',
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height
+  });
+  savePanelLayout();
+  applyPanelLayout();
+}
+
+function dockPanel(key) {
+  if (!key) return;
+  panelLayout[key] = { ...(panelLayout[key] || {}), mode: 'docked', popped: false };
+  const popped = poppedPanelWindows.get(key);
+  if (popped && !popped.closed) popped.close();
+  poppedPanelWindows.delete(key);
+  savePanelLayout();
+  applyPanelLayout();
+  showLayoutToast(`${titleCase(key)} docked.`);
+}
+
+function togglePanelMinimized(key) {
+  if (!key) return;
+  const current = panelLayout[key] || {};
+  panelLayout[key] = { ...current, minimized: !current.minimized };
+  savePanelLayout();
+  applyPanelLayout();
+}
+
+function resetPanelLayout() {
+  panelLayout = {};
+  localStorage.removeItem(PANEL_LAYOUT_STORAGE_KEY);
+  for (const [key, popped] of poppedPanelWindows.entries()) {
+    if (popped && !popped.closed) popped.close();
+    poppedPanelWindows.delete(key);
+  }
+  applyPanelLayout();
+  showLayoutToast('Panel layout reset, sir.');
+}
+
+function toggleLayoutLock() {
+  layoutLocked = !layoutLocked;
+  saveLayoutLocked();
+  updatePanelControls();
+  renderBodyClasses(lastState.avatar?.state || DEFAULT_STATE.avatar.state);
+  showLayoutToast(layoutLocked ? 'Panel layout locked.' : 'Panel layout unlocked. Drag and resize panels with the mouse.');
+}
+
+function buildPresetLayout(name) {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const top = 128;
+  const bottom = Math.max(120, h - top - 24);
+  const leftW = Math.max(280, Math.min(360, Math.round(w * 0.23)));
+  const rightW = Math.max(340, Math.min(440, Math.round(w * 0.28)));
+  const centerW = Math.max(420, w - leftW - rightW - 52);
+  if (name === 'minimal') {
+    return {
+      core: { mode: 'floating', x: 18, y: top, width: w - 36, height: h - top - 34 },
+      conversation: { mode: 'floating', x: w - rightW - 20, y: h - 340, width: rightW, height: 320, minimized: true }
+    };
+  }
+  if (name === 'gaming') {
+    return {
+      core: { mode: 'floating', x: leftW + 24, y: top, width: centerW, height: bottom },
+      workspace: { mode: 'floating', x: 18, y: top, width: leftW, height: bottom },
+      conversation: { mode: 'floating', x: w - rightW - 18, y: top, width: rightW, height: bottom },
+      voice: { mode: 'floating', x: 18, y: top, width: leftW, height: 260, minimized: true }
+    };
+  }
+  if (name === 'coding') {
+    return {
+      workspace: { mode: 'floating', x: 18, y: top, width: leftW + 40, height: bottom },
+      core: { mode: 'floating', x: leftW + 72, y: top, width: centerW - 70, height: bottom },
+      conversation: { mode: 'floating', x: w - rightW - 18, y: top, width: rightW, height: bottom },
+      diagnostics: { mode: 'floating', x: leftW + 72, y: h - 210, width: centerW - 70, height: 188, minimized: true }
+    };
+  }
+  if (name === 'music') {
+    return {
+      voice: { mode: 'floating', x: 18, y: top, width: leftW, height: bottom },
+      core: { mode: 'floating', x: leftW + 28, y: top, width: centerW, height: bottom },
+      conversation: { mode: 'floating', x: w - rightW - 18, y: top, width: rightW, height: bottom },
+      workspace: { mode: 'floating', x: 18, y: h - 260, width: leftW, height: 238, minimized: true }
+    };
+  }
+  return {};
+}
+
+function applyLayoutPreset(name) {
+  const preset = buildPresetLayout(name);
+  if (!Object.keys(preset).length) return;
+  panelLayout = { ...panelLayout, ...preset };
+  savePanelLayout();
+  applyPanelLayout();
+  showLayoutToast(`${titleCase(name)} layout applied.`);
+  if (els.layoutPresetSelect) els.layoutPresetSelect.value = '';
+}
+
+function openPanelByName(query) {
+  const wanted = normalizeState(query);
+  if (!wanted) return false;
+  const panels = layoutPanels();
+  const match = panels.find(panel => {
+    const key = panelKeyFromElement(panel);
+    const title = normalizeState(panel.dataset.layoutTitle || key);
+    return key === wanted || title.includes(wanted) || wanted.includes(key);
+  });
+  if (!match) return false;
+  const key = panelKeyFromElement(match);
+  if (PANEL_KEYS.includes(key)) {
+    togglePanel(key, true);
+  }
+  const rect = match.getBoundingClientRect();
+  setPanelFloating(match, rect.width > 0 ? rect : undefined);
+  showLayoutToast(`${match.dataset.layoutTitle || titleCase(key)} opened.`);
+  return true;
+}
+
+function panelPopoutHtml(title, bodyHtml) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${document.querySelector('style[data-popout-style]')?.textContent || ''}</style><link rel="stylesheet" href="renderer/styles.css"></head><body class="popout-body state-${escapeHtml(activeVisualState)}"><main class="glass-panel popout-shell"><div class="panel-heading"><div><p class="panel-kicker">Jarvis Panel</p><h2>${escapeHtml(title)}</h2></div></div><div class="popout-content">${bodyHtml}</div></main></body></html>`;
+}
+
+function refreshPopoutPanel(key) {
+  const popped = poppedPanelWindows.get(key);
+  if (!popped || popped.closed) {
+    poppedPanelWindows.delete(key);
+    if (panelLayout[key]?.popped) {
+      panelLayout[key] = { ...panelLayout[key], popped: false };
+      savePanelLayout();
+    }
+    return;
+  }
+  const panel = findLayoutPanel(key);
+  if (!panel) return;
+  const title = panel.dataset.layoutTitle || titleCase(key);
+  const clone = panel.cloneNode(true);
+  clone.querySelectorAll('.panel-layout-actions,.panel-resize-handle').forEach(node => node.remove());
+  try {
+    popped.document.open();
+    popped.document.write(panelPopoutHtml(title, clone.innerHTML));
+    popped.document.close();
+  } catch (error) {
+    poppedPanelWindows.delete(key);
+  }
+}
+
+function refreshAllPopouts() {
+  for (const key of Array.from(poppedPanelWindows.keys())) refreshPopoutPanel(key);
+}
+
+function popOutPanel(key) {
+  const panel = findLayoutPanel(key);
+  if (!panel) return;
+  const title = panel.dataset.layoutTitle || titleCase(key);
+  const popped = window.open('', `jarvis_panel_${key}`, 'width=460,height=620,resizable=yes,scrollbars=yes');
+  if (!popped) {
+    showLayoutToast('Pop-out was blocked by the app shell.');
+    return;
+  }
+  poppedPanelWindows.set(key, popped);
+  panelLayout[key] = { ...(panelLayout[key] || {}), popped: true };
+  savePanelLayout();
+  refreshPopoutPanel(key);
+  applyPanelLayout();
+  showLayoutToast(`${title} popped out. Move it to any monitor, sir.`);
+}
+
+function beginPanelDrag(event, panel) {
+  if (layoutLocked || event.button !== 0 || event.target.closest('button,input,select,textarea,a')) return;
+  const rect = panel.getBoundingClientRect();
+  const key = panelKeyFromElement(panel);
+  setPanelFloating(panel, rect);
+  const start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  panel.classList.add('is-dragging');
+  panel.setPointerCapture?.(event.pointerId);
+  const move = moveEvent => {
+    const next = sanitizeLayoutRecord({
+      mode: 'floating',
+      x: start.left + moveEvent.clientX - start.x,
+      y: start.top + moveEvent.clientY - start.y,
+      width: start.width,
+      height: start.height,
+      minimized: Boolean(panelLayout[key]?.minimized),
+      popped: Boolean(panelLayout[key]?.popped)
+    });
+    panelLayout[key] = next;
+    panel.style.left = `${next.x}px`;
+    panel.style.top = `${next.y}px`;
+  };
+  const up = () => {
+    panel.classList.remove('is-dragging');
+    savePanelLayout();
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up, { once: true });
+}
+
+function beginPanelResize(event, panel) {
+  if (layoutLocked || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const rect = panel.getBoundingClientRect();
+  const key = panelKeyFromElement(panel);
+  setPanelFloating(panel, rect);
+  const start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  panel.classList.add('is-resizing');
+  const move = moveEvent => {
+    const next = sanitizeLayoutRecord({
+      mode: 'floating',
+      x: start.left,
+      y: start.top,
+      width: start.width + moveEvent.clientX - start.x,
+      height: start.height + moveEvent.clientY - start.y,
+      minimized: false,
+      popped: Boolean(panelLayout[key]?.popped)
+    });
+    panelLayout[key] = next;
+    panel.style.width = `${next.width}px`;
+    panel.style.height = `${next.height}px`;
+    panel.classList.remove('panel-minimized');
+  };
+  const up = () => {
+    panel.classList.remove('is-resizing');
+    savePanelLayout();
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up, { once: true });
+}
+
+function initPanelLayoutControls() {
+  for (const panel of layoutPanels()) {
+    ensurePanelLayoutChrome(panel);
+    const heading = panel.querySelector('.panel-heading') || panel;
+    const resize = panel.querySelector('.panel-resize-handle');
+    heading.addEventListener('pointerdown', event => beginPanelDrag(event, panel));
+    resize?.addEventListener('pointerdown', event => beginPanelResize(event, panel));
+  }
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-layout-action]');
+    if (!button) return;
+    const key = button.dataset.layoutTarget;
+    const action = button.dataset.layoutAction;
+    if (action === 'minimize') togglePanelMinimized(key);
+    if (action === 'dock') dockPanel(key);
+    if (action === 'popout') popOutPanel(key);
+  });
+  els.layoutLockButton?.addEventListener('click', toggleLayoutLock);
+  els.layoutResetButton?.addEventListener('click', resetPanelLayout);
+  els.layoutPresetSelect?.addEventListener('change', event => applyLayoutPreset(event.target.value));
+  els.panelCommandInput?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const query = els.panelCommandInput.value.trim();
+    if (!query) return;
+    if (!openPanelByName(query)) showLayoutToast(`I could not find a panel named ${query}.`);
+    els.panelCommandInput.value = '';
+  });
+  window.addEventListener('resize', () => {
+    for (const key of Object.keys(panelLayout)) panelLayout[key] = sanitizeLayoutRecord(panelLayout[key]);
+    savePanelLayout();
+    applyPanelLayout();
+  });
+  applyPanelLayout();
+}
+
 async function boot() {
   if (window.jarvisNative?.getConfig) {
     const config = await window.jarvisNative.getConfig();
@@ -647,6 +1089,8 @@ async function boot() {
   for (const button of els.panelCloseButtons) {
     button.addEventListener('click', () => togglePanel(button.dataset.panelClose, false));
   }
+  initPanelLayoutControls();
+
   els.commandForm.addEventListener('submit', event => {
     event.preventDefault();
     const command = els.commandInput.value.trim();

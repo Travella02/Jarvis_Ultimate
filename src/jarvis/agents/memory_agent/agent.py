@@ -12,12 +12,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from jarvis.core.result import JarvisResult
+from jarvis.core.result import JarvisEvent, JarvisResult
 from jarvis.memory.always_on import ChatArchiveStore, MemoryCandidateStore, ShortTermFactStore
 from jarvis.memory.long_term import LongTermMemoryStore
 from jarvis.memory.entities import EntityMemoryStore, normalize_entity_type, normalize_text
 from jarvis.memory.preferences import MemoryPreferenceStore, canonical_category, display_category, infer_memory_category, normalize_policy
 from jarvis.memory.secure_vault import SecureVaultStore, classify_vault_category, is_vault_like
+from jarvis.memory.review import build_memory_review, format_memory_review_spoken
 
 
 class Agent:
@@ -50,6 +51,15 @@ class Agent:
         secure_vault_action = self._extract_secure_vault_action(text)
         if secure_vault_action is not None:
             return self._handle_secure_vault_action(secure_vault, secure_vault_action)
+
+        memory_review_action = self._extract_memory_review_action(text)
+        if memory_review_action is not None:
+            return self._handle_memory_review_action(
+                memory_review_action,
+                long_term=long_term,
+                short_term_facts=short_term_facts,
+                entity_memory=entity_memory,
+            )
 
         if self._is_status(lowered):
             message = "\n\n".join([
@@ -356,6 +366,70 @@ class Agent:
             agent_name=self.name,
             action="memory_help",
             data={"implemented": True, "long_term_memory": long_term.status(), "short_term_facts": short_term_facts.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status(), "entity_memory": entity_memory.status()},
+        )
+
+
+    def _handle_memory_review_action(
+        self,
+        action: dict[str, str],
+        *,
+        long_term: LongTermMemoryStore,
+        short_term_facts: ShortTermFactStore,
+        entity_memory: EntityMemoryStore,
+    ) -> JarvisResult:
+        subject = self._clean_tail(action.get("subject", ""))
+        if not subject:
+            return JarvisResult.ok(
+                "Tell me who or what you want me to review, sir.",
+                agent_name=self.name,
+                action="memory_review_missing_subject",
+                data={},
+            )
+
+        speak_detail = bool(action.get("speak_detail"))
+        review = build_memory_review(
+            subject,
+            long_term=long_term,
+            short_term_facts=short_term_facts,
+            entity_memory=entity_memory,
+            limit=24,
+        )
+        payload = review.to_panel_payload()
+        panel_title = f"Memory Review: {review.display_subject}"
+        if review.items:
+            short_message = f"Here is everything I know about {review.display_subject}, sir."
+        else:
+            short_message = f"I do not have anything saved about {review.display_subject}, sir."
+        message = format_memory_review_spoken(review) if speak_detail and review.items else short_message
+        events = [
+            JarvisEvent(
+                "ui.open_panel",
+                source=self.name,
+                message=panel_title,
+                data={
+                    "panel_id": "memory_review",
+                    "title": panel_title,
+                    "panel_type": "memory_review",
+                    "payload": payload,
+                },
+            ),
+            JarvisEvent(
+                "ui.workspace_card",
+                source=self.name,
+                message=short_message,
+                data={
+                    "card_type": "memory_review",
+                    "title": panel_title,
+                    "payload": payload,
+                },
+            ),
+        ]
+        return JarvisResult.ok(
+            message,
+            agent_name=self.name,
+            action="memory_review_speak" if speak_detail else "memory_review_show",
+            data={"memory_review": payload, "speak_detail": speak_detail},
+            events=events,
         )
 
 
@@ -1066,6 +1140,22 @@ class Agent:
     def _is_future_screen_settings_request(self, memory_text: str) -> bool:
         lowered = normalize_text(memory_text)
         return lowered in {"these settings", "this setting", "these game settings", "these app settings", "these application settings", "current settings", "this screen"}
+
+    def _extract_memory_review_action(self, text: str) -> dict[str, str] | None:
+        cleaned = " ".join(str(text or "").strip().split()).strip(" .?!\"'")
+        if not cleaned:
+            return None
+        patterns = [
+            (r"^(?:jarvis,?\s*)?(show|display|pull\s+up|open)\s+(?:me\s+)?(?:everything|all)\s+(?:that\s+)?(?:you\s+)?(?:remember|know|have\s+saved)\s+about\s+(.+)$", False),
+            (r"^(?:jarvis,?\s*)?(show|display|pull\s+up|open)\s+(?:my\s+)?(?:full\s+)?memory\s+(?:review|profile|panel)\s+(?:for|about)\s+(.+)$", False),
+            (r"^(?:jarvis,?\s*)?(tell|read|speak)\s+(?:me\s+)?(?:everything|all)\s+(?:that\s+)?(?:you\s+)?(?:remember|know|have\s+saved)\s+about\s+(.+)$", True),
+            (r"^(?:jarvis,?\s*)?(tell|read|speak)\s+(?:my\s+)?(?:full\s+)?memory\s+(?:review|profile)\s+(?:for|about)\s+(.+)$", True),
+        ]
+        for pattern, speak_detail in patterns:
+            match = re.search(pattern, cleaned, flags=re.IGNORECASE)
+            if match:
+                return {"action": "review", "subject": self._clean_tail(match.group(2)), "speak_detail": "1" if speak_detail else ""}
+        return None
 
     def _extract_relationship_action(self, text: str) -> dict[str, str] | None:
         cleaned = " ".join(str(text or "").strip().split()).strip(" .?!\"'")

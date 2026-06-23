@@ -1,56 +1,43 @@
-# Jarvis Ultimate
+# Jarvis Ultimate 0.3.3a App Agent Test-Isolation Hotfix
 
-Jarvis Ultimate is a local-first desktop AI assistant project with a Python runtime, Electron app shell, local LLM integration, voice input/output, modular agents, and an expanding always-on memory system.
+Run the installer from the Jarvis project root:
 
-## Current milestone
+```powershell
+python apply_0_3_3a_app_agent_test_isolation_hotfix.py
+```
 
-Current version: **0.3.6 — Sensitive Chat Redaction + Memory Log Hygiene**
-
-This version keeps normal memory useful while preventing sensitive values from leaking into local chat archives, memory candidate metadata, UI chat history, and JSONL logs. Passwords, API keys, account numbers, recovery codes, and similar values are routed away from normal memory toward the future Secure Vault / Password Manager Agent path.
-
-## Core capabilities
-
-- Local-first Jarvis runtime
-- Electron native app shell
-- LM Studio-compatible local LLM provider
-- Faster Whisper STT
-- Kokoro TTS
-- Sleep/wake voice loop
-- Typed input voice parity
-- App Agent with launch/close/focus/alias support
-- Long-term memory
-- Short-term fact memory
-- Chat archive memory
-- Memory candidate review
-- Scalable entity memory
-- Entity aliases, merges, and phonetic name recovery
-- Relationship memory graph
-- Memory preferences and auto-remember controls
-- Sensitive memory secure-vault routing foundation
-- Sensitive chat/log redaction hygiene
-
-## Testing
-
-Run:
+Then run:
 
 ```powershell
 python -m unittest discover -s tests -v
-```
-
-## Start Jarvis
-
-```powershell
 python scripts\start_jarvis_app.py
 ```
 
-Or double-click:
+This patch only fixes App Agent launch-verification tests that could fail when Discord was already installed or running locally.
 
-```powershell
-Start_Jarvis_Ultimate_App.bat
+## Latest milestone: 0.3.7 Memory Review Panel
+
+Jarvis can now show a ranked visual review of what he remembers about a person, pet, project, app, place, or topic. For visual review requests, Jarvis keeps the spoken response short and opens a Memory Review card/panel with bullet points ranked from most important to least important.
+
+Example:
+
+```text
+Show everything you remember about Kenleigh.
 ```
 
-## Privacy and memory notes
+Jarvis should say:
 
-Jarvis stores memory locally by default. Normal memory should be used for user preferences, projects, people, pets, apps, settings, relationships, and daily context. Sensitive values should not be saved in normal memory. The 0.3.6 redaction layer masks sensitive values before they are written into chat archives, UI history state, memory candidate metadata, and JSONL logs.
+```text
+Here is everything I know about Kenleigh, sir.
+```
 
-Full encrypted Secure Vault / Password Manager Agent storage is not implemented yet. Until that dedicated feature exists, Jarvis routes sensitive save requests away from normal memory and explains that encrypted local vault storage is not enabled.
+The detailed list appears in the workspace panel instead of being spoken aloud. To make Jarvis read the full list, ask:
+
+```text
+Speak everything you remember about Kenleigh.
+```
+
+
+## Latest milestone: 0.3.8 Dockable Workspace Panels
+
+Jarvis now supports a more flexible workspace. Panels can be dragged, resized, minimized, docked, reset, and popped out into separate windows for multi-monitor workflows. Layouts are stored locally and restored on startup. The app shell also includes quick layout presets for Gaming, Coding, Music, and Minimal workflows.

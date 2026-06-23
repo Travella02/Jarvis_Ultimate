@@ -22,6 +22,16 @@
           <button type="button" class="view-toggle" data-panel-toggle="conversation" aria-pressed="true">Chat</button>
           <button type="button" class="view-toggle" data-panel-toggle="diagnostics" aria-pressed="false">Diagnostics</button>
           <button type="button" class="view-toggle focus-toggle" id="orbFocusButton" aria-pressed="false">Orb Only</button>
+          <button type="button" class="view-toggle layout-lock-toggle" id="layoutLockButton" aria-pressed="false">Layout: Unlocked</button>
+          <button type="button" class="view-toggle" id="layoutResetButton">Reset Layout</button>
+          <select class="layout-preset-select" id="layoutPresetSelect" aria-label="Saved layout preset">
+            <option value="">Layouts</option>
+            <option value="gaming">Gaming</option>
+            <option value="coding">Coding</option>
+            <option value="music">Music</option>
+            <option value="minimal">Minimal</option>
+          </select>
+          <input class="panel-command-input" id="panelCommandInput" type="search" placeholder="Open panel..." aria-label="Open panel by name">
         </div>
         <div class="top-status-row" aria-label="Bridge and voice readiness">
           <button type="button" class="mini-status auto-wake-toggle" id="autoWakeToggle" aria-pressed="true">Auto Wake: On</button>
@@ -33,7 +43,7 @@
 
     <section class="interface-grid" id="interfaceGrid">
       <aside class="left-rail" id="leftRail">
-        <section class="system-card glass-panel" data-panel="runtime">
+        <section class="system-card glass-panel" data-panel="runtime" data-layout-panel="runtime" data-layout-title="Runtime">
           <div class="panel-heading compact">
             <div>
               <p class="panel-kicker">Runtime</p>
@@ -49,7 +59,7 @@
           </dl>
         </section>
 
-        <section class="voice-card glass-panel" data-panel="voice" aria-label="Jarvis voice controls">
+        <section class="voice-card glass-panel" data-panel="voice" data-layout-panel="voice" data-layout-title="Voice" aria-label="Jarvis voice controls">
           <div class="panel-heading compact">
             <div>
               <p class="panel-kicker">Voice</p>
@@ -72,7 +82,7 @@
           </div>
         </section>
 
-        <section class="workspace-card glass-panel" data-panel="workspace">
+        <section class="workspace-card glass-panel" data-panel="workspace" data-layout-panel="workspace" data-layout-title="Workspace">
           <div class="panel-heading compact">
             <div>
               <p class="panel-kicker">Workspace</p>
@@ -85,7 +95,7 @@
         </section>
       </aside>
 
-      <section class="core-stage glass-panel" aria-label="Jarvis core interface">
+      <section class="core-stage glass-panel" data-layout-panel="core" data-layout-title="Core Orb" aria-label="Jarvis core interface">
         <div class="stage-background">
           <div class="grid-scan"></div>
           <div class="radar-sweep"></div>
@@ -123,7 +133,7 @@
         </div>
       </section>
 
-      <aside class="conversation-dock glass-panel" data-panel="conversation">
+      <aside class="conversation-dock glass-panel" data-panel="conversation" data-layout-panel="conversation" data-layout-title="Conversation">
         <div class="panel-heading">
           <div>
             <p class="panel-kicker">Conversation</p>
@@ -142,7 +152,7 @@
       </aside>
     </section>
 
-    <section class="diagnostics-drawer glass-panel" data-panel="diagnostics" aria-label="Diagnostics and live event hooks">
+    <section class="diagnostics-drawer glass-panel" data-panel="diagnostics" data-layout-panel="diagnostics" data-layout-title="Diagnostics" aria-label="Diagnostics and live event hooks">
       <button id="diagnosticsToggle" class="drawer-toggle" type="button">Show Diagnostics</button>
       <div class="diagnostics-content">
         <div class="panel-heading compact">
