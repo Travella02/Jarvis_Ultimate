@@ -440,3 +440,52 @@ Current status:
 - Entity phonetic aliases are working for Kenleigh / Ken Lee style STT mistakes.
 - Relationship graph queries are working, but continue testing real-world speech variants before expanding further.
 - Next recommended memory update: memory preferences and auto-remember controls, or STT vocabulary/name biasing for frequently misheard personal names.
+
+## 0.3.5 Memory Preferences + Auto-Remember Controls
+
+This milestone adds user-controlled memory policy rules so Jarvis can decide whether possible memories should be saved automatically, queued for review, kept temporarily, or blocked.
+
+Changes:
+- Added `MemoryPreferenceStore` at `src/jarvis/memory/preferences.py`.
+- Added category-based policies: `auto`, `ask`, `short_term`, and `never`.
+- Added memory preference commands such as `Show my memory preferences`, `Remember project rules automatically`, `Ask me before remembering people`, `Never remember financial information`, and `Keep daily life temporary`.
+- Auto-capture now checks memory preferences before saving long-term memory, short-term memory, or memory candidates.
+- Future screen-aware setting saves are policy-ready with categories like `app_settings`, `game_settings`, and `screen_context`.
+- Sensitive categories such as financial data and secrets default to `never` for automatic saving.
+
+Validation:
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 397 tests in 5.600s — OK`
+
+## 0.3.5a Sensitive Memory Vault Routing Foundation
+
+This hotfix follows 0.3.5 before committing the memory preference work. It keeps normal memory safe while preparing a future local encrypted Secure Vault / Password Manager Agent.
+
+Changes:
+- Added `SecureVaultStore` at `src/jarvis/memory/secure_vault.py`.
+- Added sensitive-memory classification for passwords, API keys, access tokens, recovery codes, private keys, Wi-Fi passwords, and financial/account data.
+- Explicit sensitive save requests are routed away from normal memory and into the secure-vault path.
+- Because encrypted local vault storage is not implemented/enabled yet, Jarvis does not store raw secret values. He responds that secure vault routing is ready but encrypted storage is not enabled yet.
+- Normal memory, entity memory, short-term memory, chat archive summaries, and memory candidates should not receive raw secrets through this route.
+- Added secure vault status support and app-shell snapshot status.
+- Added config fields for future vault enablement: `memory_secure_vault_enabled`, `memory_secure_vault_path`, and `memory_secure_vault_encrypted_storage_ready`.
+- App shell capabilities now include `sensitive_memory_secure_vault_routing`, `password_manager_agent_foundation`, and `normal_memory_secret_blocking`.
+- App shell version is now `0.3.5a`.
+
+Manual examples:
+- `Remember that my password is hunter2.` should not save to normal memory and should say encrypted vault storage is not enabled yet.
+- `Remember that my bank account number is 123456789.` should route to the vault path and not long-term memory.
+- `Secure vault status.` should explain that vault routing is ready but encrypted vault storage is not enabled yet.
+
+Current status after 0.3.5a:
+- Jarvis has safe policy controls for normal memory.
+- Jarvis has routing foundations for a future Password Manager / Secure Vault Agent.
+- Full encrypted vault storage is not implemented yet and should be treated as a future dedicated security feature.
+
+Validation:
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 405 tests in 5.385s — OK`
+
+Next recommended update:
+- Commit 0.3.5 + 0.3.5a together after manual testing.
+- Then continue with `0.3.6 Memory Review Dashboard / Cleanup Commands`, or start a dedicated `Secure Vault Agent` milestone if password-manager behavior becomes the priority.

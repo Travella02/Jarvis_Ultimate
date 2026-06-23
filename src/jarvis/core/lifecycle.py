@@ -19,6 +19,8 @@ from jarvis.memory.short_term import ShortTermMemory
 from jarvis.memory.long_term import LongTermMemoryStore
 from jarvis.memory.always_on import ChatArchiveStore, MemoryAutoCaptureEngine, MemoryCandidateStore, MemoryMaintenance, ShortTermFactStore
 from jarvis.memory.entities import EntityMemoryStore
+from jarvis.memory.preferences import MemoryPreferenceStore
+from jarvis.memory.secure_vault import SecureVaultStore
 from jarvis.providers.llm.base import LLMStreamCallback
 from jarvis.providers.llm.factory import create_llm_provider
 from jarvis.providers.tts.manager import TTSManager, format_tts_result
@@ -101,6 +103,20 @@ class JarvisRuntime:
             max_records=getattr(self.config, "memory_entity_max_records", 2000),
             inject_limit=getattr(self.config, "memory_entity_inject_limit", 5),
         )
+        configured_memory_preferences_path = Path(str(getattr(self.config, "memory_preferences_path", "data/memory/memory_preferences.json")))
+        if not configured_memory_preferences_path.is_absolute():
+            configured_memory_preferences_path = self.config.project_root / configured_memory_preferences_path
+        self.memory_preferences = MemoryPreferenceStore(
+            path=configured_memory_preferences_path,
+        )
+        configured_secure_vault_path = Path(str(getattr(self.config, "memory_secure_vault_path", "data/secure_vault/vault.json")))
+        if not configured_secure_vault_path.is_absolute():
+            configured_secure_vault_path = self.config.project_root / configured_secure_vault_path
+        self.secure_vault = SecureVaultStore(
+            enabled=getattr(self.config, "memory_secure_vault_enabled", False),
+            path=configured_secure_vault_path,
+            encrypted_storage_ready=getattr(self.config, "memory_secure_vault_encrypted_storage_ready", False),
+        )
         self.memory_auto_capture = MemoryAutoCaptureEngine(
             min_importance=getattr(self.config, "memory_auto_capture_min_importance", 2),
             llm_review_enabled=getattr(self.config, "memory_auto_capture_llm_review", False),
@@ -132,6 +148,8 @@ class JarvisRuntime:
             chat_archive=self.chat_archive,
             memory_candidates=self.memory_candidates,
             entity_memory=self.entity_memory,
+            memory_preferences=self.memory_preferences,
+            secure_vault=self.secure_vault,
             ability_registry=self.ability_registry,
         )
         self.started = True
@@ -159,6 +177,8 @@ class JarvisRuntime:
                 "chat_archive": self.chat_archive.status(),
                 "memory_candidates": self.memory_candidates.status(),
                 "entity_memory": self.entity_memory.status(),
+                "memory_preferences": self.memory_preferences.status(),
+                "secure_vault": self.secure_vault.status(),
                 "memory_auto_capture": {
                     "enabled": getattr(self.config, "memory_auto_capture_enabled", True),
                     "llm_review": getattr(self.config, "memory_auto_capture_llm_review", False),
@@ -1320,18 +1340,84 @@ class JarvisRuntime:
         if not text:
             return
 
+        preference_decision = self.memory_preferences.decide(
+            text,
+            category=str(decision.get("category") or "general"),
+            entity_hint=decision.get("entity"),
+            suggested_tier=tier,
+            explicit=False,
+        )
+        if timing is not None:
+            timing.mark("memory.preference_decision", **preference_decision.to_dict())
+
+        if preference_decision.action == "ignore":
+            self.events.emit(
+                "memory.auto_capture_ignored_by_preferences",
+                source="lifecycle",
+                message="Memory auto-capture ignored by user preferences.",
+                data={"preference_decision": preference_decision.to_dict(), "secure_vault": self.secure_vault.status() if hasattr(self, "secure_vault") else {}},
+            )
+            return
+
+        tags = decision.get("tags") if isinstance(decision.get("tags"), list) else []
+        category = preference_decision.category or str(decision.get("category") or "general")
+        importance = int(decision.get("importance") or 2)
+        confidence = float(decision.get("confidence") or 0.5)
+
+        if preference_decision.action == "save":
+            long_record = self.long_term_memory.add(
+                text,
+                category=category,
+                tags=tags,
+                source="auto_capture",
+                importance=importance,
+                metadata={"agent_name": result.agent_name, "action": result.action, "intent": result.data.get("intent"), "entity_hint": decision.get("entity"), "memory_preference": preference_decision.to_dict()},
+            )
+            entity_record = None
+            try:
+                entity_record = self.entity_memory.upsert_from_text(
+                    text,
+                    source="auto_capture",
+                    metadata={"source_command": command, "memory_preference": preference_decision.to_dict()},
+                    confidence=confidence,
+                )
+            except Exception:
+                entity_record = None
+            if long_record is not None and timing is not None:
+                timing.mark("memory.auto_long_term_saved", memory_id=long_record.id)
+            self.events.emit(
+                "memory.auto_long_term_saved",
+                source="lifecycle",
+                message="Memory saved automatically by user preference.",
+                data={"memory_id": getattr(long_record, "id", ""), "entity_id": getattr(entity_record, "id", ""), "preference_decision": preference_decision.to_dict()},
+            )
+            return
+
+        if preference_decision.action == "short_term" and getattr(self.config, "memory_auto_short_term_enabled", True):
+            short_record = self.short_term_facts.add(
+                text,
+                category=category,
+                tags=tags,
+                source="auto_capture",
+                importance=importance,
+                metadata={"auto_captured": True, "memory_preference": preference_decision.to_dict()},
+            )
+            if short_record is not None and timing is not None:
+                timing.mark("memory.auto_short_term_saved", short_term_id=short_record.id)
+            return
+
         record = self.memory_candidates.add(
             text,
             suggested_tier=tier,
-            category=str(decision.get("category") or "general"),
-            tags=decision.get("tags") if isinstance(decision.get("tags"), list) else [],
-            importance=int(decision.get("importance") or 2),
-            confidence=float(decision.get("confidence") or 0.5),
-            reason=str(decision.get("reason") or "auto-captured for review"),
+            category=category,
+            tags=tags,
+            importance=importance,
+            confidence=confidence,
+            reason=str(decision.get("reason") or preference_decision.reason or "auto-captured for review"),
             source="auto_capture",
             source_user=command,
             source_assistant=result.message,
-            metadata={"agent_name": result.agent_name, "action": result.action, "intent": result.data.get("intent"), "entity_hint": decision.get("entity")},
+            metadata={"agent_name": result.agent_name, "action": result.action, "intent": result.data.get("intent"), "entity_hint": decision.get("entity"), "memory_preference": preference_decision.to_dict()},
         )
         if record is not None and timing is not None:
             timing.mark("memory.candidate_saved", candidate_id=record.id, suggested_tier=record.suggested_tier)
@@ -1340,20 +1426,8 @@ class JarvisRuntime:
                 "memory.candidate_saved",
                 source="lifecycle",
                 message="Memory candidate saved for review.",
-                data={"candidate_id": record.id, "suggested_tier": record.suggested_tier, "confidence": record.confidence},
+                data={"candidate_id": record.id, "suggested_tier": record.suggested_tier, "confidence": record.confidence, "preference_decision": preference_decision.to_dict()},
             )
-
-        if tier == "short_term" and getattr(self.config, "memory_auto_short_term_enabled", True):
-            short_record = self.short_term_facts.add(
-                text,
-                category=str(decision.get("category") or "general"),
-                tags=decision.get("tags") if isinstance(decision.get("tags"), list) else [],
-                source="auto_capture",
-                importance=int(decision.get("importance") or 2),
-                metadata={"candidate_id": getattr(record, "id", ""), "auto_captured": True},
-            )
-            if short_record is not None and timing is not None:
-                timing.mark("memory.auto_short_term_saved", short_term_id=short_record.id)
 
     def _run_memory_maintenance_if_due(self, *, timing: TurnTimer | None = None) -> None:
         """Run lightweight memory maintenance without relying on restarts."""

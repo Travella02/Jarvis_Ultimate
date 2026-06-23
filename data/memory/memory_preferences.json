@@ -1,0 +1,27 @@
+{
+  "policies": {
+    "app_settings": "ask",
+    "apps": "auto",
+    "daily_life": "short_term",
+    "devices": "ask",
+    "financial": "never",
+    "financial_information": "never",
+    "game_settings": "ask",
+    "general": "ask",
+    "health": "ask",
+    "people": "ask",
+    "pets": "ask",
+    "places": "ask",
+    "preferences": "ask",
+    "private": "ask",
+    "project_rules": "auto",
+    "projects": "auto",
+    "relationships": "ask",
+    "screen_context": "ask",
+    "secrets": "never",
+    "vehicles": "ask",
+    "work": "ask"
+  },
+  "schema_version": 1,
+  "updated_at": "2026-06-23T06:58:30.816231+00:00"
+}

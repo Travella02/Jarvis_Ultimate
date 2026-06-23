@@ -10,6 +10,19 @@ from jarvis.memory.always_on import (
     ShortTermFactRecord,
     ShortTermFactStore,
 )
+from jarvis.memory.preferences import (
+    MemoryPreferenceDecision,
+    MemoryPreferenceStore,
+    canonical_category,
+    infer_memory_category,
+)
+from jarvis.memory.secure_vault import (
+    SecureVaultDecision,
+    SecureVaultStore,
+    classify_vault_category,
+    is_vault_like,
+    redact_sensitive_text,
+)
 from jarvis.memory.entities import (
     EntityMemoryStore,
     EntityRecord,
@@ -30,6 +43,15 @@ __all__ = [
     "ChatArchiveStore",
     "MemoryMaintenance",
     "MemoryMatch",
+    "MemoryPreferenceDecision",
+    "MemoryPreferenceStore",
+    "canonical_category",
+    "infer_memory_category",
+    "SecureVaultDecision",
+    "SecureVaultStore",
+    "classify_vault_category",
+    "is_vault_like",
+    "redact_sensitive_text",
     "EntityMemoryStore",
     "EntityRecord",
     "EntitySearchResult",

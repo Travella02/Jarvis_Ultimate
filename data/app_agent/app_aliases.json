@@ -26,7 +26,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "chrome",
-      "learned_at": 1782195322.2308483,
+      "learned_at": 1782199858.6312125,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "",
@@ -46,7 +46,7 @@
       ],
       "launch_type": "path",
       "learned_alias": "could you open google chrome for me",
-      "learned_at": 1782195398.4072382,
+      "learned_at": 1782199945.265433,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -146,7 +146,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "notepad",
-      "learned_at": 1782195396.3911798,
+      "learned_at": 1782199943.1198416,
       "learned_source": "verified_launch_success",
       "name": "notepad",
       "path": "",
@@ -201,6 +201,6 @@
     }
   },
   "roles": {},
-  "updated_at": 1782195398.4072382,
+  "updated_at": 1782199945.265433,
   "version": 2
 }

@@ -45,6 +45,8 @@ class JarvisRouter:
         chat_archive: Any | None = None,
         memory_candidates: Any | None = None,
         entity_memory: Any | None = None,
+        memory_preferences: Any | None = None,
+        secure_vault: Any | None = None,
         ability_registry: Any | None = None,
     ) -> None:
         self.registry = registry
@@ -58,6 +60,8 @@ class JarvisRouter:
         self.chat_archive = chat_archive
         self.memory_candidates = memory_candidates
         self.entity_memory = entity_memory
+        self.memory_preferences = memory_preferences
+        self.secure_vault = secure_vault
         self.ability_registry = ability_registry
 
     def handle(self, command: str, *, timing: Any | None = None, stream_callback: LLMStreamCallback | None = None) -> JarvisResult:
@@ -112,6 +116,8 @@ class JarvisRouter:
             "chat_archive": self.chat_archive,
             "memory_candidates": self.memory_candidates,
             "entity_memory": self.entity_memory,
+            "memory_preferences": self.memory_preferences,
+            "secure_vault": self.secure_vault,
             "ability_registry": self.ability_registry,
             "ability_selection": ability_selection,
         }

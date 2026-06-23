@@ -61,6 +61,51 @@ class IntentClassifier:
         if text.startswith("call ") and " app" not in text and " tool" not in text and " program" not in text:
             return IntentResult("memory_write", 0.72, "Entity nickname phrase detected.")
 
+        sensitive_vault_phrases = (
+            "secure vault",
+            "password vault",
+            "password manager",
+            "save my password",
+            "store my password",
+            "remember my password",
+            "save this password",
+            "store this password",
+            "save my api key",
+            "store my api key",
+            "remember my api key",
+            "save my recovery code",
+            "store my recovery code",
+            "remember my recovery code",
+            "save my account number",
+            "store my account number",
+        )
+        if any(phrase in text for phrase in sensitive_vault_phrases):
+            if any(phrase in text for phrase in ["status", "show", "what is"]):
+                return IntentResult("memory_search", 0.9, "Secure vault status/search phrase detected.")
+            return IntentResult("memory_write", 0.92, "Sensitive secure-vault phrase detected.")
+
+        memory_preference_phrases = (
+            "memory preferences",
+            "memory settings",
+            "remember project rules automatically",
+            "remember app settings automatically",
+            "remember game settings automatically",
+            "ask me before remembering",
+            "ask before remembering",
+            "ask me before saving",
+            "never remember",
+            "do not remember",
+            "don't remember",
+            "dont remember",
+            "temporary memory",
+            "short term memory",
+            "short-term memory",
+        )
+        if any(phrase in text for phrase in memory_preference_phrases):
+            if any(phrase in text for phrase in ["show", "what are", "how are"]):
+                return IntentResult("memory_search", 0.9, "Memory preference status phrase detected.")
+            return IntentResult("memory_write", 0.9, "Memory preference control phrase detected.")
+
         app_prefixes = ["open ", "launch ", "start app ", "start ", "run ", "open website ", "open site ", "close ", "quit ", "exit ", "switch to ", "focus ", "show "]
         app_phrases = [
             "pull up",

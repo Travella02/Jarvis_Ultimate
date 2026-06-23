@@ -1,0 +1,2 @@
+Applied 0.3.5a_sensitive_memory_vault_routing at 2026-06-23T01:30:38.242098
+Backups only include files that already existed before this patch.

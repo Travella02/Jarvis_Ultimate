@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.4"
+APP_SHELL_VERSION = "0.3.5a"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -119,6 +119,12 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "relationship_label_normalization",
         "relationship_display_cleanup",
         "saas_ready_entity_relationship_edges",
+        "memory_preferences_auto_remember_controls",
+        "memory_policy_privacy_controls",
+        "screen_setting_memory_policy_ready",
+        "sensitive_memory_secure_vault_routing",
+        "password_manager_agent_foundation",
+        "normal_memory_secret_blocking",
     )
 
 
@@ -181,6 +187,8 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
     memory_maintenance = getattr(runtime, "memory_maintenance", None)
     memory_candidates = getattr(runtime, "memory_candidates", None)
     entity_memory = getattr(runtime, "entity_memory", None)
+    memory_preferences = getattr(runtime, "memory_preferences", None)
+    secure_vault = getattr(runtime, "secure_vault", None)
 
     return {
         "started": bool(getattr(runtime, "started", False)),
@@ -201,6 +209,8 @@ def _runtime_summary(runtime: Any | None) -> dict[str, Any]:
             "chat_archive": chat_archive.status() if chat_archive is not None and hasattr(chat_archive, "status") else {},
             "candidates": memory_candidates.status() if memory_candidates is not None and hasattr(memory_candidates, "status") else {},
             "entities": entity_memory.status() if entity_memory is not None and hasattr(entity_memory, "status") else {},
+            "preferences": memory_preferences.status() if memory_preferences is not None and hasattr(memory_preferences, "status") else {},
+            "secure_vault": secure_vault.status() if secure_vault is not None and hasattr(secure_vault, "status") else {},
             "maintenance": memory_maintenance.status() if memory_maintenance is not None and hasattr(memory_maintenance, "status") else {},
         },
     }

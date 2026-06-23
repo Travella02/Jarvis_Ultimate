@@ -16,6 +16,8 @@ from jarvis.core.result import JarvisResult
 from jarvis.memory.always_on import ChatArchiveStore, MemoryCandidateStore, ShortTermFactStore
 from jarvis.memory.long_term import LongTermMemoryStore
 from jarvis.memory.entities import EntityMemoryStore, normalize_entity_type, normalize_text
+from jarvis.memory.preferences import MemoryPreferenceStore, canonical_category, display_category, infer_memory_category, normalize_policy
+from jarvis.memory.secure_vault import SecureVaultStore, classify_vault_category, is_vault_like
 
 
 class Agent:
@@ -33,11 +35,21 @@ class Agent:
         chat_archive = context.get("chat_archive") or self._fallback_chat_archive(config)
         memory_candidates = context.get("memory_candidates") or self._fallback_memory_candidates(config)
         entity_memory = context.get("entity_memory") or self._fallback_entity_memory(config)
+        memory_preferences = context.get("memory_preferences") or self._fallback_memory_preferences(config)
+        secure_vault = context.get("secure_vault") or self._fallback_secure_vault(config)
 
         text = " ".join(str(command or "").strip().split())
         lowered = text.lower()
         if not text:
             return JarvisResult.fail("I did not catch what you wanted me to remember, sir.", agent_name=self.name, action="memory_empty")
+
+        preference_action = self._extract_memory_preference_action(text)
+        if preference_action is not None:
+            return self._handle_memory_preference_action(memory_preferences, preference_action)
+
+        secure_vault_action = self._extract_secure_vault_action(text)
+        if secure_vault_action is not None:
+            return self._handle_secure_vault_action(secure_vault, secure_vault_action)
 
         if self._is_status(lowered):
             message = "\n\n".join([
@@ -45,12 +57,14 @@ class Agent:
                 long_term.format_status(),
                 chat_archive.format_status(),
                 entity_memory.format_status(),
+                memory_preferences.format_status(),
+                self._format_secure_vault_status(secure_vault),
             ])
             return JarvisResult.ok(
                 message,
                 agent_name=self.name,
                 action="memory_status",
-                data={"short_term_facts": short_term_facts.status(), "long_term_memory": long_term.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status(), "entity_memory": entity_memory.status()},
+                data={"short_term_facts": short_term_facts.status(), "long_term_memory": long_term.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status(), "entity_memory": entity_memory.status(), "memory_preferences": memory_preferences.status(), "secure_vault": secure_vault.status()},
             )
 
         entity_edit_action = self._extract_entity_edit_action(text)
@@ -270,11 +284,37 @@ class Agent:
 
         memory_text = self._extract_memory_text(text)
         if memory_text:
-            category = self._infer_category(memory_text)
+            category = infer_memory_category(memory_text, category=self._infer_category(memory_text))
             tags = self._infer_tags(memory_text, category=category)
-            if self._is_short_term_request(text):
+
+            if self._is_future_screen_settings_request(memory_text):
+                return JarvisResult.ok(
+                    "I’m ready to remember visible app or game settings once screen awareness can pass me the settings, sir. For now, tell me the exact settings and I’ll save them under app settings.",
+                    agent_name=self.name,
+                    action="memory_settings_future_ready",
+                    data={"category": "app_settings"},
+                )
+
+            if self._should_route_to_secure_vault(memory_text, category=category):
+                return self._route_sensitive_memory_to_vault(
+                    secure_vault,
+                    memory_text,
+                    category=category,
+                    source_command=text,
+                )
+
+            preference_decision = memory_preferences.decide(memory_text, category=category, explicit=True)
+            if preference_decision.action == "ignore":
+                return JarvisResult.ok(
+                    f"I did not save that, sir. Your memory preferences say not to remember {display_category(preference_decision.category)}.",
+                    agent_name=self.name,
+                    action="memory_store_blocked_by_preferences",
+                    data={"memory_preferences": memory_preferences.status(), "preference_decision": preference_decision.to_dict()},
+                )
+
+            if self._is_short_term_request(text) or preference_decision.action == "short_term":
                 days = self._extract_days(text) or getattr(short_term_facts, "default_days", 3)
-                record = short_term_facts.add(memory_text, category=category, tags=tags, source="user", days=days, metadata={"source_command": text})
+                record = short_term_facts.add(memory_text, category=category, tags=tags, source="user", days=days, metadata={"source_command": text, "memory_preference": preference_decision.to_dict()})
                 if record is None:
                     return JarvisResult.fail(
                         "Temporary memory is disabled or I could not save that memory, sir.",
@@ -286,15 +326,15 @@ class Agent:
                     f"I’ll remember that for the next {days} day{'s' if int(days) != 1 else ''}, sir.",
                     agent_name=self.name,
                     action="memory_store_short_term",
-                    data={"memory": record.to_dict(), "short_term_facts": short_term_facts.status()},
+                    data={"memory": record.to_dict(), "short_term_facts": short_term_facts.status(), "memory_preferences": memory_preferences.status(), "preference_decision": preference_decision.to_dict()},
                 )
 
-            record = long_term.add(memory_text, category=category, tags=tags, source="user", metadata={"source_command": text})
+            record = long_term.add(memory_text, category=category, tags=tags, source="user", metadata={"source_command": text, "memory_preference": preference_decision.to_dict()})
             entity_record = self._upsert_entity_from_text(
                 entity_memory,
                 memory_text,
                 source="user",
-                metadata={"source_command": text},
+                metadata={"source_command": text, "memory_preference": preference_decision.to_dict()},
                 confidence=0.9,
             )
             if record is None:
@@ -308,7 +348,7 @@ class Agent:
                 "I’ll remember that, sir.",
                 agent_name=self.name,
                 action="memory_store",
-                data={"memory": record.to_dict(), "long_term_memory": long_term.status(), "entity_memory": entity_memory.status(), "entity_update": entity_record.to_dict() if entity_record is not None else None},
+                data={"memory": record.to_dict(), "long_term_memory": long_term.status(), "entity_memory": entity_memory.status(), "entity_update": entity_record.to_dict() if entity_record is not None else None, "memory_preferences": memory_preferences.status(), "preference_decision": preference_decision.to_dict()},
             )
 
         return JarvisResult.ok(
@@ -316,6 +356,100 @@ class Agent:
             agent_name=self.name,
             action="memory_help",
             data={"implemented": True, "long_term_memory": long_term.status(), "short_term_facts": short_term_facts.status(), "chat_archive": chat_archive.status(), "memory_candidates": memory_candidates.status(), "entity_memory": entity_memory.status()},
+        )
+
+
+    def _handle_secure_vault_action(self, secure_vault: SecureVaultStore, action: dict[str, str]) -> JarvisResult:
+        action_name = action.get("action", "status")
+        if action_name == "status":
+            return JarvisResult.ok(
+                self._format_secure_vault_status(secure_vault),
+                agent_name=self.name,
+                action="secure_vault_status",
+                data={"secure_vault": secure_vault.status()},
+            )
+        return JarvisResult.ok(
+            self._format_secure_vault_status(secure_vault),
+            agent_name=self.name,
+            action="secure_vault_status",
+            data={"secure_vault": secure_vault.status()},
+        )
+
+    def _route_sensitive_memory_to_vault(self, secure_vault: SecureVaultStore, memory_text: str, *, category: str, source_command: str) -> JarvisResult:
+        decision = secure_vault.route_sensitive_save(
+            memory_text,
+            category=category,
+            explicit=True,
+            metadata={"source_command": source_command},
+        )
+        label = decision.label or display_category(category)
+        if decision.stored:
+            message = f"I saved that in your secure vault, sir. I kept it out of normal memory."
+            action = "secure_vault_store"
+        else:
+            message = (
+                f"I can’t save {label} in normal memory, sir. "
+                "Secure vault routing is ready, but encrypted local vault storage is not enabled yet, so I did not store the value."
+            )
+            action = "secure_vault_storage_not_enabled"
+        return JarvisResult.ok(
+            message,
+            agent_name=self.name,
+            action=action,
+            data={"secure_vault_decision": decision.to_dict(), "secure_vault": secure_vault.status()},
+        )
+
+    def _should_route_to_secure_vault(self, memory_text: str, *, category: str = "") -> bool:
+        return is_vault_like(memory_text, category=category) or canonical_category(category) in {"secrets", "financial"}
+
+    def _format_secure_vault_status(self, secure_vault: SecureVaultStore) -> str:
+        status = secure_vault.status()
+        if status.get("enabled") and status.get("encrypted_storage_ready"):
+            return "Secure vault is online, sir. Sensitive memories stay out of normal memory and can be stored in the encrypted local vault."
+        return "Secure vault routing is ready, sir, but encrypted vault storage is not enabled yet. I will keep passwords, API keys, recovery codes, and financial details out of normal memory."
+
+    def _handle_memory_preference_action(self, memory_preferences: MemoryPreferenceStore, action: dict[str, str]) -> JarvisResult:
+        action_name = action.get("action", "")
+        if action_name == "show":
+            return JarvisResult.ok(
+                memory_preferences.format_status(),
+                agent_name=self.name,
+                action="memory_preferences_status",
+                data={"memory_preferences": memory_preferences.status()},
+            )
+        if action_name == "reset":
+            memory_preferences.reset()
+            return JarvisResult.ok(
+                "I reset your memory preferences to the safe defaults, sir.",
+                agent_name=self.name,
+                action="memory_preferences_reset",
+                data={"memory_preferences": memory_preferences.status()},
+            )
+        if action_name == "set":
+            category = action.get("category", "general")
+            policy = action.get("policy", "ask")
+            canonical = memory_preferences.set_policy(category, policy)
+            display = display_category(canonical)
+            normalized_policy = normalize_policy(policy)
+            if normalized_policy == "auto":
+                message = f"Understood, sir. I’ll remember {display} automatically when they look safe and useful."
+            elif normalized_policy == "never":
+                message = f"Understood, sir. I will not save {display}."
+            elif normalized_policy == "short_term":
+                message = f"Understood, sir. I’ll keep {display} as temporary memory by default."
+            else:
+                message = f"Understood, sir. I’ll ask before saving {display}."
+            return JarvisResult.ok(
+                message,
+                agent_name=self.name,
+                action="memory_preferences_set",
+                data={"category": canonical, "policy": normalized_policy},
+            )
+        return JarvisResult.ok(
+            memory_preferences.format_status(),
+            agent_name=self.name,
+            action="memory_preferences_status",
+            data={"memory_preferences": memory_preferences.status()},
         )
 
     def _handle_relationship_action(self, entity_memory: EntityMemoryStore, action: dict[str, str]) -> JarvisResult | None:
@@ -581,6 +715,24 @@ class Agent:
         path = getattr(config, "data_dir", None) / "memory" / "entities.json" if getattr(config, "data_dir", None) else None
         return EntityMemoryStore(path=path)
 
+    def _fallback_memory_preferences(self, config: Any | None) -> MemoryPreferenceStore:
+        path = getattr(config, "data_dir", None) / "memory" / "memory_preferences.json" if getattr(config, "data_dir", None) else None
+        return MemoryPreferenceStore(path=path)
+
+    def _fallback_secure_vault(self, config: Any | None) -> SecureVaultStore:
+        configured = getattr(config, "memory_secure_vault_path", None)
+        if configured:
+            path = Path(str(configured))
+            if not path.is_absolute() and getattr(config, "project_root", None):
+                path = getattr(config, "project_root") / path
+        else:
+            path = getattr(config, "data_dir", None) / "secure_vault" / "vault.json" if getattr(config, "data_dir", None) else None
+        return SecureVaultStore(
+            enabled=bool(getattr(config, "memory_secure_vault_enabled", False)),
+            path=path,
+            encrypted_storage_ready=bool(getattr(config, "memory_secure_vault_encrypted_storage_ready", False)),
+        )
+
     def _select_entity_records(
         self,
         entity_memory: EntityMemoryStore,
@@ -820,6 +972,100 @@ class Agent:
             "entity memory status",
             "structured memory status",
         }
+
+    def _extract_secure_vault_action(self, text: str) -> dict[str, str] | None:
+        cleaned = " ".join(str(text or "").strip().split()).strip(" .?!\"'")
+        lowered = cleaned.lower()
+        if not cleaned:
+            return None
+        if any(phrase in lowered for phrase in ["secure vault status", "vault status", "password vault status", "password manager status"]):
+            return {"action": "status"}
+        return None
+
+    def _extract_memory_preference_action(self, text: str) -> dict[str, str] | None:
+        cleaned = " ".join(str(text or "").strip().split()).strip(" .?!\"'")
+        lowered = cleaned.lower()
+        if not cleaned:
+            return None
+        if any(phrase in lowered for phrase in ["show my memory preferences", "memory preferences", "memory settings", "what are my memory preferences", "how are you remembering things"]):
+            if any(phrase in lowered for phrase in ["reset memory preferences", "reset my memory preferences", "default memory preferences"]):
+                return {"action": "reset"}
+            if not any(phrase in lowered for phrase in ["automatically", "before remembering", "before saving", "never remember", "do not remember", "don't remember", "dont remember", "temporary", "short term", "short-term"]):
+                return {"action": "show"}
+        if any(phrase in lowered for phrase in ["reset memory preferences", "reset my memory preferences", "reset memory settings"]):
+            return {"action": "reset"}
+
+        policy = ""
+        if any(phrase in lowered for phrase in ["automatically", "auto remember", "always remember", "remember automatically"]):
+            policy = "auto"
+        elif any(phrase in lowered for phrase in ["ask me before remembering", "ask before remembering", "ask me before saving", "ask before saving", "review before saving"]):
+            policy = "ask"
+        elif any(phrase in lowered for phrase in ["never remember", "do not remember", "don't remember", "dont remember", "stop remembering"]):
+            policy = "never"
+        elif any(phrase in lowered for phrase in ["temporarily", "temporary memory", "short term", "short-term"]):
+            policy = "short_term"
+        if not policy:
+            return None
+
+        category = self._extract_memory_preference_category(cleaned)
+        if not category:
+            return None
+        return {"action": "set", "category": category, "policy": policy}
+
+    def _extract_memory_preference_category(self, text: str) -> str:
+        lowered = text.lower()
+        candidates = [
+            "game settings",
+            "app settings",
+            "application settings",
+            "screen context",
+            "screen settings",
+            "project rules",
+            "project details",
+            "projects",
+            "people",
+            "person",
+            "pets",
+            "pet details",
+            "dogs",
+            "cats",
+            "relationships",
+            "app preferences",
+            "apps",
+            "applications",
+            "devices",
+            "hardware",
+            "vehicles",
+            "cars",
+            "places",
+            "locations",
+            "preferences",
+            "work",
+            "health information",
+            "health",
+            "financial information",
+            "financial",
+            "banking",
+            "secrets",
+            "passwords",
+            "private information",
+            "sensitive information",
+            "daily life",
+        ]
+        for candidate in candidates:
+            if candidate in lowered:
+                return canonical_category(candidate)
+        match = re.search(r"(?:remember|saving|save|store)\s+(.+?)(?:\s+automatically|\s+by default|$)", text, flags=re.IGNORECASE)
+        if match:
+            return canonical_category(self._clean_tail(match.group(1)))
+        match = re.search(r"before\s+(?:remembering|saving)\s+(.+)$", text, flags=re.IGNORECASE)
+        if match:
+            return canonical_category(self._clean_tail(match.group(1)))
+        return ""
+
+    def _is_future_screen_settings_request(self, memory_text: str) -> bool:
+        lowered = normalize_text(memory_text)
+        return lowered in {"these settings", "this setting", "these game settings", "these app settings", "these application settings", "current settings", "this screen"}
 
     def _extract_relationship_action(self, text: str) -> dict[str, str] | None:
         cleaned = " ".join(str(text or "").strip().split()).strip(" .?!\"'")

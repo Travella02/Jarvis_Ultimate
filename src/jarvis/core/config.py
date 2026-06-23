@@ -64,6 +64,10 @@ _ENV_ALIASES = {
     "memory_entity_path": ("JARVIS_MEMORY_ENTITY_PATH", "JARVIS_MEMORY_ENTITIES_PATH"),
     "memory_entity_max_records": ("JARVIS_MEMORY_ENTITY_MAX_RECORDS", "JARVIS_MEMORY_ENTITIES_MAX_RECORDS"),
     "memory_entity_inject_limit": ("JARVIS_MEMORY_ENTITY_INJECT_LIMIT", "JARVIS_MEMORY_ENTITIES_INJECT_LIMIT"),
+    "memory_preferences_path": ("JARVIS_MEMORY_PREFERENCES_PATH",),
+    "memory_secure_vault_enabled": ("JARVIS_MEMORY_SECURE_VAULT_ENABLED", "JARVIS_SECURE_VAULT_ENABLED"),
+    "memory_secure_vault_path": ("JARVIS_MEMORY_SECURE_VAULT_PATH", "JARVIS_SECURE_VAULT_PATH"),
+    "memory_secure_vault_encrypted_storage_ready": ("JARVIS_MEMORY_SECURE_VAULT_ENCRYPTED_STORAGE_READY", "JARVIS_SECURE_VAULT_ENCRYPTED_STORAGE_READY"),
     "tts_enabled": ("JARVIS_TTS_ENABLED",),
     "tts_provider": ("JARVIS_TTS_PROVIDER",),
     "tts_fallback_providers": ("JARVIS_TTS_FALLBACK_PROVIDERS",),
@@ -332,6 +336,10 @@ class JarvisConfig:
     memory_entity_path: str = "data/memory/entities.json"
     memory_entity_max_records: int = 2000
     memory_entity_inject_limit: int = 5
+    memory_preferences_path: str = "data/memory/memory_preferences.json"
+    memory_secure_vault_enabled: bool = False
+    memory_secure_vault_path: str = "data/secure_vault/vault.json"
+    memory_secure_vault_encrypted_storage_ready: bool = False
 
     tts_enabled: bool = True
     tts_provider: str = "kokoro"
@@ -567,6 +575,20 @@ class JarvisConfig:
             ),
             memory_entity_inject_limit=int(
                 _setting(_ENV_ALIASES["memory_entity_inject_limit"], env_file, provider_config.get("memory_entity_inject_limit", "5"))
+            ),
+            memory_preferences_path=str(
+                _setting(_ENV_ALIASES["memory_preferences_path"], env_file, provider_config.get("memory_preferences_path", "data/memory/memory_preferences.json"))
+            ),
+            memory_secure_vault_enabled=_as_bool(
+                _setting(_ENV_ALIASES["memory_secure_vault_enabled"], env_file, provider_config.get("memory_secure_vault_enabled", "false")),
+                default=False,
+            ),
+            memory_secure_vault_path=str(
+                _setting(_ENV_ALIASES["memory_secure_vault_path"], env_file, provider_config.get("memory_secure_vault_path", "data/secure_vault/vault.json"))
+            ),
+            memory_secure_vault_encrypted_storage_ready=_as_bool(
+                _setting(_ENV_ALIASES["memory_secure_vault_encrypted_storage_ready"], env_file, provider_config.get("memory_secure_vault_encrypted_storage_ready", "false")),
+                default=False,
             ),
             tts_enabled=_as_bool(_setting(_ENV_ALIASES["tts_enabled"], env_file, tts_config.get("enabled", "true")), default=True),
             tts_provider=str(_setting(_ENV_ALIASES["tts_provider"], env_file, tts_config.get("default", "kokoro"))).strip().lower(),

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "saved_at": "2026-06-23T06:16:38.365901+00:00",
+  "saved_at": "2026-06-23T07:32:25.211677+00:00",
   "records": [
     {
       "text": "my favorite test color is blue",
@@ -50,32 +50,48 @@
     },
     {
       "text": "my dog Nugget is a golden doodle",
-      "category": "personal",
+      "category": "pets",
       "tags": [
-        "personal"
+        "personal",
+        "pets"
       ],
       "source": "user",
       "importance": 3,
       "id": "mem_53acb1a0b198",
       "created_at": "2026-06-18T06:33:06.820742+00:00",
-      "updated_at": "2026-06-23T06:16:38.365901+00:00",
+      "updated_at": "2026-06-23T07:32:25.211677+00:00",
       "metadata": {
-        "source_command": "Remember that my dog Nugget is a golden doodle."
+        "source_command": "Remember that my dog Nugget is a golden doodle.",
+        "memory_preference": {
+          "category": "pets",
+          "policy": "ask",
+          "action": "save",
+          "reason": "explicit user memory request",
+          "explicit": true
+        }
       }
     },
     {
       "text": "Kenleigh is my fiance",
-      "category": "personal",
+      "category": "relationships",
       "tags": [
-        "personal"
+        "personal",
+        "relationships"
       ],
       "source": "user",
       "importance": 3,
       "id": "mem_ea7dd7aa086f",
       "created_at": "2026-06-18T06:33:49.785413+00:00",
-      "updated_at": "2026-06-23T06:16:38.306363+00:00",
+      "updated_at": "2026-06-23T07:32:25.111634+00:00",
       "metadata": {
-        "source_command": "Remember that Kenleigh is my fiance."
+        "source_command": "Remember that Kenleigh is my fiance.",
+        "memory_preference": {
+          "category": "relationships",
+          "policy": "ask",
+          "action": "save",
+          "reason": "explicit user memory request",
+          "explicit": true
+        }
       }
     },
     {
@@ -95,32 +111,48 @@
     },
     {
       "text": "Scout is my dog",
-      "category": "personal",
+      "category": "pets",
       "tags": [
-        "personal"
+        "personal",
+        "pets"
       ],
       "source": "user",
       "importance": 3,
       "id": "mem_64bac4f06773",
       "created_at": "2026-06-19T07:14:40.676737+00:00",
-      "updated_at": "2026-06-23T06:16:38.219099+00:00",
+      "updated_at": "2026-06-23T07:32:25.004650+00:00",
       "metadata": {
-        "source_command": "Jarvis, remember that Scout is my dog"
+        "source_command": "Jarvis, remember that Scout is my dog",
+        "memory_preference": {
+          "category": "pets",
+          "policy": "ask",
+          "action": "save",
+          "reason": "explicit user memory request",
+          "explicit": true
+        }
       }
     },
     {
       "text": "Kenleigh is my fianc\u00e9e",
-      "category": "personal",
+      "category": "people",
       "tags": [
+        "people",
         "personal"
       ],
       "source": "user",
       "importance": 3,
       "id": "mem_31871790ee1c",
       "created_at": "2026-06-22T05:18:06.669689+00:00",
-      "updated_at": "2026-06-23T06:16:38.356384+00:00",
+      "updated_at": "2026-06-23T07:32:25.200776+00:00",
       "metadata": {
-        "source_command": "Remember that Kenleigh is my fianc\u00e9e."
+        "source_command": "Remember that Kenleigh is my fianc\u00e9e.",
+        "memory_preference": {
+          "category": "people",
+          "policy": "ask",
+          "action": "save",
+          "reason": "explicit user memory request",
+          "explicit": true
+        }
       }
     }
   ]

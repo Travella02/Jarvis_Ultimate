@@ -16,7 +16,7 @@ from jarvis.memory.long_term import LongTermMemoryStore
 
 class MemoryAutoCapture030Tests(unittest.TestCase):
     def test_version_and_capabilities_include_auto_capture(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.4")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.5a")
         capabilities = app_shell_capabilities()
         self.assertIn("memory_auto_capture_candidate_review", capabilities)
         self.assertIn("memory_candidate_queue", capabilities)
@@ -86,6 +86,7 @@ class MemoryAutoCapture030Tests(unittest.TestCase):
                 action="llm_chat",
                 data={"intent": "general_chat"},
             )
+            runtime.memory_preferences.set_policy("projects", "ask")
             result = runtime.handle_command("From now on, always keep Jarvis memory local-first.")
             self.assertTrue(result.success)
             self.assertGreaterEqual(runtime.memory_candidates.status()["pending"], 1)
