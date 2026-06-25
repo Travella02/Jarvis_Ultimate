@@ -850,6 +850,7 @@ body.layout-unlocked .layout-lock-toggle { color: var(--success); border-color: 
 .dockable-panel { position: relative; min-width: 240px; min-height: 96px; }
 .dockable-panel .panel-heading { user-select: none; }
 body.layout-unlocked .dockable-panel .panel-heading { cursor: grab; }
+body.layout-unlocked .dockable-panel.panel-layout-locked .panel-heading { cursor: default; }
 body.layout-unlocked .dockable-panel.is-dragging .panel-heading { cursor: grabbing; }
 .dockable-panel.layout-floating {
   position: fixed !important;
@@ -887,6 +888,16 @@ body.layout-unlocked .dockable-panel.is-dragging .panel-heading { cursor: grabbi
   background: rgba(45, 169, 255, .014);
 }
 .panel-layout-button:hover { color: var(--state); }
+.panel-layout-button.is-active,
+.panel-lock-button.is-active {
+  color: var(--success);
+  border-color: rgba(53,255,182,.44);
+  background: rgba(53,255,182,.045);
+  box-shadow: 0 0 14px rgba(53,255,182,.08);
+}
+.dockable-panel.panel-layout-locked {
+  box-shadow: inset 0 0 0 1px rgba(53,255,182,.10), 0 0 28px rgba(53,255,182,.045);
+}
 .panel-resize-handle {
   position: absolute;
   right: 7px;
@@ -903,6 +914,11 @@ body.layout-unlocked .dockable-panel .panel-resize-handle {
   opacity: .72;
   pointer-events: auto;
   cursor: nwse-resize;
+}
+body.layout-unlocked .dockable-panel.panel-layout-locked .panel-resize-handle {
+  opacity: .16;
+  pointer-events: none;
+  cursor: default;
 }
 .dockable-panel.panel-minimized {
   overflow: hidden !important;
@@ -950,4 +966,102 @@ body.layout-unlocked .dockable-panel .panel-resize-handle {
 .popout-body .popout-shell { min-height: calc(100vh - 28px); }
 @media (max-width: 1280px) {
   .dockable-panel.layout-floating { position: relative !important; left: auto !important; top: auto !important; width: auto !important; height: auto !important; }
+}
+
+/* 0.3.8b: panel header containment and first-drag stability guard. */
+.layout-preset-select option {
+  color: #e9fbff;
+  background: #020812;
+}
+.dockable-panel .panel-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+  align-items: start;
+  column-gap: 8px;
+  row-gap: 8px;
+  min-width: 0;
+}
+.dockable-panel .panel-heading > :first-child {
+  min-width: 0;
+}
+.dockable-panel .panel-heading h2,
+.dockable-panel .panel-heading .panel-kicker {
+  overflow-wrap: anywhere;
+}
+.dockable-panel .panel-actions {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 5px;
+  overflow: visible;
+}
+.dockable-panel .panel-layout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+.dockable-panel .panel-close,
+.dockable-panel .panel-layout-button,
+.core-stage > .panel-actions .panel-layout-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  line-height: 1;
+}
+.left-rail .dockable-panel .panel-heading.compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+.left-rail .dockable-panel .panel-actions {
+  width: 100%;
+  justify-content: flex-start;
+}
+.left-rail .dockable-panel .panel-layout-actions {
+  justify-content: flex-start;
+}
+.core-stage > .panel-actions {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  z-index: 22;
+  max-width: calc(100% - 32px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  pointer-events: auto;
+}
+.core-stage > .panel-actions .panel-layout-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.panel-layout-placeholder {
+  min-width: 0;
+  min-height: 58px;
+  border: 1px solid transparent;
+  border-radius: var(--panel-radius);
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+}
+.left-rail > .panel-layout-placeholder {
+  width: 100%;
+}
+.interface-grid > .panel-layout-placeholder {
+  min-width: 0;
+  min-height: 0;
+}
+@media (max-width: 1420px) {
+  .dockable-panel .panel-heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dockable-panel .panel-actions,
+  .dockable-panel .panel-layout-actions {
+    justify-content: flex-start;
+  }
 }

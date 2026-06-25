@@ -11,7 +11,7 @@ from jarvis.core.lifecycle import JarvisRuntime
 
 class TestAlwaysOnMemory029(unittest.TestCase):
     def test_version_and_capabilities_include_always_on_memory(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
         capabilities = set(app_shell_capabilities())
         self.assertIn("always_on_memory_tiers", capabilities)
         self.assertIn("daily_chat_archive_memory", capabilities)

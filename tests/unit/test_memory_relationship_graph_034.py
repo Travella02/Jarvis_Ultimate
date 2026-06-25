@@ -14,7 +14,7 @@ from jarvis.memory.entities import EntityMemoryStore, infer_entity_from_text
 
 class RelationshipMemory034Tests(unittest.TestCase):
     def test_version_and_capability_include_relationship_graph(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
         capabilities = set(app_shell_capabilities())
         self.assertIn("relationship_memory_graph", capabilities)
         self.assertIn("relationship_memory_queries", capabilities)

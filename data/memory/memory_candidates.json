@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-06-23T09:04:41.666775+00:00",
+  "updated_at": "2026-06-25T07:21:43.019537+00:00",
   "records": [
     {
       "text": "From now on, I prefer short direct patch instructions",
@@ -39,7 +39,7 @@
       "source_assistant": "",
       "id": "cand_343c4b6d36f9",
       "created_at": "2026-06-16T08:02:24.501734+00:00",
-      "updated_at": "2026-06-23T09:04:41.666775+00:00",
+      "updated_at": "2026-06-25T07:21:43.019537+00:00",
       "metadata": {}
     },
     {

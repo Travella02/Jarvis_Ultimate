@@ -25,7 +25,7 @@ from jarvis.tools.shared.process_tools import LaunchResult
 
 class TestAppAgentLaunchVerification026(unittest.TestCase):
     def test_version_and_capabilities_include_launch_verification(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
         capabilities = set(app_shell_capabilities())
         self.assertIn("verified_app_launches", capabilities)
         self.assertIn("verified_app_closes", capabilities)

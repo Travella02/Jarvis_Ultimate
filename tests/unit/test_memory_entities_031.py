@@ -21,7 +21,7 @@ from jarvis.memory.long_term import LongTermMemoryStore
 
 class EntityMemory031Tests(unittest.TestCase):
     def test_version_and_capabilities_include_entity_memory(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
         capabilities = set(app_shell_capabilities())
         self.assertIn("structured_entity_memory_foundation", capabilities)
         self.assertIn("scalable_entity_type_registry", capabilities)

@@ -11,6 +11,7 @@ const PANEL_STORAGE_KEY = 'jarvis.appShell.panelVisibility.v021';
 const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v021';
 const PANEL_LAYOUT_STORAGE_KEY = 'jarvis.appShell.panelLayout.v038';
 const PANEL_LAYOUT_LOCK_STORAGE_KEY = 'jarvis.appShell.panelLayoutLocked.v038';
+const PANEL_LOCK_STORAGE_KEY = 'jarvis.appShell.panelLocks.v038a';
 
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
@@ -25,8 +26,10 @@ let refreshInFlight = false;
 let panelVisibility = loadPanelVisibility();
 let panelLayout = loadPanelLayout();
 let layoutLocked = loadLayoutLocked();
+let panelLocks = loadPanelLocks();
 const poppedPanelWindows = new Map();
 let layoutToastTimer = null;
+let activePanelPlaceholder = null;
 let stateFadeTimer = null;
 let activeVisualState = normalizeState(DEFAULT_STATE.avatar.state);
 let orbCaptionTarget = '';
@@ -686,6 +689,56 @@ function saveLayoutLocked() {
   localStorage.setItem(PANEL_LAYOUT_LOCK_STORAGE_KEY, String(layoutLocked));
 }
 
+function loadPanelLocks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PANEL_LOCK_STORAGE_KEY) || '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function savePanelLocks() {
+  localStorage.setItem(PANEL_LOCK_STORAGE_KEY, JSON.stringify(panelLocks));
+}
+
+function isPanelLocked(key) {
+  return Boolean(panelLocks[key]);
+}
+
+function layoutLockMessage(key, locked) {
+  const title = titleCase(key || 'panel');
+  return locked ? `${title} panel locked. It will stay put while other panels move.` : `${title} panel unlocked. You can drag and resize it again.`;
+}
+
+function updatePanelLockButton(panel, key = panelKeyFromElement(panel)) {
+  const button = panel?.querySelector?.('[data-layout-action="lock"]');
+  if (!button) return;
+  const locked = isPanelLocked(key);
+  button.setAttribute('aria-pressed', String(locked));
+  button.classList.toggle('is-active', locked);
+  button.title = locked ? 'Unlock this panel for dragging and resizing' : 'Lock this panel in place';
+  button.textContent = 'Lock';
+}
+
+function applyPanelLockState() {
+  for (const panel of layoutPanels()) {
+    const key = panelKeyFromElement(panel);
+    const locked = isPanelLocked(key);
+    panel.classList.toggle('panel-layout-locked', locked);
+    updatePanelLockButton(panel, key);
+  }
+}
+
+function togglePanelLock(key) {
+  if (!key) return;
+  panelLocks[key] = !isPanelLocked(key);
+  if (!panelLocks[key]) delete panelLocks[key];
+  savePanelLocks();
+  applyPanelLockState();
+  showLayoutToast(layoutLockMessage(key, isPanelLocked(key)));
+}
+
 function layoutPanels() {
   return Array.from(document.querySelectorAll('[data-layout-panel]'));
 }
@@ -718,11 +771,13 @@ function ensurePanelLayoutChrome(panel) {
   const layoutActions = document.createElement('span');
   layoutActions.className = 'panel-layout-actions';
   layoutActions.innerHTML = [
+    `<button type="button" class="panel-layout-button panel-lock-button" data-layout-action="lock" data-layout-target="${escapeHtml(key)}" aria-pressed="false" title="Lock this panel in place">Lock</button>`,
     `<button type="button" class="panel-layout-button" data-layout-action="minimize" data-layout-target="${escapeHtml(key)}" title="Minimize or restore this panel">Min</button>`,
     `<button type="button" class="panel-layout-button" data-layout-action="dock" data-layout-target="${escapeHtml(key)}" title="Dock this panel back into the main layout">Dock</button>`,
     `<button type="button" class="panel-layout-button" data-layout-action="popout" data-layout-target="${escapeHtml(key)}" title="Pop this panel into its own window">Pop</button>`
   ].join('');
   actions.appendChild(layoutActions);
+  updatePanelLockButton(panel, key);
   const resize = document.createElement('span');
   resize.className = 'panel-resize-handle';
   resize.setAttribute('aria-hidden', 'true');
@@ -764,6 +819,7 @@ function applyPanelLayout() {
       panel.style.height = '';
     }
   }
+  applyPanelLockState();
   updatePanelControls();
 }
 
@@ -780,10 +836,33 @@ function showLayoutToast(message) {
   layoutToastTimer = window.setTimeout(() => toast.classList.remove('visible'), 2200);
 }
 
-function setPanelFloating(panel, rect = panel.getBoundingClientRect()) {
+function createPanelLayoutPlaceholder(panel, rect) {
+  if (!panel || panel.classList.contains('layout-floating')) return null;
+  const parent = panel.parentElement;
+  if (!parent) return null;
+  const placeholder = document.createElement('div');
+  placeholder.className = 'panel-layout-placeholder';
+  placeholder.setAttribute('aria-hidden', 'true');
+  placeholder.style.width = `${Math.max(1, rect.width)}px`;
+  placeholder.style.height = `${Math.max(58, rect.height)}px`;
+  placeholder.style.flex = `0 0 ${Math.max(58, rect.height)}px`;
+  const computed = window.getComputedStyle(panel);
+  placeholder.style.gridColumn = computed.gridColumn;
+  placeholder.style.gridRow = computed.gridRow;
+  parent.insertBefore(placeholder, panel);
+  return placeholder;
+}
+
+function removePanelLayoutPlaceholder(placeholder) {
+  if (!placeholder) return;
+  placeholder.remove();
+  if (activePanelPlaceholder === placeholder) activePanelPlaceholder = null;
+}
+
+function promotePanelToFloating(panel, rect = panel.getBoundingClientRect()) {
   const key = panelKeyFromElement(panel);
-  if (!key) return;
-  panelLayout[key] = sanitizeLayoutRecord({
+  if (!key) return null;
+  const next = sanitizeLayoutRecord({
     ...(panelLayout[key] || {}),
     mode: 'floating',
     x: rect.left,
@@ -791,6 +870,22 @@ function setPanelFloating(panel, rect = panel.getBoundingClientRect()) {
     width: rect.width,
     height: rect.height
   });
+  panelLayout[key] = next;
+  panel.classList.add('layout-floating');
+  panel.classList.toggle('panel-minimized', next.minimized);
+  panel.classList.toggle('panel-popped', next.popped && poppedPanelWindows.has(key));
+  panel.style.left = `${next.x}px`;
+  panel.style.top = `${next.y}px`;
+  panel.style.width = `${next.width}px`;
+  panel.style.height = `${next.height}px`;
+  applyPanelLockState();
+  updatePanelControls();
+  return next;
+}
+
+function setPanelFloating(panel, rect = panel.getBoundingClientRect()) {
+  const next = promotePanelToFloating(panel, rect);
+  if (!next) return;
   savePanelLayout();
   applyPanelLayout();
 }
@@ -815,6 +910,7 @@ function togglePanelMinimized(key) {
 }
 
 function resetPanelLayout() {
+  removePanelLayoutPlaceholder(activePanelPlaceholder);
   panelLayout = {};
   localStorage.removeItem(PANEL_LAYOUT_STORAGE_KEY);
   for (const [key, popped] of poppedPanelWindows.entries()) {
@@ -954,10 +1050,14 @@ function popOutPanel(key) {
 }
 
 function beginPanelDrag(event, panel) {
-  if (layoutLocked || event.button !== 0 || event.target.closest('button,input,select,textarea,a')) return;
-  const rect = panel.getBoundingClientRect();
   const key = panelKeyFromElement(panel);
-  setPanelFloating(panel, rect);
+  if (layoutLocked || isPanelLocked(key) || event.button !== 0 || event.target.closest('button,input,select,textarea,a')) return;
+  event.preventDefault();
+  const rect = panel.getBoundingClientRect();
+  const wasFloating = panel.classList.contains('layout-floating') || panelLayout[key]?.mode === 'floating';
+  const placeholder = wasFloating ? null : createPanelLayoutPlaceholder(panel, rect);
+  activePanelPlaceholder = placeholder || activePanelPlaceholder;
+  promotePanelToFloating(panel, rect);
   const start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   panel.classList.add('is-dragging');
   panel.setPointerCapture?.(event.pointerId);
@@ -977,6 +1077,7 @@ function beginPanelDrag(event, panel) {
   };
   const up = () => {
     panel.classList.remove('is-dragging');
+    removePanelLayoutPlaceholder(placeholder);
     savePanelLayout();
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
@@ -986,12 +1087,15 @@ function beginPanelDrag(event, panel) {
 }
 
 function beginPanelResize(event, panel) {
-  if (layoutLocked || event.button !== 0) return;
+  const key = panelKeyFromElement(panel);
+  if (layoutLocked || isPanelLocked(key) || event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
   const rect = panel.getBoundingClientRect();
-  const key = panelKeyFromElement(panel);
-  setPanelFloating(panel, rect);
+  const wasFloating = panel.classList.contains('layout-floating') || panelLayout[key]?.mode === 'floating';
+  const placeholder = wasFloating ? null : createPanelLayoutPlaceholder(panel, rect);
+  activePanelPlaceholder = placeholder || activePanelPlaceholder;
+  promotePanelToFloating(panel, rect);
   const start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   panel.classList.add('is-resizing');
   const move = moveEvent => {
@@ -1011,6 +1115,7 @@ function beginPanelResize(event, panel) {
   };
   const up = () => {
     panel.classList.remove('is-resizing');
+    removePanelLayoutPlaceholder(placeholder);
     savePanelLayout();
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
@@ -1032,6 +1137,7 @@ function initPanelLayoutControls() {
     if (!button) return;
     const key = button.dataset.layoutTarget;
     const action = button.dataset.layoutAction;
+    if (action === 'lock') togglePanelLock(key);
     if (action === 'minimize') togglePanelMinimized(key);
     if (action === 'dock') dockPanel(key);
     if (action === 'popout') popOutPanel(key);

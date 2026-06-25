@@ -26,7 +26,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "chrome",
-      "learned_at": 1782205397.3902113,
+      "learned_at": 1782372026.2027776,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "",
@@ -46,7 +46,7 @@
       ],
       "launch_type": "path",
       "learned_alias": "could you open google chrome for me",
-      "learned_at": 1782205481.8949428,
+      "learned_at": 1782372103.2117062,
       "learned_source": "verified_launch_success",
       "name": "chrome",
       "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -146,7 +146,7 @@
       ],
       "launch_type": "known",
       "learned_alias": "notepad",
-      "learned_at": 1782205479.5868318,
+      "learned_at": 1782372101.0097532,
       "learned_source": "verified_launch_success",
       "name": "notepad",
       "path": "",
@@ -176,7 +176,7 @@
       ],
       "launch_type": "aumid",
       "learned_alias": "snipping tool",
-      "learned_at": 1782104440.3783507,
+      "learned_at": 1782372280.6449037,
       "learned_source": "close_success",
       "name": "Snipping Tool",
       "path": "Microsoft.ScreenSketch_8wekyb3d8bbwe!App",
@@ -201,6 +201,6 @@
     }
   },
   "roles": {},
-  "updated_at": 1782205481.8949428,
+  "updated_at": 1782372280.6449037,
   "version": 2
 }

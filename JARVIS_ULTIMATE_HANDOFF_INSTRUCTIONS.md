@@ -4,11 +4,11 @@ This file exists so a future ChatGPT project chat can quickly understand the cur
 
 ## Current project status
 
-Current committed milestone before this patch: **0.3.3a — Typed Input Voice Parity + Natural Memory Response Hotfix**
+Current committed milestone before this patch: **0.3.8a — Panel Lock Only**
 
-Current patch milestone: **0.3.4 — Relationship Memory Graph**
+Current patch milestone: **0.3.8b — Panel Header Containment + First Drag Stabilization**
 
-Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.4`. Hotfixes may use suffixes like `0.3.2a`.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.8b`. Hotfixes may use suffixes like `0.3.2a`.
 
 ## User patch/package preferences
 
@@ -548,3 +548,55 @@ Status:
 
 Next recommended step:
 - After testing/commit, continue UI polish with dedicated Electron popout window management or return to memory review edit/delete commands.
+
+## 0.3.8a — Panel Lock Only
+
+This milestone starts the safer post-reset UI stabilization path. It intentionally changes only one thing: per-panel locking.
+
+Changes:
+- Added a per-panel **Lock** button beside the existing **Min**, **Dock**, and **Pop** panel controls.
+- Added persistent local storage for individual panel lock states.
+- Locked panels cannot be dragged or resized while the global layout is unlocked.
+- Unlocked panels continue to drag and resize as before.
+- The global layout lock still works the same way as before.
+- Added tests for the new app-shell version/capability, renderer lock storage/action, and locked-state CSS.
+- App shell version is now `0.3.8a`.
+
+Validation:
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 427 tests in 4.450s — OK`
+
+Current status after 0.3.8a:
+- Jarvis is still on the reset 0.3.8 dockable workspace baseline.
+- Panel locking is available for manual testing without touching fragile popout, preset, or responsive layout behavior.
+
+Next recommended update:
+- `0.3.8b — Safer Drag/Resize Containment`, focused only on panel minimum sizes, header/control containment, and preventing panel content from spilling behind buttons.
+- Keep dropdown text color, save custom preset, responsive resize scaling, and real Electron popout windows as separate later patches.
+
+## 0.3.8b — Panel Header Containment + First Drag Stabilization
+
+This hotfix follows live testing of 0.3.8a. It keeps the reset 0.3.8 dockable workspace baseline and the 0.3.8a per-panel Lock button, but fixes the two visible layout problems from manual testing.
+
+Changes:
+- Panel header action buttons now wrap safely instead of overlapping each other or the panel title.
+- Left-rail panels use a safer stacked header layout so Hide/Lock/Min/Dock/Pop stay visible.
+- The Lock button no longer expands from `Lock` to `Locked`, reducing header width pressure while still showing active state through color/border styling.
+- Layout preset dropdown options now have explicit dark background and readable text in Electron/Windows menus.
+- First drag/resize of a docked panel now uses an invisible placeholder so nearby panels do not suddenly expand or jump while the dragged panel is being promoted to floating mode.
+- Drag/resize now promotes the active panel to floating without reapplying the entire layout during pointer-down.
+- App shell version is now `0.3.8b` and capabilities include `panel_header_no_overlap_guard` and `panel_drag_placeholder_stabilization`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 430 tests in 4.883s — OK`
+
+Manual testing focus:
+- Runtime and Workspace headers should not have overlapping buttons.
+- Dragging a docked left-rail panel for the first time should not make the surrounding panels balloon or stack on top of each other during the drag.
+- Locked panels should still refuse drag and resize.
+
+Next recommended update:
+- Continue with the remaining small UI fixes one at a time: responsive window resize scaling, Save Custom Preset, then real Electron popout windows.
+
