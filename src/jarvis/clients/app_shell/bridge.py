@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.8b"
+APP_SHELL_VERSION = "0.3.8c4"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -142,6 +142,22 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "per_panel_layout_lock_buttons",
         "panel_header_no_overlap_guard",
         "panel_drag_placeholder_stabilization",
+        "responsive_panel_resize_clamping",
+        "floating_panel_viewport_bounds",
+        "debounced_layout_resize_handler",
+        "viewport_scaled_panel_restore",
+        "last_active_panel_z_order",
+        "floating_panel_content_containment",
+        "runtime_panel_minimum_size_guard",
+        "workspace_safe_area_panel_scaling",
+        "maximize_restore_panel_ratio_preservation",
+        "top_bar_overlap_prevention",
+        "independent_panel_drag_freeze",
+        "active_panel_only_drag_updates",
+        "no_neighbor_panel_reflow_on_drag",
+        "dom_geometry_panel_freeze",
+        "post_drag_neighbor_snap_guard",
+        "release_safe_panel_layout_restore",
         "panel_command_palette",
         "multi_monitor_panel_popouts",
     )

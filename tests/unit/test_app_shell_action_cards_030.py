@@ -9,7 +9,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 class TestAppShellActionCards030(unittest.TestCase):
     def test_app_shell_version_and_capabilities_include_030_abilities(self) -> None:
         capabilities = app_shell_capabilities()
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8c4")
         self.assertIn("ability_registry_foundation", capabilities)
         self.assertIn("safe_app_launcher_ability", capabilities)
         self.assertIn("ui_action_cards", capabilities)

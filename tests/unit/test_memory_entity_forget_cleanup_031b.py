@@ -26,7 +26,7 @@ class FakeEntityLLM:
 
 class EntityMemoryForgetCleanup031bTests(unittest.TestCase):
     def test_version_and_capability_include_forget_cleanup_guard(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8c4")
         self.assertIn("entity_memory_forget_cleanup_guard", set(app_shell_capabilities()))
 
     def test_forget_removes_duplicate_entity_records_by_name_alias_and_source_text(self) -> None:

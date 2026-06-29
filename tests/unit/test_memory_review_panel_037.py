@@ -17,7 +17,7 @@ from jarvis.ui.workspace import UIWorkspaceState
 
 class MemoryReviewPanel037Tests(unittest.TestCase):
     def test_version_and_capabilities_include_memory_review_panel(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8c4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("memory_review_panel", capabilities)
         self.assertIn("ranked_memory_review_bullets", capabilities)

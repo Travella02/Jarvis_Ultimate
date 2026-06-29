@@ -1298,6 +1298,19 @@
     },
     {
       "aliases": [
+        "capture",
+        "capture"
+      ],
+      "launch_type": "path",
+      "name": "capture",
+      "path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\capture.exe",
+      "process_names": [
+        "capture.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
         "cat",
         "cat"
       ],
@@ -1468,7 +1481,7 @@
       ],
       "launch_type": "path",
       "name": "chrmstp",
-      "path": "C:\\Program Files\\Google\\Chrome\\Application\\149.0.7827.116\\Installer\\chrmstp.exe",
+      "path": "C:\\Program Files\\Google\\Chrome\\Application\\149.0.7827.197\\Installer\\chrmstp.exe",
       "process_names": [
         "chrmstp.exe"
       ],
@@ -1511,7 +1524,7 @@
       ],
       "launch_type": "path",
       "name": "chrome pwa launcher",
-      "path": "C:\\Program Files\\Google\\Chrome\\Application\\149.0.7827.116\\chrome_pwa_launcher.exe",
+      "path": "C:\\Program Files\\Google\\Chrome\\Application\\149.0.7827.197\\chrome_pwa_launcher.exe",
       "process_names": [
         "chrome_pwa_launcher.exe"
       ],
@@ -1653,19 +1666,6 @@
       "path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\CNFNOT32.EXE",
       "process_names": [
         "CNFNOT32.EXE"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "CodeCoverage",
-        "CodeCoverage"
-      ],
-      "launch_type": "path",
-      "name": "CodeCoverage",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Team Tools\\Dynamic Code Coverage Tools\\CodeCoverage.exe",
-      "process_names": [
-        "CodeCoverage.exe"
       ],
       "source": "program_files"
     },
@@ -1832,7 +1832,7 @@
       ],
       "launch_type": "path",
       "name": "cookie exporter",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\cookie_exporter.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\cookie_exporter.exe",
       "process_names": [
         "cookie_exporter.exe"
       ],
@@ -1845,7 +1845,7 @@
       ],
       "launch_type": "path",
       "name": "cookie exporter",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\cookie_exporter.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\cookie_exporter.exe",
       "process_names": [
         "cookie_exporter.exe"
       ],
@@ -1858,7 +1858,7 @@
       ],
       "launch_type": "path",
       "name": "cookie exporter",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\cookie_exporter.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\cookie_exporter.exe",
       "process_names": [
         "cookie_exporter.exe"
       ],
@@ -1871,7 +1871,20 @@
       ],
       "launch_type": "path",
       "name": "cookie exporter",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\cookie_exporter.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\cookie_exporter.exe",
+      "process_names": [
+        "cookie_exporter.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "cookie exporter",
+        "cookie_exporter"
+      ],
+      "launch_type": "path",
+      "name": "cookie exporter",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\cookie_exporter.exe",
       "process_names": [
         "cookie_exporter.exe"
       ],
@@ -1897,7 +1910,20 @@
       ],
       "launch_type": "path",
       "name": "cookie exporter",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\cookie_exporter.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\cookie_exporter.exe",
+      "process_names": [
+        "cookie_exporter.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "cookie exporter",
+        "cookie_exporter"
+      ],
+      "launch_type": "path",
+      "name": "cookie exporter",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\cookie_exporter.exe",
       "process_names": [
         "cookie_exporter.exe"
       ],
@@ -1963,19 +1989,6 @@
       "path": "C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v10.0A\\bin\\NETFX 4.8 Tools\\CorFlags.exe",
       "process_names": [
         "CorFlags.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "covinstrc32",
-        "covinstrc32"
-      ],
-      "launch_type": "path",
-      "name": "covinstrc32",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Team Tools\\Dynamic Code Coverage Tools\\covinstrc32.exe",
-      "process_names": [
-        "covinstrc32.exe"
       ],
       "source": "program_files"
     },
@@ -2315,28 +2328,6 @@
     },
     {
       "aliases": [
-        "Database Compare",
-        "database compare"
-      ],
-      "launch_type": "aumid",
-      "name": "Database Compare",
-      "path": "Microsoft.Office.DATABASECOMPARE.EXE.15",
-      "process_names": [],
-      "source": "start_apps"
-    },
-    {
-      "aliases": [
-        "Database Compare",
-        "Database Compare"
-      ],
-      "launch_type": "path",
-      "name": "Database Compare",
-      "path": "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Office Tools\\Database Compare.lnk",
-      "process_names": [],
-      "source": "start_menu"
-    },
-    {
-      "aliases": [
         "date",
         "date"
       ],
@@ -2358,19 +2349,6 @@
       "path": "C:\\Program Files\\Git\\usr\\bin\\dd.exe",
       "process_names": [
         "dd.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "DDConfigCA",
-        "DDConfigCA"
-      ],
-      "launch_type": "path",
-      "name": "DDConfigCA",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\DDConfigCA.exe",
-      "process_names": [
-        "DDConfigCA.exe"
       ],
       "source": "program_files"
     },
@@ -2568,6 +2546,20 @@
         "disco.exe"
       ],
       "source": "program_files"
+    },
+    {
+      "aliases": [
+        "Discord",
+        "discord"
+      ],
+      "launch_type": "path",
+      "name": "discord",
+      "path": "C:\\Users\\tanne\\AppData\\Local\\Discord\\app-1.0.9243\\Discord.exe",
+      "process_names": [
+        "Discord.exe",
+        "Update.exe"
+      ],
+      "source": "known_path"
     },
     {
       "aliases": [
@@ -3022,19 +3014,6 @@
     },
     {
       "aliases": [
-        "errlook",
-        "errlook"
-      ],
-      "launch_type": "path",
-      "name": "errlook",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\errlook.exe",
-      "process_names": [
-        "errlook.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "Event Viewer",
         "event viewer"
       ],
@@ -3274,7 +3253,7 @@
       ],
       "launch_type": "path",
       "name": "FileCoAuth",
-      "path": "C:\\Program Files\\Microsoft OneDrive\\26.095.0519.0003\\FileCoAuth.exe",
+      "path": "C:\\Program Files\\Microsoft OneDrive\\26.098.0524.0004\\FileCoAuth.exe",
       "process_names": [
         "FileCoAuth.exe"
       ],
@@ -3300,7 +3279,7 @@
       ],
       "launch_type": "path",
       "name": "FileSyncConfig",
-      "path": "C:\\Program Files\\Microsoft OneDrive\\26.095.0519.0003\\FileSyncConfig.exe",
+      "path": "C:\\Program Files\\Microsoft OneDrive\\26.098.0524.0004\\FileSyncConfig.exe",
       "process_names": [
         "FileSyncConfig.exe"
       ],
@@ -4714,19 +4693,6 @@
     },
     {
       "aliases": [
-        "guidgen",
-        "guidgen"
-      ],
-      "launch_type": "path",
-      "name": "guidgen",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\guidgen.exe",
-      "process_names": [
-        "guidgen.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "gzip",
         "gzip"
       ],
@@ -4893,7 +4859,7 @@
       ],
       "launch_type": "path",
       "name": "ie to edge stub",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\BHO\\ie_to_edge_stub.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\BHO\\ie_to_edge_stub.exe",
       "process_names": [
         "ie_to_edge_stub.exe"
       ],
@@ -4906,7 +4872,7 @@
       ],
       "launch_type": "path",
       "name": "ie to edge stub",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\BHO\\ie_to_edge_stub.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\BHO\\ie_to_edge_stub.exe",
       "process_names": [
         "ie_to_edge_stub.exe"
       ],
@@ -4919,7 +4885,7 @@
       ],
       "launch_type": "path",
       "name": "ie to edge stub",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\BHO\\ie_to_edge_stub.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\BHO\\ie_to_edge_stub.exe",
       "process_names": [
         "ie_to_edge_stub.exe"
       ],
@@ -4932,7 +4898,20 @@
       ],
       "launch_type": "path",
       "name": "ie to edge stub",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\BHO\\ie_to_edge_stub.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\BHO\\ie_to_edge_stub.exe",
+      "process_names": [
+        "ie_to_edge_stub.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "ie to edge stub",
+        "ie_to_edge_stub"
+      ],
+      "launch_type": "path",
+      "name": "ie to edge stub",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\BHO\\ie_to_edge_stub.exe",
       "process_names": [
         "ie_to_edge_stub.exe"
       ],
@@ -4958,7 +4937,20 @@
       ],
       "launch_type": "path",
       "name": "ie to edge stub",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\BHO\\ie_to_edge_stub.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\BHO\\ie_to_edge_stub.exe",
+      "process_names": [
+        "ie_to_edge_stub.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "ie to edge stub",
+        "ie_to_edge_stub"
+      ],
+      "launch_type": "path",
+      "name": "ie to edge stub",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\BHO\\ie_to_edge_stub.exe",
       "process_names": [
         "ie_to_edge_stub.exe"
       ],
@@ -5559,19 +5551,6 @@
     },
     {
       "aliases": [
-        "livecapture",
-        "livecapture"
-      ],
-      "launch_type": "path",
-      "name": "livecapture",
-      "path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\livecapture.exe",
-      "process_names": [
-        "livecapture.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "LiveCodingConsole",
         "LiveCodingConsole"
       ],
@@ -5876,19 +5855,6 @@
     },
     {
       "aliases": [
-        "makehm",
-        "makehm"
-      ],
-      "launch_type": "path",
-      "name": "makehm",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\makehm.exe",
-      "process_names": [
-        "makehm.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "MavInject32",
         "MavInject32"
       ],
@@ -5938,6 +5904,39 @@
         "mDNSResponder.exe"
       ],
       "source": "program_files"
+    },
+    {
+      "aliases": [
+        "MECCHA CHAMELEON",
+        "meccha chameleon"
+      ],
+      "launch_type": "aumid",
+      "name": "MECCHA CHAMELEON",
+      "path": "steam://rungameid/4704690",
+      "process_names": [],
+      "source": "start_apps"
+    },
+    {
+      "aliases": [
+        "MECCHA CHAMELEON",
+        "MECCHA CHAMELEON"
+      ],
+      "launch_type": "path",
+      "name": "MECCHA CHAMELEON",
+      "path": "C:\\Users\\tanne\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Steam\\MECCHA CHAMELEON.url",
+      "process_names": [],
+      "source": "start_menu"
+    },
+    {
+      "aliases": [
+        "MECCHA CHAMELEON",
+        "MECCHA CHAMELEON"
+      ],
+      "launch_type": "path",
+      "name": "MECCHA CHAMELEON",
+      "path": "C:\\Users\\tanne\\Desktop\\Games\\MECCHA CHAMELEON.url",
+      "process_names": [],
+      "source": "start_menu"
     },
     {
       "aliases": [
@@ -6150,7 +6149,7 @@
       ],
       "launch_type": "path",
       "name": "Microsoft.SharePoint.NativeMessagingClient",
-      "path": "C:\\Program Files\\Microsoft OneDrive\\26.095.0519.0003\\Microsoft.SharePoint.NativeMessagingClient.exe",
+      "path": "C:\\Program Files\\Microsoft OneDrive\\26.098.0524.0004\\Microsoft.SharePoint.NativeMessagingClient.exe",
       "process_names": [
         "Microsoft.SharePoint.NativeMessagingClient.exe"
       ],
@@ -6158,40 +6157,66 @@
     },
     {
       "aliases": [
-        "MicrosoftEdge X64 149.0.4022.66 149.0.4022.62",
-        "MicrosoftEdge_X64_149.0.4022.66_149.0.4022.62"
+        "MicrosoftEdge X64 149.0.4022.80 149.0.4022.66",
+        "MicrosoftEdge_X64_149.0.4022.80_149.0.4022.66"
       ],
       "launch_type": "path",
-      "name": "MicrosoftEdge X64 149.0.4022.66 149.0.4022.62",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Download\\{C50565E9-CCCF-44B4-BA15-5AC5C6569197}\\149.0.4022.66\\MicrosoftEdge_X64_149.0.4022.66_149.0.4022.62.exe",
+      "name": "MicrosoftEdge X64 149.0.4022.80 149.0.4022.66",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Download\\{C50565E9-CCCF-44B4-BA15-5AC5C6569197}\\149.0.4022.80\\MicrosoftEdge_X64_149.0.4022.80_149.0.4022.66.exe",
       "process_names": [
-        "MicrosoftEdge_X64_149.0.4022.66_149.0.4022.62.exe"
+        "MicrosoftEdge_X64_149.0.4022.80_149.0.4022.66.exe"
       ],
       "source": "program_files"
     },
     {
       "aliases": [
-        "MicrosoftEdge X64 149.0.4022.69",
-        "MicrosoftEdge_X64_149.0.4022.69"
+        "MicrosoftEdge X64 149.0.4022.98",
+        "MicrosoftEdge_X64_149.0.4022.98"
       ],
       "launch_type": "path",
-      "name": "MicrosoftEdge X64 149.0.4022.69",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Download\\{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}\\149.0.4022.69\\MicrosoftEdge_X64_149.0.4022.69.exe",
+      "name": "MicrosoftEdge X64 149.0.4022.98",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Download\\{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}\\149.0.4022.98\\MicrosoftEdge_X64_149.0.4022.98.exe",
       "process_names": [
-        "MicrosoftEdge_X64_149.0.4022.69.exe"
+        "MicrosoftEdge_X64_149.0.4022.98.exe"
       ],
       "source": "program_files"
     },
     {
       "aliases": [
-        "MicrosoftEdge X64 149.0.4022.69 149.0.4022.62",
-        "MicrosoftEdge_X64_149.0.4022.69_149.0.4022.62"
+        "MicrosoftEdge X64 149.0.4022.98",
+        "MicrosoftEdge_X64_149.0.4022.98"
       ],
       "launch_type": "path",
-      "name": "MicrosoftEdge X64 149.0.4022.69 149.0.4022.62",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Download\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}\\149.0.4022.69\\MicrosoftEdge_X64_149.0.4022.69_149.0.4022.62.exe",
+      "name": "MicrosoftEdge X64 149.0.4022.98",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Install\\{844E181E-C5D9-4862-9E03-3ACCAB5A0490}\\MicrosoftEdge_X64_149.0.4022.98.exe",
       "process_names": [
-        "MicrosoftEdge_X64_149.0.4022.69_149.0.4022.62.exe"
+        "MicrosoftEdge_X64_149.0.4022.98.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "MicrosoftEdge X64 149.0.4022.98 149.0.4022.80",
+        "MicrosoftEdge_X64_149.0.4022.98_149.0.4022.80"
+      ],
+      "launch_type": "path",
+      "name": "MicrosoftEdge X64 149.0.4022.98 149.0.4022.80",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Download\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}\\149.0.4022.98\\MicrosoftEdge_X64_149.0.4022.98_149.0.4022.80.exe",
+      "process_names": [
+        "MicrosoftEdge_X64_149.0.4022.98_149.0.4022.80.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "MicrosoftEdge X64 149.0.4022.98 149.0.4022.80",
+        "MicrosoftEdge_X64_149.0.4022.98_149.0.4022.80"
+      ],
+      "launch_type": "path",
+      "name": "MicrosoftEdge X64 149.0.4022.98 149.0.4022.80",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\Install\\{173345BB-C91E-4F16-B21C-E713CAF48249}\\MicrosoftEdge_X64_149.0.4022.98_149.0.4022.80.exe",
+      "process_names": [
+        "MicrosoftEdge_X64_149.0.4022.98_149.0.4022.80.exe"
       ],
       "source": "program_files"
     },
@@ -6202,7 +6227,7 @@
       ],
       "launch_type": "path",
       "name": "MicrosoftEdgeComRegisterShellARM64",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\1.3.241.13\\MicrosoftEdgeComRegisterShellARM64.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\1.3.241.15\\MicrosoftEdgeComRegisterShellARM64.exe",
       "process_names": [
         "MicrosoftEdgeComRegisterShellARM64.exe"
       ],
@@ -6514,7 +6539,7 @@
       ],
       "launch_type": "path",
       "name": "mscopilot",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\mscopilot.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\mscopilot.exe",
       "process_names": [
         "mscopilot.exe"
       ],
@@ -6527,7 +6552,7 @@
       ],
       "launch_type": "path",
       "name": "mscopilot",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\mscopilot.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\mscopilot.exe",
       "process_names": [
         "mscopilot.exe"
       ],
@@ -6540,7 +6565,7 @@
       ],
       "launch_type": "path",
       "name": "mscopilot",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\mscopilot.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\mscopilot.exe",
       "process_names": [
         "mscopilot.exe"
       ],
@@ -6553,7 +6578,20 @@
       ],
       "launch_type": "path",
       "name": "mscopilot",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\mscopilot.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\mscopilot.exe",
+      "process_names": [
+        "mscopilot.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "mscopilot",
+        "mscopilot"
+      ],
+      "launch_type": "path",
+      "name": "mscopilot",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\mscopilot.exe",
       "process_names": [
         "mscopilot.exe"
       ],
@@ -6579,7 +6617,20 @@
       ],
       "launch_type": "path",
       "name": "mscopilot",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\mscopilot.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\mscopilot.exe",
+      "process_names": [
+        "mscopilot.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "mscopilot",
+        "mscopilot"
+      ],
+      "launch_type": "path",
+      "name": "mscopilot",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\mscopilot.exe",
       "process_names": [
         "mscopilot.exe"
       ],
@@ -6605,7 +6656,7 @@
       ],
       "launch_type": "path",
       "name": "msedge",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\msedge.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\msedge.exe",
       "process_names": [
         "msedge.exe"
       ],
@@ -6618,7 +6669,7 @@
       ],
       "launch_type": "path",
       "name": "msedge",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\msedge.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\msedge.exe",
       "process_names": [
         "msedge.exe"
       ],
@@ -6631,7 +6682,7 @@
       ],
       "launch_type": "path",
       "name": "msedge",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\msedge.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\msedge.exe",
       "process_names": [
         "msedge.exe"
       ],
@@ -6644,7 +6695,20 @@
       ],
       "launch_type": "path",
       "name": "msedge",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\msedge.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\msedge.exe",
+      "process_names": [
+        "msedge.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedge",
+        "msedge"
+      ],
+      "launch_type": "path",
+      "name": "msedge",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\msedge.exe",
       "process_names": [
         "msedge.exe"
       ],
@@ -6670,7 +6734,20 @@
       ],
       "launch_type": "path",
       "name": "msedge",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\msedge.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\msedge.exe",
+      "process_names": [
+        "msedge.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedge",
+        "msedge"
+      ],
+      "launch_type": "path",
+      "name": "msedge",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\msedge.exe",
       "process_names": [
         "msedge.exe"
       ],
@@ -6683,7 +6760,7 @@
       ],
       "launch_type": "path",
       "name": "msedge proxy",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\msedge_proxy.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\msedge_proxy.exe",
       "process_names": [
         "msedge_proxy.exe"
       ],
@@ -6709,7 +6786,7 @@
       ],
       "launch_type": "path",
       "name": "msedge proxy",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\msedge_proxy.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\msedge_proxy.exe",
       "process_names": [
         "msedge_proxy.exe"
       ],
@@ -6722,7 +6799,7 @@
       ],
       "launch_type": "path",
       "name": "msedge proxy",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\msedge_proxy.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\msedge_proxy.exe",
       "process_names": [
         "msedge_proxy.exe"
       ],
@@ -6735,7 +6812,20 @@
       ],
       "launch_type": "path",
       "name": "msedge proxy",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\msedge_proxy.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\msedge_proxy.exe",
+      "process_names": [
+        "msedge_proxy.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedge proxy",
+        "msedge_proxy"
+      ],
+      "launch_type": "path",
+      "name": "msedge proxy",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\msedge_proxy.exe",
       "process_names": [
         "msedge_proxy.exe"
       ],
@@ -6761,7 +6851,20 @@
       ],
       "launch_type": "path",
       "name": "msedge proxy",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\msedge_proxy.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\msedge_proxy.exe",
+      "process_names": [
+        "msedge_proxy.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedge proxy",
+        "msedge_proxy"
+      ],
+      "launch_type": "path",
+      "name": "msedge proxy",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\msedge_proxy.exe",
       "process_names": [
         "msedge_proxy.exe"
       ],
@@ -6774,7 +6877,7 @@
       ],
       "launch_type": "path",
       "name": "msedge pwa launcher",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\msedge_pwa_launcher.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\msedge_pwa_launcher.exe",
       "process_names": [
         "msedge_pwa_launcher.exe"
       ],
@@ -6787,7 +6890,7 @@
       ],
       "launch_type": "path",
       "name": "msedge pwa launcher",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\msedge_pwa_launcher.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\msedge_pwa_launcher.exe",
       "process_names": [
         "msedge_pwa_launcher.exe"
       ],
@@ -6800,7 +6903,7 @@
       ],
       "launch_type": "path",
       "name": "msedge pwa launcher",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\msedge_pwa_launcher.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\msedge_pwa_launcher.exe",
       "process_names": [
         "msedge_pwa_launcher.exe"
       ],
@@ -6813,7 +6916,20 @@
       ],
       "launch_type": "path",
       "name": "msedge pwa launcher",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\msedge_pwa_launcher.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\msedge_pwa_launcher.exe",
+      "process_names": [
+        "msedge_pwa_launcher.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedge pwa launcher",
+        "msedge_pwa_launcher"
+      ],
+      "launch_type": "path",
+      "name": "msedge pwa launcher",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\msedge_pwa_launcher.exe",
       "process_names": [
         "msedge_pwa_launcher.exe"
       ],
@@ -6839,7 +6955,20 @@
       ],
       "launch_type": "path",
       "name": "msedge pwa launcher",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\msedge_pwa_launcher.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\msedge_pwa_launcher.exe",
+      "process_names": [
+        "msedge_pwa_launcher.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedge pwa launcher",
+        "msedge_pwa_launcher"
+      ],
+      "launch_type": "path",
+      "name": "msedge pwa launcher",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\msedge_pwa_launcher.exe",
       "process_names": [
         "msedge_pwa_launcher.exe"
       ],
@@ -6852,7 +6981,7 @@
       ],
       "launch_type": "path",
       "name": "msedgewebview2",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\msedgewebview2.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\msedgewebview2.exe",
       "process_names": [
         "msedgewebview2.exe"
       ],
@@ -6865,7 +6994,7 @@
       ],
       "launch_type": "path",
       "name": "msedgewebview2",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\msedgewebview2.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\msedgewebview2.exe",
       "process_names": [
         "msedgewebview2.exe"
       ],
@@ -6878,7 +7007,7 @@
       ],
       "launch_type": "path",
       "name": "msedgewebview2",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\msedgewebview2.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\msedgewebview2.exe",
       "process_names": [
         "msedgewebview2.exe"
       ],
@@ -6891,7 +7020,20 @@
       ],
       "launch_type": "path",
       "name": "msedgewebview2",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\msedgewebview2.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\msedgewebview2.exe",
+      "process_names": [
+        "msedgewebview2.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedgewebview2",
+        "msedgewebview2"
+      ],
+      "launch_type": "path",
+      "name": "msedgewebview2",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\msedgewebview2.exe",
       "process_names": [
         "msedgewebview2.exe"
       ],
@@ -6917,7 +7059,20 @@
       ],
       "launch_type": "path",
       "name": "msedgewebview2",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\msedgewebview2.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\msedgewebview2.exe",
+      "process_names": [
+        "msedgewebview2.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "msedgewebview2",
+        "msedgewebview2"
+      ],
+      "launch_type": "path",
+      "name": "msedgewebview2",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\msedgewebview2.exe",
       "process_names": [
         "msedgewebview2.exe"
       ],
@@ -7053,19 +7208,6 @@
         "mspaint.exe"
       ],
       "source": "registry_app_paths"
-    },
-    {
-      "aliases": [
-        "mspdbsrv",
-        "mspdbsrv"
-      ],
-      "launch_type": "path",
-      "name": "mspdbsrv",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\mspdbsrv.exe",
-      "process_names": [
-        "mspdbsrv.exe"
-      ],
-      "source": "program_files"
     },
     {
       "aliases": [
@@ -7821,25 +7963,12 @@
     },
     {
       "aliases": [
-        "old msedge",
-        "old_msedge"
-      ],
-      "launch_type": "path",
-      "name": "old msedge",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Temp\\27712_1945123072\\old_msedge.exe",
-      "process_names": [
-        "old_msedge.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "olk",
         "olk.exe"
       ],
       "launch_type": "path",
       "name": "olk",
-      "path": "C:\\Program Files\\WindowsApps\\Microsoft.OutlookForWindows_1.2025.1209.500_x64__8wekyb3d8bbwe\\olk.exe",
+      "path": "C:\\Program Files\\WindowsApps\\Microsoft.OutlookForWindows_1.2026.617.600_x64__8wekyb3d8bbwe\\olk.exe",
       "process_names": [
         "olk.exe"
       ],
@@ -7922,7 +8051,7 @@
       ],
       "launch_type": "path",
       "name": "OneDriveFileLauncher",
-      "path": "C:\\Program Files\\Microsoft OneDrive\\26.095.0519.0003\\OneDriveFileLauncher.exe",
+      "path": "C:\\Program Files\\Microsoft OneDrive\\26.098.0524.0004\\OneDriveFileLauncher.exe",
       "process_names": [
         "OneDriveFileLauncher.exe"
       ],
@@ -7935,7 +8064,7 @@
       ],
       "launch_type": "path",
       "name": "OneDriveLauncher",
-      "path": "C:\\Program Files\\Microsoft OneDrive\\26.095.0519.0003\\OneDriveLauncher.exe",
+      "path": "C:\\Program Files\\Microsoft OneDrive\\26.098.0524.0004\\OneDriveLauncher.exe",
       "process_names": [
         "OneDriveLauncher.exe"
       ],
@@ -7948,7 +8077,7 @@
       ],
       "launch_type": "path",
       "name": "OneDrivePatcher",
-      "path": "C:\\Program Files\\Microsoft OneDrive\\26.095.0519.0003\\OneDrivePatcher.exe",
+      "path": "C:\\Program Files\\Microsoft OneDrive\\26.098.0524.0004\\OneDrivePatcher.exe",
       "process_names": [
         "OneDrivePatcher.exe"
       ],
@@ -8211,7 +8340,20 @@
       ],
       "launch_type": "path",
       "name": "passkey authenticator plugin",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\passkey_authenticator_plugin.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\passkey_authenticator_plugin.exe",
+      "process_names": [
+        "passkey_authenticator_plugin.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "passkey authenticator plugin",
+        "passkey_authenticator_plugin"
+      ],
+      "launch_type": "path",
+      "name": "passkey authenticator plugin",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\passkey_authenticator_plugin.exe",
       "process_names": [
         "passkey_authenticator_plugin.exe"
       ],
@@ -10967,7 +11109,7 @@
       ],
       "launch_type": "path",
       "name": "store",
-      "path": "C:\\Program Files\\WindowsApps\\Microsoft.WindowsStore_22605.1401.10.0_x64__8wekyb3d8bbwe\\store.exe",
+      "path": "C:\\Program Files\\WindowsApps\\Microsoft.WindowsStore_22605.1401.13.0_x64__8wekyb3d8bbwe\\store.exe",
       "process_names": [
         "store.exe"
       ],
@@ -11151,19 +11293,6 @@
     },
     {
       "aliases": [
-        "symsrvhost",
-        "symsrvhost"
-      ],
-      "launch_type": "path",
-      "name": "symsrvhost",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\symsrvhost.exe",
-      "process_names": [
-        "symsrvhost.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "sync",
         "sync"
       ],
@@ -11218,19 +11347,6 @@
       "path": "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Administrative Tools\\System Information.lnk",
       "process_names": [],
       "source": "start_menu"
-    },
-    {
-      "aliases": [
-        "T4VSHostProcess",
-        "T4VSHostProcess"
-      ],
-      "launch_type": "path",
-      "name": "T4VSHostProcess",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\T4VSHostProcess.exe",
-      "process_names": [
-        "T4VSHostProcess.exe"
-      ],
-      "source": "program_files"
     },
     {
       "aliases": [
@@ -11428,32 +11544,6 @@
       "path": "C:\\Program Files\\Git\\usr\\bin\\test.exe",
       "process_names": [
         "test.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "TextTransform",
-        "TextTransform"
-      ],
-      "launch_type": "path",
-      "name": "TextTransform",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\TextTransform.exe",
-      "process_names": [
-        "TextTransform.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "TextTransformCore",
-        "TextTransformCore"
-      ],
-      "launch_type": "path",
-      "name": "TextTransformCore",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\TextTransformCore.exe",
-      "process_names": [
-        "TextTransformCore.exe"
       ],
       "source": "program_files"
     },
@@ -11873,7 +11963,7 @@
       ],
       "launch_type": "path",
       "name": "uc connector",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.66\\uc_connector.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Copilot\\Application\\149.0.4022.80\\uc_connector.exe",
       "process_names": [
         "uc_connector.exe"
       ],
@@ -11886,7 +11976,7 @@
       ],
       "launch_type": "path",
       "name": "uc connector",
-      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.69\\uc_connector.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.80\\uc_connector.exe",
       "process_names": [
         "uc_connector.exe"
       ],
@@ -11899,7 +11989,7 @@
       ],
       "launch_type": "path",
       "name": "uc connector",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.66\\uc_connector.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\149.0.4022.98\\uc_connector.exe",
       "process_names": [
         "uc_connector.exe"
       ],
@@ -11912,7 +12002,20 @@
       ],
       "launch_type": "path",
       "name": "uc connector",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.69\\uc_connector.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.80\\uc_connector.exe",
+      "process_names": [
+        "uc_connector.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "uc connector",
+        "uc_connector"
+      ],
+      "launch_type": "path",
+      "name": "uc connector",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\149.0.4022.98\\uc_connector.exe",
       "process_names": [
         "uc_connector.exe"
       ],
@@ -11938,7 +12041,20 @@
       ],
       "launch_type": "path",
       "name": "uc connector",
-      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.69\\uc_connector.exe",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.80\\uc_connector.exe",
+      "process_names": [
+        "uc_connector.exe"
+      ],
+      "source": "program_files"
+    },
+    {
+      "aliases": [
+        "uc connector",
+        "uc_connector"
+      ],
+      "launch_type": "path",
+      "name": "uc connector",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\149.0.4022.98\\uc_connector.exe",
       "process_names": [
         "uc_connector.exe"
       ],
@@ -12888,71 +13004,6 @@
     },
     {
       "aliases": [
-        "VSHiveStub",
-        "VSHiveStub"
-      ],
-      "launch_type": "path",
-      "name": "VSHiveStub",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\VSHiveStub.exe",
-      "process_names": [
-        "VSHiveStub.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "VSLaunchBrowser",
-        "VSLaunchBrowser"
-      ],
-      "launch_type": "path",
-      "name": "VSLaunchBrowser",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\VSLaunchBrowser.exe",
-      "process_names": [
-        "VSLaunchBrowser.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "vsn",
-        "vsn"
-      ],
-      "launch_type": "path",
-      "name": "vsn",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\vsn.exe",
-      "process_names": [
-        "vsn.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "VSWebHandler",
-        "VSWebHandler"
-      ],
-      "launch_type": "path",
-      "name": "VSWebHandler",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\VSWebHandler.exe",
-      "process_names": [
-        "VSWebHandler.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "VSWebLauncher",
-        "VSWebLauncher"
-      ],
-      "launch_type": "path",
-      "name": "VSWebLauncher",
-      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\IDE\\VSWebLauncher.exe",
-      "process_names": [
-        "VSWebLauncher.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "wab",
         "wab.exe"
       ],
@@ -13585,6 +13636,17 @@
       ],
       "launch_type": "path",
       "name": "Wondershare Filmora 15",
+      "path": "C:\\Users\\tanne\\Desktop\\Wondershare Filmora 15.lnk",
+      "process_names": [],
+      "source": "start_menu"
+    },
+    {
+      "aliases": [
+        "Wondershare Filmora 15",
+        "Wondershare Filmora 15"
+      ],
+      "launch_type": "path",
+      "name": "Wondershare Filmora 15",
       "path": "C:\\Users\\tanne\\Desktop\\Editing - recording\\Wondershare Filmora 15.lnk",
       "process_names": [],
       "source": "start_menu"
@@ -13870,32 +13932,6 @@
     },
     {
       "aliases": [
-        "xsd",
-        "xsd"
-      ],
-      "launch_type": "path",
-      "name": "xsd",
-      "path": "C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v10.0A\\bin\\NETFX 4.8 Tools\\xsd.exe",
-      "process_names": [
-        "xsd.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
-        "xsltc",
-        "xsltc"
-      ],
-      "launch_type": "path",
-      "name": "xsltc",
-      "path": "C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v10.0A\\bin\\NETFX 4.8 Tools\\xsltc.exe",
-      "process_names": [
-        "xsltc.exe"
-      ],
-      "source": "program_files"
-    },
-    {
-      "aliases": [
         "xxd",
         "xxd"
       ],
@@ -14025,6 +14061,6 @@
       "source": "program_files"
     }
   ],
-  "created_at": 1781855177.0429323,
+  "created_at": 1782712791.7955801,
   "version": 9
 }

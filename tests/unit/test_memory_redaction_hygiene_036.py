@@ -18,7 +18,7 @@ from jarvis.ui.workspace import UIWorkspaceState
 
 class MemoryRedactionHygiene036Tests(unittest.TestCase):
     def test_version_and_capabilities_include_redaction_hygiene(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8b")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8c4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("sensitive_chat_archive_redaction", capabilities)
         self.assertIn("sensitive_ui_history_redaction", capabilities)

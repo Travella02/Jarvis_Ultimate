@@ -12,6 +12,16 @@ const AUTO_WAKE_STORAGE_KEY = 'jarvis.appShell.autoSleepWake.v021';
 const PANEL_LAYOUT_STORAGE_KEY = 'jarvis.appShell.panelLayout.v038';
 const PANEL_LAYOUT_LOCK_STORAGE_KEY = 'jarvis.appShell.panelLayoutLocked.v038';
 const PANEL_LOCK_STORAGE_KEY = 'jarvis.appShell.panelLocks.v038a';
+const PANEL_LAYOUT_VIEWPORT_STORAGE_KEY = 'jarvis.appShell.panelLayoutViewport.v038c2';
+const PANEL_LAYOUT_INTERACTION_SETTLE_MS = 140;
+const PANEL_VIEWPORT_MARGIN = 8;
+const PANEL_WORKSPACE_SELECTOR = '#interfaceGrid';
+const PANEL_MIN_FLOATING_WIDTH = 300;
+const PANEL_MIN_FLOATING_HEIGHT = 58;
+const PANEL_MIN_RESTORED_HEIGHT = 140;
+const PANEL_BASE_Z_INDEX = 40;
+
+
 
 let apiUrl = DEFAULT_STATE.app.api_url;
 let lastState = DEFAULT_STATE;
@@ -27,9 +37,15 @@ let panelVisibility = loadPanelVisibility();
 let panelLayout = loadPanelLayout();
 let layoutLocked = loadLayoutLocked();
 let panelLocks = loadPanelLocks();
+let panelLayoutViewport = loadPanelLayoutViewport();
+let panelZIndexCounter = initialPanelZIndexCounter();
 const poppedPanelWindows = new Map();
 let layoutToastTimer = null;
 let activePanelPlaceholder = null;
+let responsiveLayoutClampRaf = null;
+let activePanelInteractionKey = null;
+let activePanelInteractionSnapshot = null;
+let activePanelInteractionSettlingUntil = 0;
 let stateFadeTimer = null;
 let activeVisualState = normalizeState(DEFAULT_STATE.avatar.state);
 let orbCaptionTarget = '';
@@ -487,7 +503,11 @@ function renderState(snapshot) {
     : '<li>No panels registered yet.</li>';
 
   renderActionCards(workspace.workspace_cards || []);
-  applyPanelLayout();
+  if (!isPanelLayoutInteractionActive()) {
+    applyPanelLayout();
+  } else {
+    applyPanelLockState();
+  }
   refreshAllPopouts();
 
   const chatShouldAutoScroll = !isChatScrollLocked() && isNearScrollBottom(els.chatLog);
@@ -678,6 +698,174 @@ function loadPanelLayout() {
 
 function savePanelLayout() {
   localStorage.setItem(PANEL_LAYOUT_STORAGE_KEY, JSON.stringify(panelLayout));
+  savePanelLayoutViewport(currentPanelViewportSnapshot());
+}
+
+function currentPanelViewportSnapshot() {
+  const fallbackWidth = window.innerWidth || document.documentElement.clientWidth || PANEL_MIN_FLOATING_WIDTH;
+  const fallbackHeight = window.innerHeight || document.documentElement.clientHeight || PANEL_MIN_RESTORED_HEIGHT;
+  const workspace = document.querySelector(PANEL_WORKSPACE_SELECTOR);
+  if (workspace) {
+    const rect = workspace.getBoundingClientRect();
+    if (rect.width > 1 && rect.height > 1) {
+      return {
+        left: Math.max(0, rect.left),
+        top: Math.max(0, rect.top),
+        width: Math.max(PANEL_MIN_FLOATING_WIDTH + PANEL_VIEWPORT_MARGIN * 2, rect.width),
+        height: Math.max(PANEL_MIN_RESTORED_HEIGHT + PANEL_VIEWPORT_MARGIN * 2, rect.height)
+      };
+    }
+  }
+  return {
+    left: 0,
+    top: 0,
+    width: Math.max(PANEL_MIN_FLOATING_WIDTH + PANEL_VIEWPORT_MARGIN * 2, fallbackWidth),
+    height: Math.max(PANEL_MIN_RESTORED_HEIGHT + PANEL_VIEWPORT_MARGIN * 2, fallbackHeight)
+  };
+}
+
+function normalizePanelViewportSnapshot(value) {
+  const current = currentPanelViewportSnapshot();
+  const left = Number(value?.left ?? current.left ?? 0);
+  const top = Number(value?.top ?? current.top ?? 0);
+  const width = Number(value?.width || 0);
+  const height = Number(value?.height || 0);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
+    return current;
+  }
+  return {
+    left: Number.isFinite(left) ? left : current.left,
+    top: Number.isFinite(top) ? top : current.top,
+    width,
+    height
+  };
+}
+
+function inferPanelLayoutViewport() {
+  const current = currentPanelViewportSnapshot();
+  let inferredRight = current.left + current.width;
+  let inferredBottom = current.top + current.height;
+  for (const record of Object.values(panelLayout || {})) {
+    if (record?.mode !== 'floating') continue;
+    const right = Number(record.x || 0) + Number(record.width || 0) + PANEL_VIEWPORT_MARGIN;
+    const bottom = Number(record.y || 0) + Number(record.height || 0) + PANEL_VIEWPORT_MARGIN;
+    if (Number.isFinite(right)) inferredRight = Math.max(inferredRight, right);
+    if (Number.isFinite(bottom)) inferredBottom = Math.max(inferredBottom, bottom);
+  }
+  return {
+    left: current.left,
+    top: current.top,
+    width: Math.max(current.width, inferredRight - current.left),
+    height: Math.max(current.height, inferredBottom - current.top)
+  };
+}
+
+function loadPanelLayoutViewport() {
+  try {
+    const raw = localStorage.getItem(PANEL_LAYOUT_VIEWPORT_STORAGE_KEY);
+    if (!raw) return inferPanelLayoutViewport();
+    const saved = JSON.parse(raw);
+    return normalizePanelViewportSnapshot(saved);
+  } catch (error) {
+    return inferPanelLayoutViewport();
+  }
+}
+
+function savePanelLayoutViewport(snapshot) {
+  panelLayoutViewport = normalizePanelViewportSnapshot(snapshot);
+  localStorage.setItem(PANEL_LAYOUT_VIEWPORT_STORAGE_KEY, JSON.stringify(panelLayoutViewport));
+}
+
+function initialPanelZIndexCounter() {
+  let highest = PANEL_BASE_Z_INDEX;
+  for (const record of Object.values(panelLayout || {})) {
+    const zIndex = Number(record?.zIndex || 0);
+    if (Number.isFinite(zIndex)) highest = Math.max(highest, zIndex);
+  }
+  return highest;
+}
+
+function clonePanelLayoutRecord(record) {
+  if (!record || typeof record !== 'object') return record;
+  return { ...record };
+}
+
+function layoutRecordFromPanelGeometry(panel, options = {}) {
+  const key = panelKeyFromElement(panel);
+  const rect = panel?.getBoundingClientRect?.();
+  const current = panelLayout[key] || {};
+  if (!key || !rect || rect.width <= 0 || rect.height <= 0) {
+    return clonePanelLayoutRecord(current);
+  }
+  const forceFloating = options.forceFloating !== false;
+  const isFloating = forceFloating || panel.classList.contains('layout-floating') || current.mode === 'floating';
+  return sanitizeLayoutRecord({
+    ...current,
+    mode: isFloating ? 'floating' : 'docked',
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height,
+    minimized: panel.classList.contains('panel-minimized') || Boolean(current.minimized),
+    popped: Boolean(current.popped),
+    zIndex: current.zIndex
+  }, key);
+}
+
+function capturePanelInteractionLayout(activeKey) {
+  const snapshot = {};
+  for (const panel of layoutPanels()) {
+    const key = panelKeyFromElement(panel);
+    if (!key || key === activeKey) continue;
+    snapshot[key] = layoutRecordFromPanelGeometry(panel, { forceFloating: true });
+  }
+  return snapshot;
+}
+
+function applyFrozenPanelSnapshot(snapshot, activeKey) {
+  if (!snapshot || typeof snapshot !== 'object') return;
+  for (const [key, record] of Object.entries(snapshot)) {
+    if (key === activeKey || !record || record.mode !== 'floating') continue;
+    panelLayout[key] = clonePanelLayoutRecord(record);
+    const panel = findLayoutPanel(key);
+    if (!panel) continue;
+    panel.classList.add('layout-floating');
+    panel.classList.toggle('panel-minimized', Boolean(record.minimized));
+    panel.classList.toggle('panel-popped', Boolean(record.popped) && poppedPanelWindows.has(key));
+    panel.style.left = `${record.x}px`;
+    panel.style.top = `${record.y}px`;
+    panel.style.width = `${record.width}px`;
+    panel.style.height = `${record.height}px`;
+    panel.style.zIndex = String(record.zIndex || PANEL_BASE_Z_INDEX);
+  }
+}
+
+function startPanelLayoutInteraction(key) {
+  activePanelInteractionKey = key;
+  activePanelInteractionSnapshot = capturePanelInteractionLayout(key);
+  applyFrozenPanelSnapshot(activePanelInteractionSnapshot, key);
+  activePanelInteractionSettlingUntil = 0;
+  return activePanelInteractionSnapshot;
+}
+
+function restoreUnaffectedPanelLayout(snapshot, activeKey) {
+  if (!snapshot || typeof snapshot !== 'object') return;
+  for (const [key, record] of Object.entries(snapshot)) {
+    if (key === activeKey) continue;
+    panelLayout[key] = clonePanelLayoutRecord(record);
+  }
+}
+
+function finishPanelLayoutInteraction(key, snapshot) {
+  restoreUnaffectedPanelLayout(snapshot, key);
+  activePanelInteractionKey = null;
+  activePanelInteractionSnapshot = null;
+  activePanelInteractionSettlingUntil = Date.now() + PANEL_LAYOUT_INTERACTION_SETTLE_MS;
+}
+
+function isPanelLayoutInteractionActive() {
+  if (activePanelInteractionKey) return true;
+  return Date.now() < activePanelInteractionSettlingUntil;
 }
 
 function loadLayoutLocked() {
@@ -755,6 +943,32 @@ function findLayoutPanel(key) {
   return document.querySelector(`[data-layout-panel="${CSS.escape(key)}"]`);
 }
 
+function panelMinimums(key, minimized = false) {
+  if (minimized) return { width: PANEL_MIN_FLOATING_WIDTH, height: PANEL_MIN_FLOATING_HEIGHT };
+  const minimums = {
+    runtime: { width: 330, height: 186 },
+    voice: { width: 320, height: 178 },
+    workspace: { width: 320, height: 210 },
+    conversation: { width: 340, height: 260 },
+    diagnostics: { width: 320, height: 160 },
+    core: { width: 360, height: 260 }
+  };
+  return minimums[key] || { width: PANEL_MIN_FLOATING_WIDTH, height: PANEL_MIN_RESTORED_HEIGHT };
+}
+
+function bringPanelToFront(key, options = {}) {
+  if (!key) return;
+  const persist = options.persist !== false;
+  const current = panelLayout[key] || {};
+  panelZIndexCounter = Math.max(panelZIndexCounter + 1, initialPanelZIndexCounter() + 1);
+  panelLayout[key] = { ...current, zIndex: panelZIndexCounter };
+  const panel = findLayoutPanel(key);
+  if (panel?.classList?.contains('layout-floating')) {
+    panel.style.zIndex = String(panelZIndexCounter);
+  }
+  if (persist) savePanelLayout();
+}
+
 function ensurePanelLayoutChrome(panel) {
   if (!panel || panel.dataset.layoutReady === 'true') return;
   panel.dataset.layoutReady = 'true';
@@ -784,25 +998,132 @@ function ensurePanelLayoutChrome(panel) {
   panel.appendChild(resize);
 }
 
-function sanitizeLayoutRecord(record) {
-  const width = clamp(Number(record?.width || 340), 240, Math.max(260, window.innerWidth - 20));
-  const height = clamp(Number(record?.height || 240), 58, Math.max(120, window.innerHeight - 20));
+function viewportPanelBounds(snapshot = currentPanelViewportSnapshot()) {
+  const normalized = normalizePanelViewportSnapshot(snapshot);
+  const width = Math.max(PANEL_MIN_FLOATING_WIDTH + PANEL_VIEWPORT_MARGIN * 2, normalized.width);
+  const height = Math.max(PANEL_MIN_RESTORED_HEIGHT + PANEL_VIEWPORT_MARGIN * 2, normalized.height);
+  const left = Number.isFinite(Number(normalized.left)) ? Number(normalized.left) : 0;
+  const top = Number.isFinite(Number(normalized.top)) ? Number(normalized.top) : 0;
   return {
-    mode: record?.mode === 'floating' ? 'floating' : 'docked',
-    x: clamp(Number(record?.x || 16), 8, Math.max(8, window.innerWidth - width - 8)),
-    y: clamp(Number(record?.y || 96), 8, Math.max(8, window.innerHeight - height - 8)),
+    left,
+    top,
     width,
     height,
-    minimized: Boolean(record?.minimized),
-    popped: Boolean(record?.popped)
+    right: left + width,
+    bottom: top + height,
+    margin: PANEL_VIEWPORT_MARGIN,
+    maxPanelWidth: Math.max(PANEL_MIN_FLOATING_WIDTH, width - PANEL_VIEWPORT_MARGIN * 2),
+    maxPanelHeight: Math.max(PANEL_MIN_RESTORED_HEIGHT, height - PANEL_VIEWPORT_MARGIN * 2)
   };
 }
 
-function applyPanelLayout() {
+function sanitizeLayoutRecord(record, key = '') {
+  const bounds = viewportPanelBounds();
+  const minimized = Boolean(record?.minimized);
+  const minimum = panelMinimums(key, minimized);
+  const minWidth = Math.min(minimum.width, bounds.maxPanelWidth);
+  const minHeight = Math.min(minimum.height, bounds.maxPanelHeight);
+  const width = clamp(Number(record?.width || Math.max(340, minWidth)), minWidth, bounds.maxPanelWidth);
+  const rawHeight = Number(record?.height || Math.max(240, minHeight));
+  const height = minimized
+    ? clamp(rawHeight, PANEL_MIN_FLOATING_HEIGHT, bounds.maxPanelHeight)
+    : clamp(rawHeight, minHeight, bounds.maxPanelHeight);
+  const minX = bounds.left + bounds.margin;
+  const minY = bounds.top + bounds.margin;
+  const maxX = Math.max(minX, bounds.right - width - bounds.margin);
+  const maxY = Math.max(minY, bounds.bottom - height - bounds.margin);
+  const zIndex = Number(record?.zIndex || PANEL_BASE_Z_INDEX);
+  return {
+    mode: record?.mode === 'floating' ? 'floating' : 'docked',
+    x: clamp(Number(record?.x ?? minX), minX, maxX),
+    y: clamp(Number(record?.y ?? minY), minY, maxY),
+    width,
+    height,
+    minimized,
+    popped: Boolean(record?.popped),
+    zIndex: Number.isFinite(zIndex) ? Math.max(PANEL_BASE_Z_INDEX, Math.round(zIndex)) : PANEL_BASE_Z_INDEX
+  };
+}
+
+function scaleFloatingLayoutForViewport(previousSnapshot, nextSnapshot) {
+  const previous = viewportPanelBounds(previousSnapshot);
+  const next = viewportPanelBounds(nextSnapshot);
+  if (Math.abs(previous.width - next.width) < 2 && Math.abs(previous.height - next.height) < 2) return false;
+  const previousUsableWidth = Math.max(1, previous.width - previous.margin * 2);
+  const previousUsableHeight = Math.max(1, previous.height - previous.margin * 2);
+  const nextUsableWidth = Math.max(1, next.width - next.margin * 2);
+  const nextUsableHeight = Math.max(1, next.height - next.margin * 2);
+  const previousOriginX = previous.left + previous.margin;
+  const previousOriginY = previous.top + previous.margin;
+  const nextOriginX = next.left + next.margin;
+  const nextOriginY = next.top + next.margin;
+  const ratioX = nextUsableWidth / previousUsableWidth;
+  const ratioY = nextUsableHeight / previousUsableHeight;
+  let changed = false;
+  for (const key of Object.keys(panelLayout)) {
+    const record = panelLayout[key] || {};
+    if (record.mode !== 'floating') continue;
+    const before = JSON.stringify(record);
+    const scaled = {
+      ...record,
+      x: nextOriginX + (Number(record.x ?? previousOriginX) - previousOriginX) * ratioX,
+      y: nextOriginY + (Number(record.y ?? previousOriginY) - previousOriginY) * ratioY,
+      width: Number(record.width || 340) * ratioX,
+      height: record.minimized ? record.height : Number(record.height || 240) * ratioY
+    };
+    panelLayout[key] = sanitizeLayoutRecord(scaled, key);
+    if (JSON.stringify(panelLayout[key]) !== before) changed = true;
+  }
+  return changed;
+}
+
+function reconcilePanelLayoutToViewport() {
+  let changed = false;
+  const currentViewport = currentPanelViewportSnapshot();
+  const previousViewport = normalizePanelViewportSnapshot(panelLayoutViewport);
+  changed = scaleFloatingLayoutForViewport(previousViewport, currentViewport) || changed;
+  changed = clampPanelLayoutToViewport({ persist: false }) || changed;
+  savePanelLayoutViewport(currentViewport);
+  if (changed) savePanelLayout();
+  return changed;
+}
+
+function clampPanelLayoutToViewport(options = {}) {
+  const persist = options.persist !== false;
+  let changed = false;
+  for (const key of Object.keys(panelLayout)) {
+    const before = JSON.stringify(panelLayout[key] || {});
+    const after = sanitizeLayoutRecord(panelLayout[key] || {}, key);
+    panelLayout[key] = after;
+    if (JSON.stringify(after) !== before) changed = true;
+  }
+  if (changed && persist) savePanelLayout();
+  return changed;
+}
+
+function scheduleResponsiveLayoutClamp() {
+  if (responsiveLayoutClampRaf !== null) return;
+  responsiveLayoutClampRaf = window.requestAnimationFrame(() => {
+    responsiveLayoutClampRaf = null;
+    if (document.querySelector('.dockable-panel.is-dragging, .dockable-panel.is-resizing') || isPanelLayoutInteractionActive()) {
+      scheduleResponsiveLayoutClamp();
+      return;
+    }
+    removePanelLayoutPlaceholder(activePanelPlaceholder);
+    reconcilePanelLayoutToViewport();
+    applyPanelLayout();
+  });
+}
+
+function applyPanelLayout(options = {}) {
+  const preservedKeys = new Set(options.preserveKeys || []);
   for (const panel of layoutPanels()) {
     ensurePanelLayoutChrome(panel);
     const key = panelKeyFromElement(panel);
-    const record = sanitizeLayoutRecord(panelLayout[key] || {});
+    const existing = panelLayout[key] || {};
+    const record = preservedKeys.has(key) && existing.mode === 'floating'
+      ? sanitizeLayoutRecord({ ...existing, mode: 'floating' }, key)
+      : sanitizeLayoutRecord(existing, key);
     panel.classList.toggle('panel-minimized', record.minimized);
     panel.classList.toggle('panel-popped', record.popped && poppedPanelWindows.has(key));
     if (record.mode === 'floating') {
@@ -811,12 +1132,14 @@ function applyPanelLayout() {
       panel.style.top = `${record.y}px`;
       panel.style.width = `${record.width}px`;
       panel.style.height = `${record.height}px`;
+      panel.style.zIndex = String(record.zIndex || PANEL_BASE_Z_INDEX);
     } else {
       panel.classList.remove('layout-floating');
       panel.style.left = '';
       panel.style.top = '';
       panel.style.width = '';
       panel.style.height = '';
+      panel.style.zIndex = '';
     }
   }
   applyPanelLockState();
@@ -869,7 +1192,7 @@ function promotePanelToFloating(panel, rect = panel.getBoundingClientRect()) {
     y: rect.top,
     width: rect.width,
     height: rect.height
-  });
+  }, key);
   panelLayout[key] = next;
   panel.classList.add('layout-floating');
   panel.classList.toggle('panel-minimized', next.minimized);
@@ -878,6 +1201,7 @@ function promotePanelToFloating(panel, rect = panel.getBoundingClientRect()) {
   panel.style.top = `${next.y}px`;
   panel.style.width = `${next.width}px`;
   panel.style.height = `${next.height}px`;
+  panel.style.zIndex = String(next.zIndex || PANEL_BASE_Z_INDEX);
   applyPanelLockState();
   updatePanelControls();
   return next;
@@ -913,6 +1237,7 @@ function resetPanelLayout() {
   removePanelLayoutPlaceholder(activePanelPlaceholder);
   panelLayout = {};
   localStorage.removeItem(PANEL_LAYOUT_STORAGE_KEY);
+  savePanelLayoutViewport(currentPanelViewportSnapshot());
   for (const [key, popped] of poppedPanelWindows.entries()) {
     if (popped && !popped.closed) popped.close();
     poppedPanelWindows.delete(key);
@@ -974,6 +1299,7 @@ function applyLayoutPreset(name) {
   const preset = buildPresetLayout(name);
   if (!Object.keys(preset).length) return;
   panelLayout = { ...panelLayout, ...preset };
+  for (const key of Object.keys(preset)) bringPanelToFront(key, { persist: false });
   savePanelLayout();
   applyPanelLayout();
   showLayoutToast(`${titleCase(name)} layout applied.`);
@@ -1049,10 +1375,13 @@ function popOutPanel(key) {
   showLayoutToast(`${title} popped out. Move it to any monitor, sir.`);
 }
 
+// 0.3.8c4: active panel interactions freeze every other panel; freeze each unaffected panel from its real DOM geometry before dragging so no panel can snap after release.
 function beginPanelDrag(event, panel) {
   const key = panelKeyFromElement(panel);
   if (layoutLocked || isPanelLocked(key) || event.button !== 0 || event.target.closest('button,input,select,textarea,a')) return;
   event.preventDefault();
+  bringPanelToFront(key, { persist: false });
+  const interactionSnapshot = startPanelLayoutInteraction(key);
   const rect = panel.getBoundingClientRect();
   const wasFloating = panel.classList.contains('layout-floating') || panelLayout[key]?.mode === 'floating';
   const placeholder = wasFloating ? null : createPanelLayoutPlaceholder(panel, rect);
@@ -1069,16 +1398,21 @@ function beginPanelDrag(event, panel) {
       width: start.width,
       height: start.height,
       minimized: Boolean(panelLayout[key]?.minimized),
-      popped: Boolean(panelLayout[key]?.popped)
-    });
+      popped: Boolean(panelLayout[key]?.popped),
+      zIndex: panelLayout[key]?.zIndex
+    }, key);
     panelLayout[key] = next;
     panel.style.left = `${next.x}px`;
     panel.style.top = `${next.y}px`;
+    panel.style.zIndex = String(next.zIndex || PANEL_BASE_Z_INDEX);
   };
   const up = () => {
     panel.classList.remove('is-dragging');
     removePanelLayoutPlaceholder(placeholder);
+    finishPanelLayoutInteraction(key, interactionSnapshot);
+    panelLayout[key] = sanitizeLayoutRecord(panelLayout[key] || {}, key);
     savePanelLayout();
+    applyPanelLayout({ preserveKeys: Object.keys(interactionSnapshot || {}) });
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
   };
@@ -1091,6 +1425,8 @@ function beginPanelResize(event, panel) {
   if (layoutLocked || isPanelLocked(key) || event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
+  bringPanelToFront(key, { persist: false });
+  const interactionSnapshot = startPanelLayoutInteraction(key);
   const rect = panel.getBoundingClientRect();
   const wasFloating = panel.classList.contains('layout-floating') || panelLayout[key]?.mode === 'floating';
   const placeholder = wasFloating ? null : createPanelLayoutPlaceholder(panel, rect);
@@ -1106,17 +1442,22 @@ function beginPanelResize(event, panel) {
       width: start.width + moveEvent.clientX - start.x,
       height: start.height + moveEvent.clientY - start.y,
       minimized: false,
-      popped: Boolean(panelLayout[key]?.popped)
-    });
+      popped: Boolean(panelLayout[key]?.popped),
+      zIndex: panelLayout[key]?.zIndex
+    }, key);
     panelLayout[key] = next;
     panel.style.width = `${next.width}px`;
     panel.style.height = `${next.height}px`;
+    panel.style.zIndex = String(next.zIndex || PANEL_BASE_Z_INDEX);
     panel.classList.remove('panel-minimized');
   };
   const up = () => {
     panel.classList.remove('is-resizing');
     removePanelLayoutPlaceholder(placeholder);
+    finishPanelLayoutInteraction(key, interactionSnapshot);
+    panelLayout[key] = sanitizeLayoutRecord(panelLayout[key] || {}, key);
     savePanelLayout();
+    applyPanelLayout({ preserveKeys: Object.keys(interactionSnapshot || {}) });
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
   };
@@ -1129,6 +1470,7 @@ function initPanelLayoutControls() {
     ensurePanelLayoutChrome(panel);
     const heading = panel.querySelector('.panel-heading') || panel;
     const resize = panel.querySelector('.panel-resize-handle');
+    panel.addEventListener('pointerdown', () => bringPanelToFront(panelKeyFromElement(panel), { persist: false }));
     heading.addEventListener('pointerdown', event => beginPanelDrag(event, panel));
     resize?.addEventListener('pointerdown', event => beginPanelResize(event, panel));
   }
@@ -1153,11 +1495,9 @@ function initPanelLayoutControls() {
     if (!openPanelByName(query)) showLayoutToast(`I could not find a panel named ${query}.`);
     els.panelCommandInput.value = '';
   });
-  window.addEventListener('resize', () => {
-    for (const key of Object.keys(panelLayout)) panelLayout[key] = sanitizeLayoutRecord(panelLayout[key]);
-    savePanelLayout();
-    applyPanelLayout();
-  });
+  window.addEventListener('resize', scheduleResponsiveLayoutClamp);
+  window.addEventListener('orientationchange', scheduleResponsiveLayoutClamp);
+  reconcilePanelLayoutToViewport();
   applyPanelLayout();
 }
 

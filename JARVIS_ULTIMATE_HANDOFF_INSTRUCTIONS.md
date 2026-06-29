@@ -4,11 +4,11 @@ This file exists so a future ChatGPT project chat can quickly understand the cur
 
 ## Current project status
 
-Current committed milestone before this patch: **0.3.8a — Panel Lock Only**
+Current committed milestone before this patch: **0.3.8c2 — Workspace Safe Scaling Hotfix**
 
-Current patch milestone: **0.3.8b — Panel Header Containment + First Drag Stabilization**
+Current patch milestone: **0.3.8c3 — Independent Panel Drag Freeze Hotfix**
 
-Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.8b`. Hotfixes may use suffixes like `0.3.2a`.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.8c3`. Hotfixes may use suffixes like `0.3.2a`.
 
 ## User patch/package preferences
 
@@ -600,3 +600,142 @@ Manual testing focus:
 Next recommended update:
 - Continue with the remaining small UI fixes one at a time: responsive window resize scaling, Save Custom Preset, then real Electron popout windows.
 
+## 0.3.8c — Responsive Window Resize
+
+This focused UI stabilization patch follows the committed 0.3.8b checkpoint. It does not add new features; it makes the existing dockable/floating panel system safer when the Jarvis app window is minimized, restored, maximized, or resized.
+
+Changes:
+- Added viewport-aware layout bounds for floating panels.
+- Floating panels are clamped inside the visible app window when the window size changes.
+- Drag and resize completion now re-clamps the active panel before saving the layout.
+- Window resize handling is debounced through `requestAnimationFrame` so Jarvis does not repeatedly reapply layout mid-resize.
+- Resize handling waits until active drag/resize operations finish instead of fighting the pointer movement.
+- Removed the older small-window rule that forced floating panels back into relative layout flow, because that could make panels jump during responsive transitions.
+- Added responsive CSS guards for narrower/shorter windows while preserving the stable 0.3.8b panel header containment behavior.
+- App shell version is now `0.3.8c` and capabilities include `responsive_panel_resize_clamping`, `floating_panel_viewport_bounds`, and `debounced_layout_resize_handler`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 433 tests in 5.139s — OK`
+
+Manual testing focus:
+- Open Jarvis, move a few panels, then maximize and restore the window.
+- Shrink the app window and verify floating panels stay reachable instead of getting stuck off-screen.
+- Drag and resize panels after a window resize and confirm buttons still do not overlap.
+- Use Reset Layout and layout presets after resizing to verify the layout still feels stable.
+
+Next recommended update:
+- `0.3.8d — Save Custom Preset`, adding a button to save the current stable layout as a selectable preset. Keep real Electron popout windows and visual polish as later separate patches.
+
+## 0.3.8c1 — Window State Panel Follow + Active Panel Priority Hotfix
+
+This hotfix follows live testing of 0.3.8c. It keeps the stable 0.3.8b/0.3.8c dockable-panel behavior and only fixes the remaining responsive layout issues Tanner found while maximizing/restoring the Jarvis window and resizing panels.
+
+Changes:
+- Floating panel layouts now remember the viewport size they were saved against.
+- When updating from older 0.3.8c saved layouts, Jarvis can infer an initial saved viewport from existing floating-panel coordinates.
+- When the Jarvis window is maximized, restored, or resized, floating panels scale proportionally with the new viewport instead of staying stuck in the old window-size coordinates.
+- Floating panels are still clamped inside the visible app window after scaling.
+- The last active panel now gets visual priority: clicking, dragging, or resizing a panel brings it to the front using z-index tracking.
+- Runtime and other floating panels now have safer minimum restored sizes.
+- Runtime panel content is contained with scroll/word wrapping so long model names and status text should not spill outside when the panel is small.
+- App shell version is now `0.3.8c1` and capabilities include `viewport_scaled_panel_restore`, `last_active_panel_z_order`, `floating_panel_content_containment`, and `runtime_panel_minimum_size_guard`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 437 tests in 3.635s — OK`
+
+Manual testing focus:
+- Move/resize a few panels, then maximize and restore Jarvis. Floating panels should follow the new window size instead of keeping the old layout coordinates.
+- Click overlapping floating panels and verify the last clicked/moved panel comes to the front.
+- Shrink the Runtime panel and verify its text stays contained instead of spilling outside the panel.
+- Confirm Lock, Min, Dock, Pop, Reset Layout, and layout presets still work.
+
+Next recommended update:
+- If this hotfix passes manual testing, commit `0.3.8c1` and then continue to `0.3.8d — Save Custom Preset`.
+- Keep real Electron popout windows and visual polish as later separate patches.
+
+## 0.3.8c2 — Workspace Safe Scaling Hotfix
+
+This hotfix follows `0.3.8c1` after live testing showed that panels could still overlap the top control panel when maximizing and restoring the Jarvis window.
+
+Changes:
+- Floating panels now scale inside the actual workspace safe area below the top control bar instead of the full app window.
+- The panel viewport snapshot now tracks `left`, `top`, `width`, and `height` from `#interfaceGrid`.
+- Maximize/restore scaling preserves relative panel position and size within that workspace area.
+- Panels are clamped below the top controls so they should not cover the Native App Shell / Jarvis Ultimate header panel after restoring.
+- The panel layout viewport storage key was moved to `jarvis.appShell.panelLayoutViewport.v038c2` so old full-window viewport snapshots do not keep causing bad scaling.
+- App shell version is now `0.3.8c2` and capabilities include `workspace_safe_area_panel_scaling`, `maximize_restore_panel_ratio_preservation`, and `top_bar_overlap_prevention`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 440 tests in 3.516s — OK`
+
+Manual testing focus:
+- Move panels, maximize, restore, and confirm panels remain below the top control bar while keeping their relative positions and sizes.
+- If old saved positions still look odd, use Reset Layout once and retest.
+
+Next recommended step:
+- Commit `0.3.8c2` after manual testing succeeds.
+- Then continue to `0.3.8d — Save Custom Preset`, unless another tiny layout hotfix is needed first.
+
+
+## 0.3.8c3 — Independent Panel Drag Freeze Hotfix
+
+This hotfix follows `0.3.8c2` after live testing showed that moving the Core Orb panel could cause the Conversation panel to jump toward the center and appear behind the orb.
+
+Changes:
+- Added an active panel interaction guard so drag/resize operations only mutate the panel being moved.
+- Captures a frozen snapshot of every unaffected panel before a drag/resize begins.
+- Restores unaffected panel layout records when the drag/resize finishes, so moving the orb does not reflow or relocate the conversation panel.
+- Skips full layout reapplication during active panel interactions, preventing bridge refreshes from re-sanitizing every panel mid-drag.
+- Responsive resize clamping now waits while a panel interaction is active or settling.
+- `applyPanelLayout` can preserve frozen panel keys when only the active panel should be updated.
+- App shell version is now `0.3.8c3` and capabilities include `independent_panel_drag_freeze`, `active_panel_only_drag_updates`, and `no_neighbor_panel_reflow_on_drag`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 443 tests in 3.482s — OK`
+
+Manual testing focus:
+- Overlap or place the Core Orb and Conversation panels near each other.
+- Drag only the Core Orb panel. The Conversation panel should not move, snap, resize, or go behind the orb unless you click/move it directly.
+- Drag the Conversation panel next. The Core Orb panel should stay where it was.
+- Test resize on one panel and confirm neighboring panels stay fixed.
+- Re-test maximize/restore behavior from 0.3.8c2.
+
+Next recommended step:
+- Commit `0.3.8c3` if manual testing succeeds.
+- Then continue to `0.3.8d — Save Custom Preset`, unless another small layout stability issue appears first.
+
+## 0.3.8c4 — Release-Safe Panel Geometry Freeze Hotfix
+
+This hotfix follows `0.3.8c3` after live testing showed that the Conversation panel could still move after releasing the Core Orb panel, even though it stayed put during the drag.
+
+Changes:
+- Unaffected panels are now frozen from their real on-screen DOM geometry before a drag/resize begins, not from possibly stale saved layout records.
+- The frozen DOM geometry is applied immediately to unaffected panels so bridge refreshes, grid reflow, and release-time layout sanitizing cannot snap them somewhere else.
+- `applyPanelLayout` no longer reintroduces stale floating geometry when preserving unaffected panels after a drag/resize.
+- Moving the Core Orb panel should not cause the Conversation panel to snap after release.
+- Resizing one panel should not cause another panel to move after release.
+- App shell version is now `0.3.8c4` and capabilities include `dom_geometry_panel_freeze`, `post_drag_neighbor_snap_guard`, and `release_safe_panel_layout_restore`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 446 tests in 3.529s — OK`
+
+Manual testing focus:
+- Put the Core Orb and Conversation panels near each other.
+- Drag the Core Orb panel and release it. The Conversation panel should stay exactly where it was before, during, and after release.
+- Drag the Conversation panel and release it. The Core Orb panel should stay exactly where it was.
+- Resize one panel and confirm no other panel moves when the mouse is released.
+- Re-test maximize/restore once after Reset Layout if old saved positions still look strange.
+
+Next recommended step:
+- Commit `0.3.8c4` if manual testing succeeds.
+- Then continue to `0.3.8d — Save Custom Preset`, unless another tiny layout stability issue appears first.
