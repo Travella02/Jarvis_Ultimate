@@ -13,6 +13,8 @@ const PANEL_LAYOUT_STORAGE_KEY = 'jarvis.appShell.panelLayout.v038';
 const PANEL_LAYOUT_LOCK_STORAGE_KEY = 'jarvis.appShell.panelLayoutLocked.v038';
 const PANEL_LOCK_STORAGE_KEY = 'jarvis.appShell.panelLocks.v038a';
 const PANEL_LAYOUT_VIEWPORT_STORAGE_KEY = 'jarvis.appShell.panelLayoutViewport.v038c2';
+const CUSTOM_LAYOUT_PRESETS_STORAGE_KEY = 'jarvis.appShell.customLayoutPresets.v038d';
+const CUSTOM_LAYOUT_PRESET_PREFIX = 'custom:';
 const PANEL_LAYOUT_INTERACTION_SETTLE_MS = 140;
 const PANEL_VIEWPORT_MARGIN = 8;
 const PANEL_WORKSPACE_SELECTOR = '#interfaceGrid';
@@ -38,6 +40,8 @@ let panelLayout = loadPanelLayout();
 let layoutLocked = loadLayoutLocked();
 let panelLocks = loadPanelLocks();
 let panelLayoutViewport = loadPanelLayoutViewport();
+let customLayoutPresets = loadCustomLayoutPresets();
+let layoutPresetDialogResolve = null;
 let panelZIndexCounter = initialPanelZIndexCounter();
 const poppedPanelWindows = new Map();
 let layoutToastTimer = null;
@@ -113,7 +117,13 @@ const els = {
   orbFocusButton: document.getElementById('orbFocusButton'),
   layoutLockButton: document.getElementById('layoutLockButton'),
   layoutResetButton: document.getElementById('layoutResetButton'),
+  layoutSavePresetButton: document.getElementById('layoutSavePresetButton'),
   layoutPresetSelect: document.getElementById('layoutPresetSelect'),
+  layoutPresetDialog: document.getElementById('layoutPresetDialog'),
+  layoutPresetForm: document.getElementById('layoutPresetForm'),
+  layoutPresetNameInput: document.getElementById('layoutPresetNameInput'),
+  layoutPresetCancelButton: document.getElementById('layoutPresetCancelButton'),
+  layoutPresetConfirmButton: document.getElementById('layoutPresetConfirmButton'),
   panelCommandInput: document.getElementById('panelCommandInput'),
   panelToggleButtons: Array.from(document.querySelectorAll('[data-panel-toggle]')),
   panelCloseButtons: Array.from(document.querySelectorAll('[data-panel-close]'))
@@ -776,6 +786,237 @@ function savePanelLayoutViewport(snapshot) {
   localStorage.setItem(PANEL_LAYOUT_VIEWPORT_STORAGE_KEY, JSON.stringify(panelLayoutViewport));
 }
 
+function loadCustomLayoutPresets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CUSTOM_LAYOUT_PRESETS_STORAGE_KEY) || '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveCustomLayoutPresets() {
+  localStorage.setItem(CUSTOM_LAYOUT_PRESETS_STORAGE_KEY, JSON.stringify(customLayoutPresets));
+}
+
+function normalizeCustomPresetName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 38);
+}
+
+function customPresetIdForName(name) {
+  const base = normalizeCustomPresetName(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'custom-layout';
+  const builtInPresetNames = new Set(['gaming', 'coding', 'music', 'minimal']);
+  let id = base;
+  let suffix = 2;
+  while (builtInPresetNames.has(id) || customLayoutPresets[id]) {
+    id = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return id;
+}
+
+function cloneLayoutRecords(records) {
+  const cloned = {};
+  for (const [key, record] of Object.entries(records || {})) {
+    cloned[key] = clonePanelLayoutRecord(record);
+  }
+  return cloned;
+}
+
+function captureCurrentLayoutPresetRecords() {
+  const records = cloneLayoutRecords(panelLayout);
+  for (const panel of layoutPanels()) {
+    const key = panelKeyFromElement(panel);
+    if (!key) continue;
+    const existing = records[key] || {};
+    if (panel.classList.contains('layout-floating') || existing.mode === 'floating') {
+      records[key] = layoutRecordFromPanelGeometry(panel, { forceFloating: true });
+    } else {
+      records[key] = sanitizeLayoutRecord({ ...existing, mode: 'docked' }, key);
+    }
+  }
+  return records;
+}
+
+function syncCustomLayoutPresetOptions() {
+  const select = els.layoutPresetSelect;
+  if (!select) return;
+  select.querySelectorAll('[data-custom-layout-preset-group]').forEach(node => node.remove());
+  const presets = Object.entries(customLayoutPresets || {})
+    .filter(([, preset]) => preset && typeof preset === 'object' && preset.name && preset.layout)
+    .sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
+  if (!presets.length) return;
+  const group = document.createElement('optgroup');
+  group.label = 'Custom';
+  group.setAttribute('data-custom-layout-preset-group', 'true');
+  for (const [id, preset] of presets) {
+    const option = document.createElement('option');
+    option.value = `${CUSTOM_LAYOUT_PRESET_PREFIX}${id}`;
+    option.textContent = preset.name;
+    group.appendChild(option);
+  }
+  select.appendChild(group);
+}
+
+function scaleLayoutRecordsForViewport(records, previousSnapshot, nextSnapshot) {
+  const previous = viewportPanelBounds(previousSnapshot);
+  const next = viewportPanelBounds(nextSnapshot);
+  const previousUsableWidth = Math.max(1, previous.width - previous.margin * 2);
+  const previousUsableHeight = Math.max(1, previous.height - previous.margin * 2);
+  const nextUsableWidth = Math.max(1, next.width - next.margin * 2);
+  const nextUsableHeight = Math.max(1, next.height - next.margin * 2);
+  const previousOriginX = previous.left + previous.margin;
+  const previousOriginY = previous.top + previous.margin;
+  const nextOriginX = next.left + next.margin;
+  const nextOriginY = next.top + next.margin;
+  const ratioX = nextUsableWidth / previousUsableWidth;
+  const ratioY = nextUsableHeight / previousUsableHeight;
+  const scaledRecords = {};
+  for (const [key, record] of Object.entries(records || {})) {
+    if (!record || typeof record !== 'object') continue;
+    if (record.mode === 'floating') {
+      scaledRecords[key] = sanitizeLayoutRecord({
+        ...record,
+        x: nextOriginX + (Number(record.x ?? previousOriginX) - previousOriginX) * ratioX,
+        y: nextOriginY + (Number(record.y ?? previousOriginY) - previousOriginY) * ratioY,
+        width: Number(record.width || 340) * ratioX,
+        height: record.minimized ? record.height : Number(record.height || 240) * ratioY
+      }, key);
+    } else {
+      scaledRecords[key] = sanitizeLayoutRecord({ ...record, mode: 'docked' }, key);
+    }
+  }
+  return scaledRecords;
+}
+
+function nextCustomPresetDefaultName() {
+  const existingNames = new Set(Object.values(customLayoutPresets || {})
+    .map(preset => normalizeCustomPresetName(preset?.name).toLowerCase())
+    .filter(Boolean));
+  let base = 'My Jarvis Layout';
+  if (!existingNames.has(base.toLowerCase())) return base;
+  let suffix = 2;
+  while (existingNames.has(`${base} ${suffix}`.toLowerCase())) suffix += 1;
+  return `${base} ${suffix}`;
+}
+
+function requestCustomPresetName(defaultName) {
+  const dialog = els.layoutPresetDialog;
+  const form = els.layoutPresetForm;
+  const input = els.layoutPresetNameInput;
+  const cancelButton = els.layoutPresetCancelButton;
+
+  if (!dialog || !form || !input) {
+    if (typeof window.prompt === 'function') {
+      return Promise.resolve(window.prompt('Name this layout preset:', defaultName || 'My Jarvis Layout'));
+    }
+    showLayoutToast('Preset naming dialog is unavailable, sir.');
+    return Promise.resolve(null);
+  }
+
+  if (layoutPresetDialogResolve) {
+    layoutPresetDialogResolve(null);
+    layoutPresetDialogResolve = null;
+  }
+
+  return new Promise(resolve => {
+    const finish = value => {
+      form.removeEventListener('submit', submit);
+      cancelButton?.removeEventListener('click', cancel);
+      dialog.removeEventListener('pointerdown', backdropPointerDown);
+      document.removeEventListener('keydown', keydown);
+      dialog.hidden = true;
+      document.body.classList.remove('layout-preset-dialog-open');
+      layoutPresetDialogResolve = null;
+      resolve(value);
+    };
+    const submit = event => {
+      event.preventDefault();
+      finish(input.value);
+    };
+    const cancel = () => finish(null);
+    const backdropPointerDown = event => {
+      if (event.target === dialog) finish(null);
+    };
+    const keydown = event => {
+      if (event.key === 'Escape') finish(null);
+    };
+
+    layoutPresetDialogResolve = finish;
+    input.value = defaultName || 'My Jarvis Layout';
+    dialog.hidden = false;
+    document.body.classList.add('layout-preset-dialog-open');
+    form.addEventListener('submit', submit);
+    cancelButton?.addEventListener('click', cancel);
+    dialog.addEventListener('pointerdown', backdropPointerDown);
+    document.addEventListener('keydown', keydown);
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  });
+}
+
+async function saveCurrentLayoutPreset() {
+  if (els.layoutSavePresetButton?.disabled) return;
+  if (els.layoutSavePresetButton) els.layoutSavePresetButton.disabled = true;
+  try {
+    const entered = await requestCustomPresetName(nextCustomPresetDefaultName());
+    if (entered === null || entered === undefined) return;
+    const name = normalizeCustomPresetName(entered);
+    if (!name) {
+      showLayoutToast('Preset was not saved because it needs a name.');
+      return;
+    }
+    const existingEntry = Object.entries(customLayoutPresets || {})
+      .find(([, preset]) => normalizeCustomPresetName(preset?.name).toLowerCase() === name.toLowerCase());
+    let id = existingEntry?.[0] || customPresetIdForName(name);
+    if (existingEntry && typeof window.confirm === 'function') {
+      const shouldOverwrite = window.confirm(`Replace the saved layout preset "${name}"?`);
+      if (!shouldOverwrite) return;
+    }
+    const now = new Date().toISOString();
+    customLayoutPresets[id] = {
+      id,
+      name,
+      layout: captureCurrentLayoutPresetRecords(),
+      viewport: currentPanelViewportSnapshot(),
+      createdAt: existingEntry?.[1]?.createdAt || now,
+      updatedAt: now
+    };
+    saveCustomLayoutPresets();
+    syncCustomLayoutPresetOptions();
+    if (els.layoutPresetSelect) els.layoutPresetSelect.value = `${CUSTOM_LAYOUT_PRESET_PREFIX}${id}`;
+    showLayoutToast(`${name} layout preset saved, sir.`);
+  } finally {
+    if (els.layoutSavePresetButton) els.layoutSavePresetButton.disabled = false;
+  }
+}
+
+function applyCustomLayoutPreset(id) {
+  const preset = customLayoutPresets?.[id];
+  if (!preset || !preset.layout || typeof preset.layout !== 'object') {
+    showLayoutToast('That saved layout preset could not be found.');
+    if (els.layoutPresetSelect) els.layoutPresetSelect.value = '';
+    return;
+  }
+  const savedViewport = normalizePanelViewportSnapshot(preset.viewport || panelLayoutViewport);
+  const currentViewport = currentPanelViewportSnapshot();
+  panelLayout = {
+    ...panelLayout,
+    ...scaleLayoutRecordsForViewport(preset.layout, savedViewport, currentViewport)
+  };
+  panelLayoutViewport = currentViewport;
+  for (const key of Object.keys(preset.layout)) bringPanelToFront(key, { persist: false });
+  savePanelLayout();
+  applyPanelLayout();
+  showLayoutToast(`${preset.name || 'Custom'} layout applied.`);
+  if (els.layoutPresetSelect) els.layoutPresetSelect.value = '';
+}
+
 function initialPanelZIndexCounter() {
   let highest = PANEL_BASE_Z_INDEX;
   for (const record of Object.values(panelLayout || {})) {
@@ -1296,6 +1537,11 @@ function buildPresetLayout(name) {
 }
 
 function applyLayoutPreset(name) {
+  if (!name) return;
+  if (String(name).startsWith(CUSTOM_LAYOUT_PRESET_PREFIX)) {
+    applyCustomLayoutPreset(String(name).slice(CUSTOM_LAYOUT_PRESET_PREFIX.length));
+    return;
+  }
   const preset = buildPresetLayout(name);
   if (!Object.keys(preset).length) return;
   panelLayout = { ...panelLayout, ...preset };
@@ -1486,6 +1732,7 @@ function initPanelLayoutControls() {
   });
   els.layoutLockButton?.addEventListener('click', toggleLayoutLock);
   els.layoutResetButton?.addEventListener('click', resetPanelLayout);
+  els.layoutSavePresetButton?.addEventListener('click', saveCurrentLayoutPreset);
   els.layoutPresetSelect?.addEventListener('change', event => applyLayoutPreset(event.target.value));
   els.panelCommandInput?.addEventListener('keydown', event => {
     if (event.key !== 'Enter') return;
@@ -1497,6 +1744,7 @@ function initPanelLayoutControls() {
   });
   window.addEventListener('resize', scheduleResponsiveLayoutClamp);
   window.addEventListener('orientationchange', scheduleResponsiveLayoutClamp);
+  syncCustomLayoutPresetOptions();
   reconcilePanelLayoutToViewport();
   applyPanelLayout();
 }

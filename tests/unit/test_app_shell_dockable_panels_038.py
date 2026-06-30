@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellDockablePanels038Tests(unittest.TestCase):
     def test_version_and_capabilities_include_dockable_panels(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8c4")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
         capabilities = set(app_shell_capabilities())
         self.assertIn("dockable_workspace_panels", capabilities)
         self.assertIn("resizable_workspace_panels", capabilities)

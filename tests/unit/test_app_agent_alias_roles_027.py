@@ -20,7 +20,7 @@ from jarvis.tools.shared.app_discovery import AppAliasStore, AppCandidate, AppMa
 
 class TestAppAgentAliasRoles027(unittest.TestCase):
     def test_version_and_capabilities_include_alias_roles(self) -> None:
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8c4")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
         capabilities = set(app_shell_capabilities())
         self.assertIn("multi_app_alias_management", capabilities)
         self.assertIn("default_app_roles", capabilities)

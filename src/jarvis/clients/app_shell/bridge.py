@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from jarvis.ui.visual_state import available_visual_states, orb_profile_for_state, profile_summary
 from jarvis.ui.workspace import UIWorkspaceState
 
-APP_SHELL_VERSION = "0.3.8c4"
+APP_SHELL_VERSION = "0.3.8d"
 APP_SHELL_MODE = "electron_native_app_shell"
 DEFAULT_API_URL = "http://127.0.0.1:8765"
 
@@ -158,6 +158,11 @@ def app_shell_capabilities() -> tuple[str, ...]:
         "dom_geometry_panel_freeze",
         "post_drag_neighbor_snap_guard",
         "release_safe_panel_layout_restore",
+        "custom_workspace_layout_presets",
+        "user_saved_layout_preset_button",
+        "viewport_scaled_custom_layout_restore",
+        "custom_layout_preset_name_dialog",
+        "electron_safe_custom_preset_naming",
         "panel_command_palette",
         "multi_monitor_panel_popouts",
     )

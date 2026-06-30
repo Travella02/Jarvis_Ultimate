@@ -844,7 +844,8 @@ body.state-thinking .orb-sphere {
   letter-spacing: .08em;
   outline: none;
 }
-.layout-preset-select { max-width: 118px; text-transform: uppercase; }
+.layout-preset-select { max-width: 138px; text-transform: uppercase; }
+.layout-save-preset-button { color: var(--state); border-color: rgba(var(--state-rgb), .34); }
 .panel-command-input { width: 150px; text-transform: none; letter-spacing: .02em; }
 .panel-command-input::placeholder { color: var(--muted-soft); }
 body.layout-locked .layout-lock-toggle { color: var(--muted); border-color: rgba(96,230,255,.22); }
@@ -1146,4 +1147,74 @@ body.layout-unlocked .dockable-panel.panel-layout-locked .panel-resize-handle {
 /* 0.3.8c4: floating panels now scale inside the workspace safe area below the top control bar. */
 .dockable-panel.layout-floating {
   min-width: min(100%, 300px);
+}
+
+/* 0.3.8d: custom saved layout preset controls. */
+.layout-save-preset-button { flex: 0 0 auto; }
+.layout-preset-select optgroup { color: #9bdfff; background: #020812; }
+
+/* 0.3.8d2: in-shell custom layout preset naming dialog. */
+.layout-preset-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 3, 10, 0.72);
+  backdrop-filter: blur(10px);
+}
+.layout-preset-dialog-backdrop[hidden] {
+  display: none !important;
+}
+.layout-preset-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 22px;
+  border: 1px solid rgba(47, 191, 255, 0.55);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.62), inset 0 0 38px rgba(28, 135, 255, 0.08);
+}
+.layout-preset-dialog h2 {
+  margin: 4px 0 8px;
+  color: #f4fbff;
+  letter-spacing: 0.05em;
+}
+.layout-preset-name-label {
+  display: block;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  color: #9bdfff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.layout-preset-name-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(47, 191, 255, 0.55);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #f4fbff;
+  background: rgba(0, 8, 18, 0.78);
+  outline: none;
+}
+.layout-preset-name-input:focus {
+  border-color: rgba(34, 211, 238, 0.95);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
+}
+.layout-preset-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.layout-preset-dialog-actions .primary {
+  color: #061016;
+  background: linear-gradient(135deg, rgba(61, 214, 255, 0.95), rgba(41, 121, 255, 0.92));
+  border-color: rgba(115, 225, 255, 0.95);
+}
+.layout-save-preset-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }

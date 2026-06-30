@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellWorkspaceSafeScaling038c2Tests(unittest.TestCase):
     def test_version_and_capabilities_include_safe_workspace_scaling(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8c4")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
         capabilities = set(app_shell_capabilities())
         self.assertIn("workspace_safe_area_panel_scaling", capabilities)
         self.assertIn("maximize_restore_panel_ratio_preservation", capabilities)

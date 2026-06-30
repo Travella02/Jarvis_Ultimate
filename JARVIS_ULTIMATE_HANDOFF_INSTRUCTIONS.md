@@ -4,11 +4,11 @@ This file exists so a future ChatGPT project chat can quickly understand the cur
 
 ## Current project status
 
-Current committed milestone before this patch: **0.3.8c2 — Workspace Safe Scaling Hotfix**
+Current committed milestone before this patch: **0.3.8c4 — Release-Safe Panel Geometry Freeze Hotfix**
 
-Current patch milestone: **0.3.8c3 — Independent Panel Drag Freeze Hotfix**
+Current patch milestone: **0.3.8d — Save Custom Layout Preset**
 
-Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.8c3`. Hotfixes may use suffixes like `0.3.2a`.
+Versioning rule: after `0.2.9`, use `0.3.0`, not `0.2.10`. Current working version is `0.3.8d`. Hotfixes may use suffixes like `0.3.2a`.
 
 ## User patch/package preferences
 
@@ -739,3 +739,93 @@ Manual testing focus:
 Next recommended step:
 - Commit `0.3.8c4` if manual testing succeeds.
 - Then continue to `0.3.8d — Save Custom Preset`, unless another tiny layout stability issue appears first.
+
+
+## 0.3.8d — Save Custom Layout Preset
+
+This milestone follows `0.3.8c4` after the dockable workspace became stable enough to add the next planned feature: saving the current layout as a reusable preset.
+
+Changes:
+- Added a top-bar `Save Preset` button beside the layout preset selector.
+- The button prompts for a preset name and stores the current panel layout locally in Electron/Chromium `localStorage`.
+- Saved custom presets are appended under a `Custom` group in the existing Layouts dropdown.
+- Custom presets preserve floating/docked state, panel size, panel position, minimized state, popped marker, and z-order metadata.
+- Custom presets save the workspace viewport snapshot and scale back into the current workspace area when applied, so presets can survive maximize/restore and normal window-size changes.
+- Re-saving with the same name asks before overwriting the existing custom preset.
+- The feature does not change the recent `0.3.8c4` drag/release geometry freeze behavior.
+- App shell version is now `0.3.8d` and capabilities include `custom_workspace_layout_presets`, `user_saved_layout_preset_button`, and `viewport_scaled_custom_layout_restore`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 450 tests in 3.484s — OK`
+
+Manual testing focus:
+- Arrange panels into a layout you like.
+- Click `Save Preset`, give it a name, and confirm it appears under the `Custom` section of the Layouts dropdown.
+- Move panels around or apply a built-in preset.
+- Select the custom preset and confirm the saved layout comes back.
+- Maximize/restore the window and apply the custom preset again to confirm it scales into the workspace instead of covering the top bar.
+- Confirm dragging one panel still does not move another panel.
+
+Next recommended step:
+- Commit `0.3.8d` after manual testing succeeds.
+- Then continue to `0.3.8e — Real Pop-Out Windows`, or do a small visual polish pass only if the saved preset feature is stable.
+
+
+## 0.3.8d1 — Secure Vault Version Test Alignment Hotfix
+
+This hotfix follows `0.3.8d` after live testing showed one unit test still expected the previous app-shell version `0.3.8c4` even though the runtime correctly reports `0.3.8d`.
+
+Changes:
+- Updated `tests/unit/test_memory_secure_vault_035a.py` so its version assertion expects `0.3.8d`.
+- No runtime behavior changed.
+- No UI behavior changed.
+- No app-shell version bump; the active runtime remains `0.3.8d`.
+- This only fixes test-suite alignment after the Save Custom Layout Preset patch.
+
+Validation:
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 450 tests in 3.618s — OK`
+
+Manual testing focus:
+- No new manual UI behavior is included in this hotfix.
+- Re-run the full unit test suite.
+- Then start Jarvis and continue manually testing the Save Preset workflow from `0.3.8d`.
+
+Next recommended step:
+- Commit `0.3.8d` and this `0.3.8d1` test-alignment hotfix together once tests pass.
+- Then continue to `0.3.8e — Real Pop-Out Windows`, or pause for a small visual polish pass if needed.
+
+## 0.3.8d2 — Save Preset Name Dialog Hotfix
+
+This hotfix follows `0.3.8d` after live testing showed that clicking `Save Preset` could save the layout behavior internally without showing a visible naming prompt in the Electron app shell.
+
+Root cause:
+- The first save-preset implementation relied on the browser-native `window.prompt()` dialog.
+- In the Electron app shell this prompt can be unavailable, hidden, or not reliably visible to the user, making the save look like nothing happened and preventing the user from naming the preset.
+
+Changes:
+- Added an in-shell custom modal dialog for naming saved layout presets.
+- The `Save Preset` button now opens a visible Jarvis-styled dialog with a preset-name input, Cancel button, and Save Preset confirmation button.
+- The dialog supports Enter to save, Escape/backdrop click to cancel, and auto-focuses/selects the suggested name.
+- The saved preset still appears under the `Custom` group in the Layouts dropdown.
+- Existing custom preset storage, workspace viewport scaling, panel z-order, and 0.3.8c4 drag/release stability remain intact.
+- No app-shell version bump; active runtime remains `0.3.8d` so version-pinned tests remain stable.
+- Capabilities now include `custom_layout_preset_name_dialog` and `electron_safe_custom_preset_naming`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 454 tests in 4.479s — OK`
+
+Manual testing focus:
+- Click `Save Preset` and confirm the visible naming dialog opens.
+- Type a custom name and save it.
+- Confirm the named preset appears under `Custom` in the Layouts dropdown.
+- Move panels around, choose the custom preset, and confirm the saved layout restores.
+- Try Cancel/Escape and confirm no unwanted preset is saved.
+
+Next recommended step:
+- Commit `0.3.8d`, `0.3.8d1`, and `0.3.8d2` together after manual testing succeeds.
+- Then continue to `0.3.8e — Real Pop-Out Windows`, or do a small visual polish pass if save presets and panel layout stability are now reliable.

@@ -24,6 +24,7 @@
           <button type="button" class="view-toggle focus-toggle" id="orbFocusButton" aria-pressed="false">Orb Only</button>
           <button type="button" class="view-toggle layout-lock-toggle" id="layoutLockButton" aria-pressed="false">Layout: Unlocked</button>
           <button type="button" class="view-toggle" id="layoutResetButton">Reset Layout</button>
+          <button type="button" class="view-toggle layout-save-preset-button" id="layoutSavePresetButton">Save Preset</button>
           <select class="layout-preset-select" id="layoutPresetSelect" aria-label="Saved layout preset">
             <option value="">Layouts</option>
             <option value="gaming">Gaming</option>
@@ -169,6 +170,20 @@
       </div>
     </section>
   </main>
+
+  <div class="layout-preset-dialog-backdrop" id="layoutPresetDialog" role="dialog" aria-modal="true" aria-labelledby="layoutPresetDialogTitle" hidden>
+    <form class="layout-preset-dialog glass-panel" id="layoutPresetForm">
+      <p class="panel-kicker">Layout Preset</p>
+      <h2 id="layoutPresetDialogTitle">Name this layout</h2>
+      <p class="muted small" id="layoutPresetDialogHint">Save the current panel positions, sizes, locks, and z-order as a selectable custom preset.</p>
+      <label class="layout-preset-name-label" for="layoutPresetNameInput">Preset name</label>
+      <input id="layoutPresetNameInput" class="layout-preset-name-input" type="text" maxlength="38" autocomplete="off" placeholder="Gaming stream layout">
+      <div class="layout-preset-dialog-actions">
+        <button type="button" class="ghost-action" id="layoutPresetCancelButton">Cancel</button>
+        <button type="submit" class="ghost-action primary" id="layoutPresetConfirmButton">Save Preset</button>
+      </div>
+    </form>
+  </div>
 
   <script src="renderer.js"></script>
 </body>
