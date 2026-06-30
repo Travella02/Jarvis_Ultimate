@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellIndependentPanelDrag038c3Tests(unittest.TestCase):
     def test_version_and_capabilities_include_independent_panel_drag_freeze(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("independent_panel_drag_freeze", capabilities)
         self.assertIn("active_panel_only_drag_updates", capabilities)

@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellWindowStateFollow038c1Tests(unittest.TestCase):
     def test_version_and_capabilities_include_window_state_follow_hotfix(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("viewport_scaled_panel_restore", capabilities)
         self.assertIn("last_active_panel_z_order", capabilities)

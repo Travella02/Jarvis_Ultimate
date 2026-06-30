@@ -829,3 +829,85 @@ Manual testing focus:
 Next recommended step:
 - Commit `0.3.8d`, `0.3.8d1`, and `0.3.8d2` together after manual testing succeeds.
 - Then continue to `0.3.8e — Real Pop-Out Windows`, or do a small visual polish pass if save presets and panel layout stability are now reliable.
+
+
+## 0.3.8d3 — Custom-Only Layout Preset Management
+
+This patch follows `0.3.8d2` after Tanner decided the built-in Gaming/Coding/Music/Minimal presets should be removed in favor of fully user-created presets.
+
+Changes:
+- Removed the built-in layout preset options from the app-shell preset dropdown.
+- Custom/user-created presets are now the only selectable layout presets.
+- Added Rename and Delete buttons for selected custom presets.
+- Rename uses the visible in-shell preset-name dialog.
+- Delete uses a visible in-shell confirmation dialog.
+- There is no hard-coded custom preset count cap; users can create as many saved layouts as local storage reasonably supports.
+- Existing saved custom presets are preserved because the custom preset storage key remains unchanged.
+- Custom presets can now use names like Gaming, Coding, Music, or Minimal because those are no longer reserved built-in presets.
+- App shell version is now `0.3.8d3` and capabilities include `custom_only_layout_presets`, `unlimited_user_layout_presets`, `user_renamable_layout_presets`, and `user_deletable_layout_presets`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+
+Manual testing focus:
+- Confirm built-in presets are gone.
+- Save multiple custom presets.
+- Rename and delete selected custom presets.
+- Confirm delete does not move current panels.
+- Confirm panel drag/resize/maximize/restore behavior from 0.3.8c4 still works.
+
+Next recommended step:
+- Commit `0.3.8d3` if manual testing succeeds.
+- Then continue with `0.3.8e — Real Pop-Out Windows`, or do a small visual polish pass once layout preset management is stable.
+
+## 0.3.8d4 — Custom Preset Panel Visibility Restore
+
+This hotfix follows `0.3.8d3` after live testing showed that custom presets restored panel positions and sizes, but did not restore which panels were open or closed when the preset was saved.
+
+Root cause:
+- Custom presets stored layout geometry only.
+- The active `panelVisibility` state was stored separately and was not included in the preset payload.
+- Applying a preset restored panel geometry but preserved the currently visible panels, so panels that were closed when the preset was saved could remain open, and panels that were open when the preset was saved could remain closed.
+
+Changes:
+- Custom layout presets now save a `visibility` snapshot for Runtime, Voice, Workspace, Conversation, and Diagnostics panels.
+- Applying a custom preset now restores the saved open/closed panel state.
+- If a preset was saved with only two panels open, applying it closes the other panels.
+- If a preset was saved with more panels open, applying it reopens those panels and closes the ones not saved as open.
+- Older custom presets that do not have a visibility snapshot still preserve the current panel visibility instead of breaking.
+- Rename/Delete behavior from `0.3.8d3` remains unchanged.
+- App shell version is now `0.3.8d4` and capabilities include `custom_layout_panel_visibility_restore`, `custom_layout_open_closed_panel_state`, and `preset_panel_visibility_sync`.
+
+Validation:
+- `node --check app_shell/renderer/renderer.js`
+- `PYTHONPATH=src python -m unittest discover -s tests -v`
+- Result: `Ran 461 tests in 3.941s — OK`
+
+Manual testing focus:
+- Open only two panels and save a preset.
+- Open extra panels, then apply the saved preset and confirm the extra panels close.
+- Save another preset with more panels open.
+- Apply it and confirm those panels reopen.
+- Confirm Rename and Delete still work.
+
+Next recommended step:
+- Commit `0.3.8d4` if manual testing succeeds.
+- Then continue with `0.3.8e — Real Pop-Out Windows`, or do one more small preset/layout stability pass if any functional issue remains.
+
+## 0.3.8d4a Preset Visibility Installer Fix
+
+This tiny follow-up fixes the 0.3.8d4 installer syntax error before the patch could apply.
+
+Changes:
+- Corrected the installer string escaping issue that caused `SyntaxError: unterminated string literal`.
+- Includes the full 0.3.8d4 preset panel visibility restore payload.
+- Runtime/app-shell behavior remains 0.3.8d4; this is an installer-only correction.
+
+Validation:
+- Installer compiled successfully with Python.
+- Renderer JavaScript syntax check passed.
+
+Next recommended step:
+- Apply 0.3.8d4a, test preset visibility restore, then commit if manual testing passes.
+

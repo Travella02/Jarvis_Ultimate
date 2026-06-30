@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellDomGeometryFreeze038c4Tests(unittest.TestCase):
     def test_version_and_capabilities_include_release_snap_guard(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("dom_geometry_panel_freeze", capabilities)
         self.assertIn("post_drag_neighbor_snap_guard", capabilities)

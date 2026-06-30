@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellPanelLock038aTests(unittest.TestCase):
     def test_version_and_capability_include_per_panel_lock(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("panel_lock_mode", capabilities)
         self.assertIn("per_panel_layout_lock_buttons", capabilities)

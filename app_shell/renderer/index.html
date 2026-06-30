@@ -26,12 +26,10 @@
           <button type="button" class="view-toggle" id="layoutResetButton">Reset Layout</button>
           <button type="button" class="view-toggle layout-save-preset-button" id="layoutSavePresetButton">Save Preset</button>
           <select class="layout-preset-select" id="layoutPresetSelect" aria-label="Saved layout preset">
-            <option value="">Layouts</option>
-            <option value="gaming">Gaming</option>
-            <option value="coding">Coding</option>
-            <option value="music">Music</option>
-            <option value="minimal">Minimal</option>
+            <option value="">Presets</option>
           </select>
+          <button type="button" class="view-toggle layout-preset-manage-button" id="layoutRenamePresetButton" disabled>Rename</button>
+          <button type="button" class="view-toggle layout-preset-manage-button danger" id="layoutDeletePresetButton" disabled>Delete</button>
           <input class="panel-command-input" id="panelCommandInput" type="search" placeholder="Open panel..." aria-label="Open panel by name">
         </div>
         <div class="top-status-row" aria-label="Bridge and voice readiness">
@@ -173,7 +171,7 @@
 
   <div class="layout-preset-dialog-backdrop" id="layoutPresetDialog" role="dialog" aria-modal="true" aria-labelledby="layoutPresetDialogTitle" hidden>
     <form class="layout-preset-dialog glass-panel" id="layoutPresetForm">
-      <p class="panel-kicker">Layout Preset</p>
+      <p class="panel-kicker">Custom Layout Preset</p>
       <h2 id="layoutPresetDialogTitle">Name this layout</h2>
       <p class="muted small" id="layoutPresetDialogHint">Save the current panel positions, sizes, locks, and z-order as a selectable custom preset.</p>
       <label class="layout-preset-name-label" for="layoutPresetNameInput">Preset name</label>
@@ -183,6 +181,19 @@
         <button type="submit" class="ghost-action primary" id="layoutPresetConfirmButton">Save Preset</button>
       </div>
     </form>
+  </div>
+
+
+  <div class="layout-preset-confirm-backdrop" id="layoutPresetConfirmDialog" role="dialog" aria-modal="true" aria-labelledby="layoutPresetConfirmTitle" hidden>
+    <section class="layout-preset-dialog glass-panel" aria-describedby="layoutPresetConfirmMessage">
+      <p class="panel-kicker">Custom Layout Preset</p>
+      <h2 id="layoutPresetConfirmTitle">Confirm preset change</h2>
+      <p class="muted small" id="layoutPresetConfirmMessage">Are you sure?</p>
+      <div class="layout-preset-dialog-actions">
+        <button type="button" class="ghost-action" id="layoutPresetConfirmCancelButton">Cancel</button>
+        <button type="button" class="ghost-action primary" id="layoutPresetConfirmOkButton">Confirm</button>
+      </div>
+    </section>
   </div>
 
   <script src="renderer.js"></script>

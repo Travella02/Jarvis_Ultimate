@@ -846,6 +846,10 @@ body.state-thinking .orb-sphere {
 }
 .layout-preset-select { max-width: 138px; text-transform: uppercase; }
 .layout-save-preset-button { color: var(--state); border-color: rgba(var(--state-rgb), .34); }
+.layout-preset-manage-button { color: var(--muted); border-color: rgba(var(--state-rgb), .24); }
+.layout-preset-manage-button:not(:disabled) { color: #9bdfff; border-color: rgba(var(--state-rgb), .38); }
+.layout-preset-manage-button.danger:not(:disabled) { color: #ff9aad; border-color: rgba(255, 77, 109, .42); }
+.layout-preset-manage-button:disabled { opacity: .42; cursor: not-allowed; }
 .panel-command-input { width: 150px; text-transform: none; letter-spacing: .02em; }
 .panel-command-input::placeholder { color: var(--muted-soft); }
 body.layout-locked .layout-lock-toggle { color: var(--muted); border-color: rgba(96,230,255,.22); }
@@ -1154,7 +1158,8 @@ body.layout-unlocked .dockable-panel.panel-layout-locked .panel-resize-handle {
 .layout-preset-select optgroup { color: #9bdfff; background: #020812; }
 
 /* 0.3.8d2: in-shell custom layout preset naming dialog. */
-.layout-preset-dialog-backdrop {
+.layout-preset-dialog-backdrop,
+.layout-preset-confirm-backdrop {
   position: fixed;
   inset: 0;
   z-index: 12000;
@@ -1164,7 +1169,8 @@ body.layout-unlocked .dockable-panel.panel-layout-locked .panel-resize-handle {
   background: rgba(0, 3, 10, 0.72);
   backdrop-filter: blur(10px);
 }
-.layout-preset-dialog-backdrop[hidden] {
+.layout-preset-dialog-backdrop[hidden],
+.layout-preset-confirm-backdrop[hidden] {
   display: none !important;
 }
 .layout-preset-dialog {
@@ -1218,3 +1224,8 @@ body.layout-unlocked .dockable-panel.panel-layout-locked .panel-resize-handle {
   opacity: 0.6;
   cursor: wait;
 }
+
+
+/* 0.3.8d3: custom-only preset management. Built-in layout presets were removed so users can create, rename, and delete unlimited saved layouts. */
+.layout-preset-select { min-width: 118px; }
+.layout-preset-select option[value=""] { color: var(--muted); }

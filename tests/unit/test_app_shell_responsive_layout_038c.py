@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellResponsiveLayout038cTests(unittest.TestCase):
     def test_version_and_capabilities_include_responsive_resize_guards(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("responsive_panel_resize_clamping", capabilities)
         self.assertIn("floating_panel_viewport_bounds", capabilities)

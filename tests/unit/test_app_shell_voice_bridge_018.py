@@ -101,7 +101,7 @@ class TestAppShellVoiceBridge018(unittest.TestCase):
         self.fail("voice session did not finish")
 
     def test_app_shell_version_and_capabilities_include_voice_bridge(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d4")
         capabilities = app_shell_capabilities()
         self.assertIn("real_voice_once_control", capabilities)
         self.assertIn("sleep_wake_voice_control", capabilities)

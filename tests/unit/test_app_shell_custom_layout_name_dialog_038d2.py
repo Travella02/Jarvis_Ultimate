@@ -6,7 +6,7 @@ from jarvis.clients.app_shell.bridge import APP_SHELL_VERSION, app_shell_capabil
 
 class AppShellCustomLayoutNameDialog038d2Tests(unittest.TestCase):
     def test_runtime_version_stays_038d_and_capability_notes_dialog_hotfix(self):
-        self.assertEqual(APP_SHELL_VERSION, "0.3.8d")
+        self.assertEqual(APP_SHELL_VERSION, "0.3.8d4")
         capabilities = set(app_shell_capabilities())
         self.assertIn("custom_workspace_layout_presets", capabilities)
         self.assertIn("custom_layout_preset_name_dialog", capabilities)
